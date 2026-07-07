@@ -6,6 +6,9 @@ import Store from 'electron-store'
 import { Client } from 'ssh2'
 import mysql from 'mysql2/promise'
 import pg from 'pg'
+import mssql from 'mssql'
+import oracledb from 'oracledb'
+import dmdb from 'dmdb'
 import { createClient as createRedisClient } from 'redis'
 
 const shellSessions = new Map()
@@ -323,6 +326,27 @@ ipcMain.handle('db:inspect', async (_event, config) => {
       return { ok: true, tables: result.rows }
     }
 
+    if (config.engine === 'sqlserver') {
+      const result = await connection.request().query(`
+        select top 200 TABLE_SCHEMA as table_schema, TABLE_NAME as table_name
+        from INFORMATION_SCHEMA.TABLES
+        where TABLE_TYPE = 'BASE TABLE'
+        order by TABLE_SCHEMA, TABLE_NAME
+      `)
+      return { ok: true, tables: result.recordset }
+    }
+
+    if (isOracleLikeEngine(config.engine)) {
+      const result = await executeOracleLike(connection, config.engine, `
+        select OWNER as table_schema, TABLE_NAME as table_name
+        from ALL_TABLES
+        where OWNER not in ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'CTISYS', 'MDSYS', 'ORDSYS', 'XDB')
+        order by OWNER, TABLE_NAME
+        fetch first 200 rows only
+      `)
+      return { ok: true, tables: result.rows }
+    }
+
     const [rows] = await connection.query(`
       select table_schema, table_name
       from information_schema.tables
@@ -345,6 +369,42 @@ ipcMain.handle('db:columns', async (_event, config, table) => {
           order by ordinal_position
         `,
         [table.schema, table.name]
+      )
+      return { ok: true, columns: result.rows }
+    }
+
+    if (config.engine === 'sqlserver') {
+      const request = connection.request()
+      request.input('schema', mssql.NVarChar, table.schema)
+      request.input('name', mssql.NVarChar, table.name)
+      const result = await request.query(`
+        select
+          COLUMN_NAME as column_name,
+          DATA_TYPE as data_type,
+          IS_NULLABLE as is_nullable,
+          COLUMN_DEFAULT as column_default
+        from INFORMATION_SCHEMA.COLUMNS
+        where TABLE_SCHEMA = @schema and TABLE_NAME = @name
+        order by ORDINAL_POSITION
+      `)
+      return { ok: true, columns: result.recordset }
+    }
+
+    if (isOracleLikeEngine(config.engine)) {
+      const result = await executeOracleLike(
+        connection,
+        config.engine,
+        `
+          select
+            COLUMN_NAME as column_name,
+            DATA_TYPE as data_type,
+            NULLABLE as is_nullable,
+            DATA_DEFAULT as column_default
+          from ALL_TAB_COLUMNS
+          where OWNER = :schema and TABLE_NAME = :name
+          order by COLUMN_ID
+        `,
+        { schema: table.schema, name: table.name }
       )
       return { ok: true, columns: result.rows }
     }
@@ -389,6 +449,38 @@ ipcMain.handle('db:privileges', async (_event, config) => {
       }
     }
 
+    if (config.engine === 'sqlserver') {
+      const result = await connection.request().query('select SYSTEM_USER as [user], DB_NAME() as [database]')
+      return {
+        ok: true,
+        user: result.recordset[0]?.user || config.username,
+        database: result.recordset[0]?.database || config.database,
+        grants: [],
+        privileges: {
+          select: null,
+          insert: null,
+          update: null,
+          delete: null,
+          create: null,
+          alter: null,
+          drop: null
+        }
+      }
+    }
+
+    if (isOracleLikeEngine(config.engine)) {
+      const userResult = await executeOracleLike(connection, config.engine, 'select USER as "user" from dual')
+      const privilegeResult = await executeOracleLike(connection, config.engine, 'select PRIVILEGE from SESSION_PRIVS')
+      const grants = (privilegeResult.rows || []).map((row) => row.PRIVILEGE || row.privilege).filter(Boolean)
+      return {
+        ok: true,
+        user: userResult.rows[0]?.user || userResult.rows[0]?.USER || config.username,
+        database: config.database,
+        grants,
+        privileges: parseTextPrivileges(grants)
+      }
+    }
+
     const [userRows] = await connection.query('select current_user() as user, database() as db')
     const [grantRows] = await connection.query('show grants')
     const grants = grantRows.map((row) => Object.values(row)[0]).filter(Boolean)
@@ -407,6 +499,16 @@ ipcMain.handle('db:exec', async (_event, config, sql) => {
     if (config.engine === 'postgres') {
       const result = await connection.query(sql)
       return { ok: true, rows: result.rows, rowCount: result.rowCount }
+    }
+
+    if (config.engine === 'sqlserver') {
+      const result = await connection.request().query(sql)
+      return { ok: true, rows: result.recordset || [], rowCount: result.rowsAffected?.reduce((sum, count) => sum + count, 0) }
+    }
+
+    if (isOracleLikeEngine(config.engine)) {
+      const result = await executeOracleLike(connection, config.engine, sql, [], { autoCommit: true })
+      return { ok: true, rows: result.rows || [], rowCount: result.rowsAffected }
     }
 
     const [rows] = await connection.query(sql)
@@ -1164,12 +1266,17 @@ async function withDatabase(config, task) {
 
 function withDatabaseViaSsh(config, task) {
   return withSshClient(config.sshConfig, async (sshClient) => {
-    const stream = await withTimeout(
-      openSshForward(sshClient, config.host, Number(config.port || defaultDatabasePort(config.engine))),
-      12000,
-      'SSH tunnel timed out while opening database channel'
-    )
-    return withDatabaseConnection({ ...config, stream }, task)
+    let tunnel = null
+    try {
+      tunnel = await createSshTunnelServer(sshClient, config.host, Number(config.port || defaultDatabasePort(config.engine)))
+      return await withDatabaseConnection({
+        ...config,
+        host: '127.0.0.1',
+        port: tunnel.port
+      }, task)
+    } finally {
+      tunnel?.close()
+    }
   })
 }
 
@@ -1188,9 +1295,8 @@ function openSshForward(client, host, port) {
 async function withDatabaseConnection(config, task) {
   if (config.engine === 'postgres') {
     const client = new pg.Client({
-      host: config.stream ? undefined : config.host,
-      port: config.stream ? undefined : Number(config.port || 5432),
-      stream: config.stream,
+      host: config.host,
+      port: Number(config.port || 5432),
       user: config.username,
       password: config.password,
       database: config.database,
@@ -1204,11 +1310,66 @@ async function withDatabaseConnection(config, task) {
     }
   }
 
+  if (config.engine === 'sqlserver') {
+    const pool = new mssql.ConnectionPool({
+      server: config.host,
+      port: Number(config.port || 1433),
+      user: config.username,
+      password: config.password,
+      database: config.database,
+      connectionTimeout: 12000,
+      requestTimeout: 30000,
+      options: {
+        encrypt: Boolean(config.encrypt),
+        trustServerCertificate: true
+      }
+    })
+    await withTimeout(pool.connect(), 15000, 'Database connection timed out')
+    try {
+      return await task(pool)
+    } finally {
+      await pool.close()
+    }
+  }
+
+  if (config.engine === 'oracle') {
+    const connection = await withTimeout(
+      oracledb.getConnection({
+        user: config.username,
+        password: config.password,
+        connectString: buildOracleConnectString(config)
+      }),
+      15000,
+      'Database connection timed out'
+    )
+    try {
+      return await task(connection)
+    } finally {
+      await connection.close()
+    }
+  }
+
+  if (config.engine === 'dm') {
+    const connection = await withTimeout(
+      dmdb.getConnection({
+        user: config.username,
+        password: config.password,
+        connectString: `${config.host}:${Number(config.port || 5236)}`
+      }),
+      15000,
+      'Database connection timed out'
+    )
+    try {
+      return await task(connection)
+    } finally {
+      await connection.close()
+    }
+  }
+
   const connection = await withTimeout(
     mysql.createConnection({
       host: config.host,
       port: Number(config.port || 3306),
-      stream: config.stream,
       user: config.username,
       password: config.password,
       database: config.database,
@@ -1230,6 +1391,10 @@ async function exportTablesAsSql(connection, config, tables, filePath) {
   for (const table of tables) {
     if (config.engine === 'postgres') {
       parts.push(await buildPostgresCreateTableSql(connection, table))
+    } else if (isOracleLikeEngine(config.engine)) {
+      parts.push(await buildOracleLikeCreateTableSql(connection, config, table))
+    } else if (config.engine === 'sqlserver') {
+      parts.push(await buildSqlServerCreateTableSql(connection, table))
     } else {
       const [createRows] = await connection.query(`SHOW CREATE TABLE ${quoteMysqlTable(table)}`)
       parts.push(`${createRows[0]?.['Create Table'] || ''};`)
@@ -1262,6 +1427,14 @@ async function selectExportRows(connection, config, table) {
     const result = await connection.query(`select * from ${quotePostgresTable(table)} limit 5000`)
     return result.rows
   }
+  if (config.engine === 'sqlserver') {
+    const result = await connection.request().query(`select top 5000 * from ${quoteSqlServerTable(table)}`)
+    return result.recordset || []
+  }
+  if (isOracleLikeEngine(config.engine)) {
+    const result = await executeOracleLike(connection, config.engine, `select * from ${quoteOracleLikeTable(table)} fetch first 5000 rows only`)
+    return result.rows || []
+  }
   const [rows] = await connection.query(`select * from ${quoteMysqlTable(table)} limit 5000`)
   return rows
 }
@@ -1273,6 +1446,27 @@ async function getTableColumns(connection, config, table) {
       [table.schema, table.name]
     )
     return result.rows.map((row) => row.column_name)
+  }
+  if (config.engine === 'sqlserver') {
+    const request = connection.request()
+    request.input('schema', mssql.NVarChar, table.schema)
+    request.input('name', mssql.NVarChar, table.name)
+    const result = await request.query(`
+      select COLUMN_NAME as column_name
+      from INFORMATION_SCHEMA.COLUMNS
+      where TABLE_SCHEMA = @schema and TABLE_NAME = @name
+      order by ORDINAL_POSITION
+    `)
+    return result.recordset.map((row) => row.column_name)
+  }
+  if (isOracleLikeEngine(config.engine)) {
+    const result = await executeOracleLike(connection, config.engine, `
+      select COLUMN_NAME as column_name
+      from ALL_TAB_COLUMNS
+      where OWNER = :schema and TABLE_NAME = :name
+      order by COLUMN_ID
+    `, { schema: table.schema, name: table.name })
+    return result.rows.map((row) => row.column_name || row.COLUMN_NAME)
   }
   const [rows] = await connection.query(
     `select column_name from information_schema.columns where table_schema = ? and table_name = ? order by ordinal_position`,
@@ -1294,12 +1488,55 @@ async function buildPostgresCreateTableSql(connection, table) {
   return `CREATE TABLE IF NOT EXISTS ${quotePostgresTable(table)} (\n${columns.join(',\n')}\n);`
 }
 
+async function buildSqlServerCreateTableSql(connection, table) {
+  const request = connection.request()
+  request.input('schema', mssql.NVarChar, table.schema)
+  request.input('name', mssql.NVarChar, table.name)
+  const result = await request.query(`
+    select COLUMN_NAME as column_name, DATA_TYPE as data_type, IS_NULLABLE as is_nullable, COLUMN_DEFAULT as column_default
+    from INFORMATION_SCHEMA.COLUMNS
+    where TABLE_SCHEMA = @schema and TABLE_NAME = @name
+    order by ORDINAL_POSITION
+  `)
+  const columns = result.recordset.map((column) => {
+    const nullable = column.is_nullable === 'NO' ? ' NOT NULL' : ''
+    const defaultValue = column.column_default ? ` DEFAULT ${column.column_default}` : ''
+    return `  ${quoteSqlServerIdentifier(column.column_name)} ${column.data_type}${defaultValue}${nullable}`
+  })
+  return `CREATE TABLE ${quoteSqlServerTable(table)} (\n${columns.join(',\n')}\n);`
+}
+
+async function buildOracleLikeCreateTableSql(connection, config, table) {
+  const result = await executeOracleLike(connection, config.engine, `
+    select COLUMN_NAME as column_name, DATA_TYPE as data_type, NULLABLE as is_nullable, DATA_DEFAULT as column_default
+    from ALL_TAB_COLUMNS
+    where OWNER = :schema and TABLE_NAME = :name
+    order by COLUMN_ID
+  `, { schema: table.schema, name: table.name })
+  const columns = result.rows.map((column) => {
+    const name = column.column_name || column.COLUMN_NAME
+    const type = column.data_type || column.DATA_TYPE
+    const nullable = (column.is_nullable || column.IS_NULLABLE) === 'N' ? ' NOT NULL' : ''
+    const rawDefault = column.column_default ?? column.COLUMN_DEFAULT
+    const defaultValue = rawDefault ? ` DEFAULT ${String(rawDefault).trim()}` : ''
+    return `  ${quoteOracleLikeIdentifier(name)} ${type}${defaultValue}${nullable}`
+  })
+  return `CREATE TABLE ${quoteOracleLikeTable(table)} (\n${columns.join(',\n')}\n);`
+}
+
 function buildInsertSql(config, table, row) {
   const columns = Object.keys(row)
-  const tableName = config.engine === 'postgres' ? quotePostgresTable(table) : quoteMysqlTable(table)
-  const columnSql = columns.map((column) => config.engine === 'postgres' ? `"${column.replace(/"/g, '""')}"` : `\`${column.replace(/`/g, '``')}\``).join(', ')
+  const tableName = quoteTable(config, table)
+  const columnSql = columns.map((column) => quoteDatabaseIdentifier(config, column)).join(', ')
   const values = columns.map((column) => sqlLiteral(row[column])).join(', ')
   return `INSERT INTO ${tableName} (${columnSql}) VALUES (${values});`
+}
+
+function quoteTable(config, table) {
+  if (config.engine === 'postgres') return quotePostgresTable(table)
+  if (config.engine === 'sqlserver') return quoteSqlServerTable(table)
+  if (isOracleLikeEngine(config.engine)) return quoteOracleLikeTable(table)
+  return quoteMysqlTable(table)
 }
 
 function quoteMysqlTable(table) {
@@ -1308,6 +1545,29 @@ function quoteMysqlTable(table) {
 
 function quotePostgresTable(table) {
   return `"${String(table.schema).replace(/"/g, '""')}"."${String(table.name).replace(/"/g, '""')}"`
+}
+
+function quoteSqlServerTable(table) {
+  return `${quoteSqlServerIdentifier(table.schema)}.${quoteSqlServerIdentifier(table.name)}`
+}
+
+function quoteOracleLikeTable(table) {
+  return `${quoteOracleLikeIdentifier(table.schema)}.${quoteOracleLikeIdentifier(table.name)}`
+}
+
+function quoteDatabaseIdentifier(config, identifier) {
+  if (config.engine === 'postgres') return `"${String(identifier).replace(/"/g, '""')}"`
+  if (config.engine === 'sqlserver') return quoteSqlServerIdentifier(identifier)
+  if (isOracleLikeEngine(config.engine)) return quoteOracleLikeIdentifier(identifier)
+  return `\`${String(identifier).replace(/`/g, '``')}\``
+}
+
+function quoteSqlServerIdentifier(identifier) {
+  return `[${String(identifier).replace(/]/g, ']]')}]`
+}
+
+function quoteOracleLikeIdentifier(identifier) {
+  return `"${String(identifier).replace(/"/g, '""')}"`
 }
 
 function sqlLiteral(value) {
@@ -1338,7 +1598,11 @@ function withTimeout(promise, ms, message) {
 }
 
 function defaultDatabasePort(engine) {
-  return engine === 'postgres' ? 5432 : 3306
+  if (engine === 'postgres') return 5432
+  if (engine === 'sqlserver') return 1433
+  if (engine === 'oracle') return 1521
+  if (engine === 'dm') return 5236
+  return 3306
 }
 
 function parseMysqlPrivileges(grants = []) {
@@ -1353,6 +1617,43 @@ function parseMysqlPrivileges(grants = []) {
     create: has('CREATE'),
     alter: has('ALTER'),
     drop: has('DROP')
+  }
+}
+
+function parseTextPrivileges(grants = []) {
+  const text = grants.join('\n').toUpperCase()
+  const hasAny = (names) => names.some((name) => new RegExp(`\\b${name}\\b`).test(text))
+  return {
+    select: hasAny(['SELECT ANY TABLE', 'SELECT']),
+    insert: hasAny(['INSERT ANY TABLE', 'INSERT']),
+    update: hasAny(['UPDATE ANY TABLE', 'UPDATE']),
+    delete: hasAny(['DELETE ANY TABLE', 'DELETE']),
+    create: hasAny(['CREATE TABLE', 'CREATE ANY TABLE', 'CREATE']),
+    alter: hasAny(['ALTER ANY TABLE', 'ALTER']),
+    drop: hasAny(['DROP ANY TABLE', 'DROP'])
+  }
+}
+
+function isOracleLikeEngine(engine) {
+  return engine === 'oracle' || engine === 'dm'
+}
+
+function buildOracleConnectString(config) {
+  const host = config.host || '127.0.0.1'
+  const port = Number(config.port || 1521)
+  const service = config.database || 'ORCL'
+  return `${host}:${port}/${service}`
+}
+
+async function executeOracleLike(connection, engine, sql, binds = [], options = {}) {
+  const driver = engine === 'dm' ? dmdb : oracledb
+  const result = await connection.execute(sql, binds, {
+    outFormat: driver.OUT_FORMAT_OBJECT,
+    ...options
+  })
+  return {
+    ...result,
+    rows: result.rows || []
   }
 }
 

@@ -53,9 +53,12 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "dmdb": "^1.0.49630",
     "electron-store": "^10.0.1",
     "lucide-react": "^0.468.0",
+    "mssql": "^12.7.0",
     "mysql2": "^3.11.5",
+    "oracledb": "^7.0.0",
     "pg": "^8.13.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

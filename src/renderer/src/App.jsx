@@ -2811,7 +2811,7 @@ function DatabaseDialog({ form, mode, isTesting, notice, onChange, onClose, onSa
   const isEdit = mode === 'edit'
   const changeEngine = (engine) => {
     onChange('engine', engine)
-    onChange('port', engine === 'postgres' ? 5432 : 3306)
+    onChange('port', defaultDatabasePort(engine))
   }
 
   return (
@@ -2832,6 +2832,9 @@ function DatabaseDialog({ form, mode, isTesting, notice, onChange, onClose, onSa
             <select value={form.engine} onChange={(event) => changeEngine(event.target.value)}>
               <option value="mysql">MySQL</option>
               <option value="postgres">PostgreSQL</option>
+              <option value="sqlserver">SQL Server</option>
+              <option value="oracle">Oracle</option>
+              <option value="dm">Dameng</option>
             </select>
           </Field>
           <Field label="Connection method">
@@ -3244,7 +3247,7 @@ function buildDatabaseFromForm(form, server) {
     engine: form.engine,
     connectionMode: form.connectionMode || 'ssh',
     host: form.host?.trim(),
-    port: Number(form.port || (form.engine === 'postgres' ? 5432 : 3306)),
+    port: Number(form.port || defaultDatabasePort(form.engine)),
     database: form.database?.trim(),
     username: form.username?.trim(),
     password: form.password || '',
@@ -3259,7 +3262,7 @@ function buildDatabaseFormFromConfig(database) {
     engine: database.engine || 'mysql',
     connectionMode: database.connectionMode || 'ssh',
     host: database.host || '127.0.0.1',
-    port: database.port || (database.engine === 'postgres' ? 5432 : 3306),
+    port: database.port || defaultDatabasePort(database.engine),
     database: database.database || '',
     username: database.username || '',
     password: database.password || ''
@@ -3402,6 +3405,12 @@ function buildRenameTableSql(database, table, nextName) {
   if (database.engine === 'postgres') {
     return `ALTER TABLE ${qualifiedTableName(database, table)} RENAME TO ${quoteIdentifier(database, nextName)};`
   }
+  if (database.engine === 'sqlserver') {
+    return `EXEC sp_rename '${table.schema}.${table.name}', '${nextName}';`
+  }
+  if (isOracleLikeEngine(database.engine)) {
+    return `ALTER TABLE ${qualifiedTableName(database, table)} RENAME TO ${quoteIdentifier(database, nextName)};`
+  }
   return `RENAME TABLE ${qualifiedTableName(database, table)} TO ${qualifiedTableName(database, { schema: table.schema, name: nextName })};`
 }
 
@@ -3429,6 +3438,30 @@ function buildEditColumnSql(database, table, column, form) {
     return `${statements.join(';\n')};`
   }
 
+  if (database.engine === 'sqlserver') {
+    const statements = []
+    if (currentName !== nextName) {
+      statements.push(`EXEC sp_rename '${table.schema}.${table.name}.${currentName}', '${nextName}', 'COLUMN'`)
+    }
+    statements.push(`ALTER TABLE ${tableName} ALTER COLUMN ${quoteIdentifier(database, nextName)} ${form.type} ${nullableSql}`)
+    if (defaultValue) {
+      statements.push(`ALTER TABLE ${tableName} ADD DEFAULT ${defaultValue} FOR ${quoteIdentifier(database, nextName)}`)
+    }
+    return `${statements.join(';\n')};`
+  }
+
+  if (isOracleLikeEngine(database.engine)) {
+    const statements = []
+    if (currentName !== nextName) {
+      statements.push(`ALTER TABLE ${tableName} RENAME COLUMN ${quoteIdentifier(database, currentName)} TO ${quoteIdentifier(database, nextName)}`)
+    }
+    statements.push(`ALTER TABLE ${tableName} MODIFY ${quoteIdentifier(database, nextName)} ${form.type} ${form.nullable ? 'NULL' : 'NOT NULL'}`)
+    if (defaultValue) {
+      statements.push(`ALTER TABLE ${tableName} MODIFY ${quoteIdentifier(database, nextName)} DEFAULT ${defaultValue}`)
+    }
+    return `${statements.join(';\n')};`
+  }
+
   return [
     `ALTER TABLE ${tableName} CHANGE COLUMN ${quoteIdentifier(database, currentName)} ${quoteIdentifier(database, nextName)} ${form.type}`,
     nullableSql,
@@ -3446,13 +3479,29 @@ function qualifiedTableName(database, table) {
 }
 
 function defaultSchemaForCreate(database) {
-  return database.engine === 'postgres' ? 'public' : database.database
+  if (database.engine === 'postgres') return 'public'
+  if (database.engine === 'sqlserver') return 'dbo'
+  if (isOracleLikeEngine(database.engine)) return database.username?.toUpperCase() || database.database
+  return database.database
 }
 
 function quoteIdentifier(database, identifier) {
   const value = String(identifier || '')
-  if (database.engine === 'postgres') return `"${value.replace(/"/g, '""')}"`
+  if (database.engine === 'postgres' || isOracleLikeEngine(database.engine)) return `"${value.replace(/"/g, '""')}"`
+  if (database.engine === 'sqlserver') return `[${value.replace(/]/g, ']]')}]`
   return `\`${value.replace(/`/g, '``')}\``
+}
+
+function defaultDatabasePort(engine) {
+  if (engine === 'postgres') return 5432
+  if (engine === 'sqlserver') return 1433
+  if (engine === 'oracle') return 1521
+  if (engine === 'dm') return 5236
+  return 3306
+}
+
+function isOracleLikeEngine(engine) {
+  return engine === 'oracle' || engine === 'dm'
 }
 
 function formatConnectionMode(mode) {
