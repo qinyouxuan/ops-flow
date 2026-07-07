@@ -14,6 +14,20 @@ This repository is the open-source base edition. It intentionally contains only 
 
 Commercial-only capabilities are maintained outside this base edition.
 
+## Screenshots
+
+### SSH Terminal And Remote Files
+
+![SSH terminal and remote files](./docs/screenshots/ssh-terminal.png)
+
+### Database Browser
+
+![Database browser](./docs/screenshots/database-browser.png)
+
+### Redis Browser
+
+![Redis browser](./docs/screenshots/redis-browser.png)
+
 ## Editions
 
 Ops Flow Community Edition provides the open-source core for day-to-day SSH, SFTP, database and Redis maintenance.
