@@ -6,7 +6,7 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: 'src/main/index.js',
-        external: ['ssh2', 'cpu-features', 'bcrypt-pbkdf', 'mysql2', 'pg', 'redis']
+        external: ['ssh2', 'cpu-features', 'bcrypt-pbkdf', 'mysql2', 'pg', 'redis', 'mssql', 'oracledb', 'dmdb']
       }
     }
   },
