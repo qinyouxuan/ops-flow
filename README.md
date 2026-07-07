@@ -14,6 +14,29 @@ This repository is the open-source base edition. It intentionally contains only 
 
 Commercial-only capabilities are maintained outside this base edition.
 
+## Editions
+
+Ops Flow Community Edition provides the open-source core for day-to-day SSH, SFTP, database and Redis maintenance.
+
+The commercial edition is distributed separately and may include:
+
+- Visual workflow automation for deployment, backup, rollback and data export scenarios
+- System management and inspection for services, packages, runtimes and cron tasks
+- Package deployer for downloading, uploading, installing, testing and uninstalling server components
+- AI-assisted analysis for operations logs, command output, system status and troubleshooting context
+- Commercial support, private builds and customized delivery
+
+## Commercial Contact
+
+For commercial edition access, private builds, customized deployment support, custom feature development or operations automation consulting, please contact the maintainer.
+
+Contact:
+
+- Email: `1829941918@qq.com`
+- WeChat: `MortalQY99`
+
+You can also open a GitHub Issue for public community feedback, bug reports or feature suggestions.
+
 ## License
 
 Ops Flow Community Edition is licensed under the GNU Affero General Public License v3.0. See [LICENSE](./LICENSE).
