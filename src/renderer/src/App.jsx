@@ -18,6 +18,7 @@ import {
   PowerOff,
   Plus,
   RefreshCw,
+  Save,
   Server,
   ShieldCheck,
   SquarePen,
@@ -48,9 +49,7 @@ const emptyServer = {
   uptime: '-'
 }
 
-const defaultCommand = `cd /opt/apps/demo
-systemctl status demo-app
-tail -n 80 logs/app.log`
+const defaultCommand = ''
 
 const sqlTemplate = ''
 
@@ -116,6 +115,37 @@ function DesktopOnly() {
   )
 }
 
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { error: null }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+
+  componentDidCatch(error, info) {
+    console.error('[renderer:error-boundary]', error, info)
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="desktop-only">
+          <section>
+            <div className="brand-mark"><Boxes size={24} /></div>
+            <h1>Ops Flow encountered a screen error</h1>
+            <p>{this.state.error?.message || 'Renderer failed while drawing the page.'}</p>
+            <button className="solid-button" onClick={() => this.setState({ error: null })}>Back to app</button>
+          </section>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 export default function App() {
   if (!window.opsFlow) return <DesktopOnly />
 
@@ -176,12 +206,10 @@ export default function App() {
   const [isTestingServer, setIsTestingServer] = useState(false)
   const [isCommandRunning, setIsCommandRunning] = useState(false)
   const [terminalInput, setTerminalInput] = useState('')
-  const [terminalOutput, setTerminalOutput] = useState([
-    'Add a server, then click Connect to start the SSH terminal.',
-    ''
-  ].join('\n'))
+  const [terminalOutput, setTerminalOutput] = useState('Add a server, then click Connect to start the SSH terminal.\n')
   const [resourceHistory, setResourceHistory] = useState(() => makeInitialUsageHistory())
   const [toast, setToast] = useState(null)
+  const [appSidebarWidth, setAppSidebarWidth] = useState(270)
   const terminalOutputRef = useRef(null)
   const terminalHostRef = useRef(null)
   const moduleTabsRef = useRef(null)
@@ -574,6 +602,8 @@ export default function App() {
     const server = buildServerFromForm(serverForm)
     if (!server.host || !server.username) {
       appendLog('Server save failed: host and username are required')
+      setServerNotice({ type: 'error', text: 'Host and username are required.' })
+      showToast('error', 'Server save failed')
       return
     }
 
@@ -607,6 +637,7 @@ export default function App() {
         'Click Connect to reconnect with the new settings.',
         ''
       ].join('\n'))
+      showToast('success', `Server updated: ${editedServer.name}`)
     } else {
       const next = [...servers, server]
       setServers(next)
@@ -618,10 +649,12 @@ export default function App() {
         'Click Connect to open the SSH terminal.',
         ''
       ].join('\n'))
+      showToast('success', `Server saved: ${server.name}`)
     }
 
     setIsServerDialogOpen(false)
     setEditingServerId('')
+    setServerNotice(null)
   }
 
   const testServerConnection = async () => {
@@ -986,12 +1019,19 @@ export default function App() {
       const result = await window.opsFlow.readRemoteFile(selectedServer, targetPath)
       if (!result.ok) {
         appendLog(`Preview failed: ${result.message}`)
-        setPreviewFile(null)
+        setPreviewFile({ ...item, path: targetPath, loading: false, error: result.message || 'Failed to read file.' })
+        setPreviewContent('')
         showToast('error', result.message)
         return
       }
       setPreviewFile({ ...item, path: targetPath, loading: false })
-      setPreviewContent(result.content || '')
+      setPreviewContent(formatPreviewContent(result.content))
+    } catch (error) {
+      const message = error?.message || 'Failed to read remote file.'
+      appendLog(`Preview failed: ${message}`)
+      setPreviewFile({ ...item, path: targetPath, loading: false, error: message })
+      setPreviewContent('')
+      showToast('error', message)
     } finally {
       setIsFileTransferRunning(false)
     }
@@ -1891,8 +1931,33 @@ export default function App() {
     })
   }
 
+  function startAppSidebarResize(event) {
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = appSidebarWidth
+    document.body.classList.add('is-resizing-panel')
+
+    const handleMove = (moveEvent) => {
+      const maxWidth = Math.min(420, Math.max(260, window.innerWidth * 0.36))
+      const nextWidth = Math.min(maxWidth, Math.max(220, startWidth + moveEvent.clientX - startX))
+      setAppSidebarWidth(nextWidth)
+    }
+
+    const handleUp = () => {
+      document.body.classList.remove('is-resizing-panel')
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
+
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      style={{ gridTemplateColumns: `${appSidebarWidth}px 10px minmax(0, 1fr)` }}
+    >
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark"><Boxes size={22} /></div>
@@ -1936,6 +2001,13 @@ export default function App() {
           <pre>{logs.slice(-6).join('\n')}</pre>
         </section>
       </aside>
+      <div
+        className="app-shell-splitter"
+        role="separator"
+        aria-orientation="vertical"
+        title="Drag to resize sidebar"
+        onMouseDown={startAppSidebarResize}
+      />
 
       <main className="workspace">
         <header className="topbar">
@@ -2284,9 +2356,24 @@ function UsageChart({ label, value, points }) {
   )
 }
 
+const remoteFileColumns = [
+  { key: 'name', label: 'Name', width: 260, minWidth: 140 },
+  { key: 'type', label: 'Type', width: 90, minWidth: 70 },
+  { key: 'size', label: 'Size', width: 110, minWidth: 80 },
+  { key: 'permissions', label: 'Permissions', width: 150, minWidth: 110 },
+  { key: 'owner', label: 'Owner', width: 120, minWidth: 90 },
+  { key: 'modified', label: 'Modified', width: 180, minWidth: 120 }
+]
+
+const defaultRemoteFileColumnWidths = remoteFileColumns.reduce((widths, column) => {
+  widths[column.key] = column.width
+  return widths
+}, {})
+
 function RemoteFilesPanel({ path, items, sort, focusedItemName, selectedItem, loading, transferring, onOpen, onOpenDirectory, onOpenPath, onCopyPath, onSort, onFocusHandled, onParent, onUpload, onDownload, onEditFile, onDelete, onRefresh }) {
   const breadcrumbs = buildRemoteBreadcrumbs(path)
   const [isPathTextMode, setIsPathTextMode] = useState(false)
+  const [columnWidths, setColumnWidths] = useState(defaultRemoteFileColumnWidths)
   const pathInputRef = useRef(null)
   const focusedRowRef = useRef(null)
   const breadcrumbClickTimerRef = useRef(null)
@@ -2314,11 +2401,40 @@ function RemoteFilesPanel({ path, items, sort, focusedItemName, selectedItem, lo
     })
   }, [focusedItemName, loading, sortedItems, onFocusHandled])
 
-  const renderSortHead = (key, label) => (
-    <button type="button" className="remote-sort-button" onClick={() => onSort(key)}>
-      <span>{label}</span>
-      <em>{sort?.key === key ? (sort.direction === 'asc' ? '▲' : '▼') : ''}</em>
-    </button>
+  const startColumnResize = (event, column) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const startX = event.clientX
+    const startWidth = columnWidths[column.key] || column.width
+    document.body.classList.add('is-resizing-column')
+
+    const handleMove = (moveEvent) => {
+      const nextWidth = Math.max(column.minWidth, startWidth + moveEvent.clientX - startX)
+      setColumnWidths((current) => ({ ...current, [column.key]: nextWidth }))
+    }
+
+    const handleUp = () => {
+      document.body.classList.remove('is-resizing-column')
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
+
+  const renderSortHead = (column) => (
+    <div className="remote-resizable-head">
+      <button type="button" className="remote-sort-button" onClick={() => onSort(column.key)}>
+        <span>{column.label}</span>
+        <em>{sort?.key === column.key ? (sort.direction === 'asc' ? '▲' : '▼') : ''}</em>
+      </button>
+      <span
+        className="remote-column-resizer"
+        title="Drag to resize column"
+        onMouseDown={(event) => startColumnResize(event, column)}
+      />
+    </div>
   )
 
   const openBreadcrumbPath = (nextPath) => {
@@ -2402,14 +2518,16 @@ function RemoteFilesPanel({ path, items, sort, focusedItemName, selectedItem, lo
       </div>
       <div className="remote-table-wrap">
         <table className="remote-table">
+          <colgroup>
+            {remoteFileColumns.map((column) => (
+              <col key={column.key} style={{ width: `${columnWidths[column.key] || column.width}px` }} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
-              <th>{renderSortHead('name', 'Name')}</th>
-              <th>{renderSortHead('type', 'Type')}</th>
-              <th>{renderSortHead('size', 'Size')}</th>
-              <th>{renderSortHead('permissions', 'Permissions')}</th>
-              <th>{renderSortHead('owner', 'Owner')}</th>
-              <th>{renderSortHead('modified', 'Modified')}</th>
+              {remoteFileColumns.map((column) => (
+                <th key={column.key}>{renderSortHead(column)}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -2492,6 +2610,9 @@ function DatabaseBrowser({ databases, selectedDatabase, serverConnected, selecte
   const canCreate = hasPrivilege(privileges, 'create')
   const canAlter = hasPrivilege(privileges, 'alter')
   const canDrop = hasPrivilege(privileges, 'drop')
+  const [schemaSplit, setSchemaSplit] = useState(50)
+  const [sqlPanelHeight, setSqlPanelHeight] = useState(170)
+  const schemaBrowserRef = useRef(null)
   const copyTimerRef = useRef(null)
   const copyOnSingleClick = (value) => {
     window.clearTimeout(copyTimerRef.current)
@@ -2505,9 +2626,52 @@ function DatabaseBrowser({ databases, selectedDatabase, serverConnected, selecte
     const id = `${table.schema}.${table.name}`
     setCheckedTables((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
   }
+  const startSchemaResize = (event) => {
+    event.preventDefault()
+    const bounds = schemaBrowserRef.current?.getBoundingClientRect()
+    if (!bounds?.width) return
+    document.body.classList.add('is-resizing-panel')
+
+    const handleMove = (moveEvent) => {
+      const nextPercent = ((moveEvent.clientX - bounds.left) / bounds.width) * 100
+      setSchemaSplit(Math.min(75, Math.max(25, nextPercent)))
+    }
+
+    const handleUp = () => {
+      document.body.classList.remove('is-resizing-panel')
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
+  const startSqlResultResize = (event) => {
+    event.preventDefault()
+    const startY = event.clientY
+    const startHeight = sqlPanelHeight
+    document.body.classList.add('is-resizing-row')
+
+    const handleMove = (moveEvent) => {
+      const nextHeight = Math.min(360, Math.max(92, startHeight + moveEvent.clientY - startY))
+      setSqlPanelHeight(nextHeight)
+    }
+
+    const handleUp = () => {
+      document.body.classList.remove('is-resizing-row')
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
 
   return (
-    <div className="database-browser">
+    <div
+      className="database-browser"
+      style={{ gridTemplateRows: `54px 30px minmax(180px, 2fr) ${sqlPanelHeight}px 10px minmax(110px, 1fr)` }}
+    >
       {!serverConnected && <div className="module-disabled-banner">Connect server first to use database tools.</div>}
       <div className="database-toolbar">
         <div className="database-picker">
@@ -2551,7 +2715,11 @@ function DatabaseBrowser({ databases, selectedDatabase, serverConnected, selecte
         )}
       </div>
 
-      <div className="schema-browser">
+      <div
+        className="schema-browser"
+        ref={schemaBrowserRef}
+        style={{ gridTemplateColumns: `minmax(220px, ${schemaSplit}%) 10px minmax(220px, 1fr)` }}
+      >
         <div className="table-list">
           <div className="database-head">
             <strong>Tables</strong>
@@ -2602,6 +2770,13 @@ function DatabaseBrowser({ databases, selectedDatabase, serverConnected, selecte
             )}
           </div>
         </div>
+        <div
+          className="schema-splitter"
+          role="separator"
+          aria-orientation="vertical"
+          title="Drag to resize tables and fields"
+          onMouseDown={startSchemaResize}
+        />
         <div className="column-panel">
           <div className="database-head">
             <strong>Fields</strong>
@@ -2680,6 +2855,14 @@ function DatabaseBrowser({ databases, selectedDatabase, serverConnected, selecte
         />
       </div>
 
+      <div
+        className="vertical-panel-splitter"
+        role="separator"
+        aria-orientation="horizontal"
+        title="Drag to resize SQL and result"
+        onMouseDown={startSqlResultResize}
+      />
+
       <div className="sql-result-panel">
         <div className="database-head">
           <strong>Result</strong>
@@ -2693,6 +2876,31 @@ function DatabaseBrowser({ databases, selectedDatabase, serverConnected, selecte
 
 
 function RedisBrowser({ connections, selected, serverConnected, databases, selectedDb, keys, pattern, selectedKey, detail, loading, onAdd, onEdit, onDelete, onSelect, onRefresh, onSelectDb, onPatternChange, onSearch, onOpenKey, onDeleteKey, onFlushDb }) {
+  const [redisSplit, setRedisSplit] = useState(42)
+  const redisMainRef = useRef(null)
+  const startRedisResize = (event) => {
+    event.preventDefault()
+    const bounds = redisMainRef.current?.getBoundingClientRect()
+    if (!bounds?.width) return
+    const contentLeft = bounds.left + 160
+    const contentWidth = Math.max(1, bounds.width - 160)
+    document.body.classList.add('is-resizing-panel')
+
+    const handleMove = (moveEvent) => {
+      const nextPercent = ((moveEvent.clientX - contentLeft) / contentWidth) * 100
+      setRedisSplit(Math.min(70, Math.max(25, nextPercent)))
+    }
+
+    const handleUp = () => {
+      document.body.classList.remove('is-resizing-panel')
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
+
   return (
     <div className="redis-browser">
       {!serverConnected && <div className="module-disabled-banner">Connect server first to use Redis tools.</div>}
@@ -2705,7 +2913,11 @@ function RedisBrowser({ connections, selected, serverConnected, databases, selec
         <button onClick={() => onDelete()} disabled={!selected}><Trash2 size={14} />Delete</button>
         <button className="solid-button" onClick={() => onRefresh()} disabled={!serverConnected || !selected || loading}><RefreshCw size={14} />{loading ? 'Loading' : 'Load'}</button>
       </div>
-      <div className="redis-main">
+      <div
+        className="redis-main"
+        ref={redisMainRef}
+        style={{ gridTemplateColumns: `160px minmax(180px, ${redisSplit}%) 10px minmax(240px, 1fr)` }}
+      >
         <aside className="redis-sidebar">
           <div className="redis-section-title">Databases</div>
           <div className="redis-db-list">
@@ -2730,6 +2942,13 @@ function RedisBrowser({ connections, selected, serverConnected, databases, selec
             )) : <div className="redis-empty">{loading ? 'Loading keys...' : 'No keys loaded.'}</div>}
           </div>
         </section>
+        <div
+          className="redis-splitter"
+          role="separator"
+          aria-orientation="vertical"
+          title="Drag to resize keys and value"
+          onMouseDown={startRedisResize}
+        />
         <section className="redis-value-panel">
           <div className="redis-section-title"><span>Value</span><button onClick={onDeleteKey} disabled={!serverConnected || !selectedKey || loading}><Trash2 size={14} />Delete key</button></div>
           {detail ? (
@@ -2778,6 +2997,12 @@ function TransferPopover({ transfers, onClear }) {
 
 
 function FilePreviewDialog({ file, content, saving, onChange, onClose, onSave }) {
+  const displayContent = file.loading
+    ? 'Loading remote file...'
+    : file.error
+      ? ''
+      : String(content ?? '')
+
   return (
     <div className="modal-backdrop">
       <section className="file-preview-dialog">
@@ -2788,16 +3013,17 @@ function FilePreviewDialog({ file, content, saving, onChange, onClose, onSave })
           </div>
           <button onClick={onClose}><X size={18} /></button>
         </div>
+        {file.error && <div className="dialog-notice error">{file.error}</div>}
         <textarea
           className="preview-editor"
-          value={file.loading ? 'Loading remote file...' : content}
+          value={displayContent}
           onChange={(event) => onChange(event.target.value)}
-          disabled={file.loading}
+          disabled={file.loading || Boolean(file.error)}
           spellCheck="false"
         />
         <div className="dialog-actions">
           <button onClick={onClose}>Close</button>
-          <button className="solid-button" onClick={onSave} disabled={saving || file.loading}>
+          <button className="solid-button" onClick={onSave} disabled={saving || file.loading || Boolean(file.error)}>
             <Save size={16} />{file.loading ? 'Loading' : saving ? 'Saving' : 'Save'}
           </button>
         </div>
@@ -3114,6 +3340,7 @@ function ServerDialog({ form, mode, isTesting, notice, onChange, onClose, onSave
             </>
           )}
         </div>
+        {notice && <div className={`dialog-notice ${notice.type}`}>{notice.text}</div>}
         <div className="dialog-actions">
           <button onClick={onTest} disabled={isTesting}>
             <CheckCircle2 size={16} />{isTesting ? 'Testing' : 'Test connection'}
@@ -3647,6 +3874,19 @@ function formatCellValue(value) {
   return String(value)
 }
 
+function formatPreviewContent(value) {
+  if (value === null || typeof value === 'undefined') return ''
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return value.join('')
+  if (typeof value === 'object') {
+    if (value.type === 'Buffer' && Array.isArray(value.data)) {
+      return new TextDecoder('utf-8').decode(new Uint8Array(value.data))
+    }
+    return JSON.stringify(value, null, 2)
+  }
+  return String(value)
+}
+
 function formatWelcomeTerminal(server, stdout = '') {
   const parsed = parseServerInspect(stdout)
   const hostname = parseHostname(stdout) || server.name
@@ -3990,7 +4230,9 @@ function time() {
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
   </React.StrictMode>
 )
 
