@@ -1,12 +1,39 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('opsFlow', {
   getStore: (key) => ipcRenderer.invoke('store:get', key),
   setStore: (key, value) => ipcRenderer.invoke('store:set', key, value),
+  getConfigSecurityStatus: () => ipcRenderer.invoke('config:security-status'),
+  exportEncryptedConfig: (options) => ipcRenderer.invoke('config:export-encrypted', options),
+  selectEncryptedConfigFile: () => ipcRenderer.invoke('config:select-import-file'),
+  inspectEncryptedConfig: (request) => ipcRenderer.invoke('config:inspect-import', request),
+  applyEncryptedConfig: (token, operationId) => ipcRenderer.invoke('config:apply-import', { token, operationId }),
+  onConfigOperationProgress: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('config:operation-progress', listener)
+    return () => ipcRenderer.removeListener('config:operation-progress', listener)
+  },
   readClipboardText: () => ipcRenderer.invoke('clipboard:read-text'),
   writeClipboardText: (text) => ipcRenderer.invoke('clipboard:write-text', text),
+  openExternal: (url) => ipcRenderer.invoke('app:open-external', url),
+  selectLocalPath: (options) => ipcRenderer.invoke('dialog:select-local-path', options),
+  selectSqlFile: () => ipcRenderer.invoke('dialog:select-sql-file'),
+  statLocalPath: (path) => ipcRenderer.invoke('fs:stat-local-path', path),
   testSsh: (config) => ipcRenderer.invoke('ssh:test', config),
   execSsh: (config, command) => ipcRenderer.invoke('ssh:exec', config, command),
+  execSshStream: (config, command, executionId, privilege) => ipcRenderer.invoke('ssh:exec-stream', config, command, executionId, privilege),
+  execSshPrivileged: (config, command, privilege) => ipcRenderer.invoke('ssh:exec-privileged', config, command, privilege),
+  cancelSshExec: (executionId) => ipcRenderer.invoke('ssh:exec-cancel', executionId),
+  detectSshPrivilege: (config) => ipcRenderer.invoke('ssh:privilege-detect', config),
+  verifySshPrivilege: (config, privilege) => ipcRenderer.invoke('ssh:privilege-verify', config, privilege),
+  forgetSshPrivilege: (config, mode) => ipcRenderer.invoke('ssh:privilege-forget', config, mode),
+  onSshExecData: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('ssh:exec:data', listener)
+    return () => ipcRenderer.removeListener('ssh:exec:data', listener)
+  },
   startSshShell: (config, size) => ipcRenderer.invoke('ssh:shell:start', config, size),
   writeSshShell: (sessionId, data) => ipcRenderer.invoke('ssh:shell:write', sessionId, data),
   resizeSshShell: (sessionId, size) => ipcRenderer.invoke('ssh:shell:resize', sessionId, size),
@@ -33,7 +60,11 @@ contextBridge.exposeInMainWorld('opsFlow', {
   },
   inspectServer: (config) => ipcRenderer.invoke('ssh:inspect', config),
   listRemoteDirectory: (config, path) => ipcRenderer.invoke('sftp:list', config, path),
-  uploadRemoteFile: (config, path) => ipcRenderer.invoke('sftp:upload', config, path),
+  listPrivilegedRemoteDirectory: (config, path, privilege) => ipcRenderer.invoke('sftp:privileged-list', config, path, privilege),
+  searchRemoteFiles: (config, query, privilege, executionId) => ipcRenderer.invoke('sftp:search-files', config, query, privilege, executionId),
+  uploadRemoteFile: (config, path, options) => ipcRenderer.invoke('sftp:upload', config, path, options),
+  uploadPrivilegedRemoteFile: (config, path, privilege) => ipcRenderer.invoke('sftp:privileged-upload', config, path, privilege),
+  uploadPrivilegedRemotePath: (config, localPath, path, privilege) => ipcRenderer.invoke('sftp:privileged-upload-path', config, localPath, path, privilege),
   uploadRemotePath: (config, localPath, remotePath) => ipcRenderer.invoke('sftp:upload-path', config, localPath, remotePath),
   onUploadProgress: (callback) => {
     const listener = (_event, payload) => callback(payload)
@@ -45,17 +76,32 @@ contextBridge.exposeInMainWorld('opsFlow', {
     ipcRenderer.on('sftp:transfer-progress', listener)
     return () => ipcRenderer.removeListener('sftp:transfer-progress', listener)
   },
+  cancelFileTransfer: (transferId) => ipcRenderer.invoke('sftp:transfer-cancel', transferId),
   downloadRemoteFile: (config, path) => ipcRenderer.invoke('sftp:download', config, path),
+  downloadPrivilegedRemoteFile: (config, path, privilege) => ipcRenderer.invoke('sftp:privileged-download', config, path, privilege),
+  downloadRemoteFiles: (config, paths, privilege) => ipcRenderer.invoke('sftp:download-files', config, paths, privilege),
   downloadRemotePath: (config, remotePath, localPath) => ipcRenderer.invoke('sftp:download-path', config, remotePath, localPath),
   readRemoteFile: (config, path) => ipcRenderer.invoke('sftp:read-file', config, path),
+  readPrivilegedRemoteFile: (config, path, privilege) => ipcRenderer.invoke('sftp:privileged-read-file', config, path, privilege),
   writeRemoteFile: (config, path, content) => ipcRenderer.invoke('sftp:write-file', config, path, content),
+  writePrivilegedRemoteFile: (config, path, content, privilege) => ipcRenderer.invoke('sftp:privileged-write-file', config, path, content, privilege),
+  createRemoteFile: (config, parentPath, name) => ipcRenderer.invoke('sftp:create-file', config, parentPath, name),
+  createRemoteDirectory: (config, parentPath, name) => ipcRenderer.invoke('sftp:create-directory', config, parentPath, name),
+  renameRemoteItem: (config, sourcePath, newName) => ipcRenderer.invoke('sftp:rename', config, sourcePath, newName),
+  createPrivilegedRemoteFile: (config, parentPath, name, privilege) => ipcRenderer.invoke('sftp:privileged-create-file', config, parentPath, name, privilege),
+  createPrivilegedRemoteDirectory: (config, parentPath, name, privilege) => ipcRenderer.invoke('sftp:privileged-create-directory', config, parentPath, name, privilege),
+  renamePrivilegedRemoteItem: (config, sourcePath, newName, privilege) => ipcRenderer.invoke('sftp:privileged-rename', config, sourcePath, newName, privilege),
+  copyRemoteFileBackup: (config, path, privilege) => ipcRenderer.invoke('sftp:copy-file-backup', config, path, privilege),
   writeRemoteBinaryFile: (config, path, contentBase64) => ipcRenderer.invoke('sftp:write-binary-file', config, path, contentBase64),
   deleteRemoteItem: (config, path, type) => ipcRenderer.invoke('sftp:delete', config, path, type),
+  deletePrivilegedRemoteItem: (config, path, type, privilege) => ipcRenderer.invoke('sftp:privileged-delete', config, path, type, privilege),
   testDatabase: (config) => ipcRenderer.invoke('db:test', config),
   inspectDatabase: (config) => ipcRenderer.invoke('db:inspect', config),
   inspectDatabaseColumns: (config, table) => ipcRenderer.invoke('db:columns', config, table),
   inspectDatabasePrivileges: (config) => ipcRenderer.invoke('db:privileges', config),
   execDatabase: (config, sql) => ipcRenderer.invoke('db:exec', config, sql),
+  execDatabaseScript: (config, sql, options) => ipcRenderer.invoke('db:exec-script', config, sql, options),
+  cancelDatabaseScript: (taskId) => ipcRenderer.invoke('db:cancel-script', taskId),
   exportDatabaseTables: (config, tables, format) => ipcRenderer.invoke('db:export', config, tables, format),
   testRedis: (config) => ipcRenderer.invoke('redis:test', config),
   inspectRedis: (config) => ipcRenderer.invoke('redis:inspect', config),

@@ -1,10 +1,21 @@
 {
   "name": "ops-flow",
-  "version": "0.1.0",
-  "private": false,
-  "description": "A lightweight SSH/SFTP, database and Redis operations desktop tool.",
-  "author": "Ops Flow Contributors",
-  "license": "AGPL-3.0-only",
+  "version": "0.2.0",
+  "private": true,
+  "description": "A lightweight visual SSH/SFTP operations and deployment workflow desktop tool.",
+  "author": {
+    "name": "秦屿",
+    "email": "1829941918@qq.com"
+  },
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qinyouxuan/ops-flow.git"
+  },
+  "homepage": "https://github.com/qinyouxuan/ops-flow#readme",
+  "bugs": {
+    "url": "https://github.com/qinyouxuan/ops-flow/issues"
+  },
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -16,14 +27,24 @@
     "lint": "eslint ."
   },
   "build": {
-    "appId": "com.opsflow.app",
-    "productName": "Ops Flow",
+    "appId": "com.opsflow.plus",
+    "productName": "Ops Flow Plus",
     "directories": {
       "output": "release"
     },
     "files": [
       "out/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "SOURCE_CODE.md",
+        "to": "SOURCE_CODE.md"
+      }
     ],
     "asar": true,
     "win": {
@@ -48,7 +69,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Ops Flow"
+      "shortcutName": "Ops Flow Plus"
     }
   },
   "dependencies": {
@@ -62,16 +83,20 @@
     "pg": "^8.13.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "reactflow": "^11.11.4",
     "redis": "^4.7.0",
     "ssh2": "^1.16.0",
+    "xlsx": "^0.18.5",
     "xterm": "^5.3.0",
     "xterm-addon-fit": "^0.8.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "electron": "^33.2.1",
     "electron-builder": "^24.13.3",
     "electron-vite": "^2.3.0",
     "eslint": "^9.17.0",
+    "globals": "^14.0.0",
     "vite": "^5.4.11"
   }
 }

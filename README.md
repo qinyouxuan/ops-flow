@@ -1,101 +1,108 @@
-# Ops Flow
+# Ops Flow Plus
 
-Ops Flow is a lightweight desktop operations workbench for SSH, SFTP, database and Redis maintenance.
+Ops Flow Plus 是一个面向服务器日常运维、部署与排障的桌面工具，将
+SSH 终端、SFTP 文件管理、数据库、Redis、工作流、备份恢复和运行环境
+管理集中在一个客户端中。
 
-This repository is the open-source base edition. It intentionally contains only the free core features:
+项目全部功能统一提供，并依据
+[Mozilla Public License 2.0](./LICENSE) 开放源代码。
 
-- SSH server connection management
-- Interactive SSH terminal
-- Remote file browsing, upload, download, edit and delete
-- Basic server resource summary
-- Database connection management, table/field browsing and SQL execution
-- Redis connection management, database/key browsing and basic commands
-- Local transfer history for upload, download, delete and export tasks
+## 主要功能
 
-Commercial-only capabilities are maintained outside this base edition.
+- SSH 服务器连接管理、交互式终端和实时资源概览
+- SFTP 文件浏览、搜索、上传、下载、编辑、重命名、备份和删除
+- 最近路径、收藏路径以及带名称、标签和备注的常用命令
+- MySQL、PostgreSQL、SQL Server、Oracle 和达梦数据库连接与 SQL 操作
+- Redis 连接、数据库与键浏览以及常用维护操作
+- 可视化工作流、批量服务器执行、角色范围、运行身份和失败回滚
+- 安全审计、系统服务、定时任务、防火墙和监听端口检查
+- Java、Node.js、Python、Go、.NET、Redis、MySQL、Nginx 等运行环境检测与部署
+- 备份任务发现、备份产物校验及人工确认后的恢复操作
+- 配置加密导出、解密预览和跨电脑导入
+- 上传、下载、部署和 SQL 文件任务的统一进度与取消控制
 
-## Screenshots
-
-### SSH Terminal And Remote Files
-
-![SSH terminal and remote files](./docs/screenshots/ssh-terminal.png)
-
-### Database Browser
-
-![Database browser](./docs/screenshots/database-browser.png)
-
-### Redis Browser
-
-![Redis browser](./docs/screenshots/redis-browser.png)
-
-## Editions
-
-Ops Flow Community Edition provides the open-source core for day-to-day SSH, SFTP, database and Redis maintenance.
-
-The commercial edition is distributed separately and may include:
-
-- Visual workflow automation for deployment, backup, rollback and data export scenarios
-- System management and inspection for services, packages, runtimes and cron tasks
-- Package deployer for downloading, uploading, installing, testing and uninstalling server components
-- AI-assisted analysis for operations logs, command output, system status and troubleshooting context
-- Commercial support, private builds and customized delivery
-
-## Commercial Contact
-
-For commercial edition access, private builds, customized deployment support, custom feature development or operations automation consulting, please contact the maintainer.
-
-Contact:
-
-- Email: `1829941918@qq.com`
-- WeChat: `MortalQY99`
-
-You can also open a GitHub Issue for public community feedback, bug reports or feature suggestions.
-
-## License
-
-Ops Flow Community Edition is licensed under the GNU Affero General Public License v3.0. See [LICENSE](./LICENSE).
-
-Commercial and plus editions are distributed separately and are not included in this repository.
-
-## Stack
+## 技术栈
 
 - Electron
 - React + Vite
+- React Flow
 - xterm.js
 - ssh2
-- mysql2 / pg
+- mysql2、pg、mssql、oracledb、dmdb
 - redis
 - electron-store
 
-## Run
+## 本地开发
 
-Use PowerShell:
+建议使用当前 Node.js LTS 版本。在 Windows PowerShell 中，如果执行策略
+阻止 `npm.ps1`，可以直接使用 `npm.cmd`：
 
 ```powershell
 npm.cmd install
 npm.cmd run dev
 ```
 
-Ops Flow depends on the Electron preload bridge for SSH, SFTP, database and Redis operations. Running the Vite renderer directly in a browser is not a supported production entry.
+SSH、SFTP、数据库和 Redis 操作依赖 Electron preload bridge，因此不能把
+普通浏览器中的 Vite 页面作为正式运行入口。
 
-## Build
+## 构建
+
+生产构建：
 
 ```powershell
 npm.cmd run build
 ```
 
-## Release Packages
-
-Build a Windows installer and a zip package:
+生成 Windows 安装包和免安装 ZIP：
 
 ```powershell
 npm.cmd run dist:win
 ```
 
-Build only the Windows zip package:
+仅生成免安装 ZIP：
 
 ```powershell
 npm.cmd run dist:win:zip
 ```
 
-Release artifacts are written to `release/`. The NSIS installer target may download Electron Builder helper binaries on the first run. If GitHub access is slow or blocked, retry after the helper cache is available, or publish the zip package as a no-install fallback.
+构建产物默认输出到 `release/`。
+
+## 配置与安全
+
+- 连接密码和私钥优先使用 Electron `safeStorage` 结合当前系统用户保护。
+- 原始本机配置不适合直接复制到另一台电脑；跨电脑迁移请使用软件内的
+  “导出加密配置”和“解密并导入”。
+- 加密备份密码不会随备份文件一起保存，请通过独立安全渠道传递。
+- 工作流、部署、删除、恢复、防火墙和服务操作可能改变远程服务器状态，
+  执行前应确认服务器、路径、账号、命令和回滚方案。
+- 请勿把真实服务器密码、私钥、数据库密码或导出的配置备份提交到仓库。
+
+## 版本与源码
+
+公开仓库：
+
+https://github.com/qinyouxuan/ops-flow
+
+正式发布时，安装包、免安装包、SHA-256 校验文件和对应版本源码应放在同一个
+GitHub Release 中，并使用相同版本标签。安装包内同时携带 `LICENSE` 和
+`SOURCE_CODE.md`，用于说明许可证及源码获取方式。
+
+版本变更记录见 [CHANGELOG.md](./CHANGELOG.md)。
+
+## 反馈
+
+问题反馈和功能建议请使用
+[GitHub Issues](https://github.com/qinyouxuan/ops-flow/issues)。
+
+维护者：秦屿
+
+联系邮箱：1829941918@qq.com
+
+## 许可证
+
+本项目的自有源代码依据
+[Mozilla Public License 2.0](./LICENSE) 发布。第三方依赖仍分别遵循其各自
+的许可证。
+
+分发安装包或其他可执行版本时，需要同时向接收者说明如何及时获得该版本
+对应的源代码。具体说明见 [SOURCE_CODE.md](./SOURCE_CODE.md)。

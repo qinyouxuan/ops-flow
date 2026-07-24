@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 
@@ -19,6 +21,6 @@ export default defineConfig({
   },
   renderer: {
     root: 'src/renderer',
-    plugins: [react()]
+    plugins: [react({ babel: { compact: true } })]
   }
 })
