@@ -22,13 +22,17 @@
     "build": "electron-vite build",
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win nsis zip",
+    "dist:win:signed": "npm run build && electron-builder --win nsis zip -c.win.signAndEditExecutable=true -c.forceCodeSigning=true",
     "dist:win:zip": "npm run build && electron-builder --win zip",
+    "verify:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1",
+    "verify:release:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -RequireSignature",
     "preview": "electron-vite preview",
     "lint": "eslint ."
   },
   "build": {
     "appId": "com.opsflow.plus",
     "productName": "Ops Flow Plus",
+    "copyright": "Copyright © 2026 秦屿",
     "directories": {
       "output": "release"
     },
@@ -44,6 +48,10 @@
       {
         "from": "SOURCE_CODE.md",
         "to": "SOURCE_CODE.md"
+      },
+      {
+        "from": "THIRD_PARTY_NOTICES.md",
+        "to": "THIRD_PARTY_NOTICES.md"
       }
     ],
     "asar": true,
@@ -73,8 +81,6 @@
     }
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
-    "dmdb": "^1.0.49630",
     "electron-store": "^10.0.1",
     "lucide-react": "^0.468.0",
     "mssql": "^12.7.0",
@@ -92,6 +98,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.2.1",
     "electron-builder": "^24.13.3",
     "electron-vite": "^2.3.0",

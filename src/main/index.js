@@ -11,7 +11,6 @@ import mysql from 'mysql2/promise'
 import pg from 'pg'
 import mssql from 'mssql'
 import oracledb from 'oracledb'
-import dmdb from 'dmdb'
 import { createClient as createRedisClient } from 'redis'
 import {
   containsCredentials,
@@ -23,6 +22,7 @@ import {
 } from './configCrypto.mjs'
 
 const shellSessions = new Map()
+let dmdbDriverPromise = null
 const shellSessionsByWebContents = new Map()
 const sshExecSessions = new Map()
 const workflowPrivilegeCredentials = new Map()
@@ -3605,6 +3605,7 @@ async function withDatabaseConnection(config, task) {
   }
 
   if (config.engine === 'dm') {
+    const dmdb = await loadDmdbDriver()
     const connection = await withTimeout(
       dmdb.getConnection({
         user: config.username,
@@ -3901,7 +3902,7 @@ function buildOracleConnectString(config) {
 }
 
 async function executeOracleLike(connection, engine, sql, binds = [], options = {}) {
-  const driver = engine === 'dm' ? dmdb : oracledb
+  const driver = engine === 'dm' ? await loadDmdbDriver() : oracledb
   const result = await connection.execute(sql, binds, {
     outFormat: driver.OUT_FORMAT_OBJECT,
     ...options
@@ -3910,6 +3911,21 @@ async function executeOracleLike(connection, engine, sql, binds = [], options = 
     ...result,
     rows: result.rows || []
   }
+}
+
+async function loadDmdbDriver() {
+  if (!dmdbDriverPromise) {
+    dmdbDriverPromise = import('dmdb')
+      .then((module) => module.default || module)
+      .catch((error) => {
+        dmdbDriverPromise = null
+        const message = 'Dameng database support requires the vendor dmdb driver. It is not bundled with the public Ops Flow Plus distribution; install and license it separately before building a DM-enabled package.'
+        const driverError = new Error(message)
+        driverError.cause = error
+        throw driverError
+      })
+  }
+  return dmdbDriverPromise
 }
 
 async function withRedis(config, task) {
