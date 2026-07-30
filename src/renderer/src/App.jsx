@@ -1,0 +1,20405 @@
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react'
+// SPDX-License-Identifier: MPL-2.0
+
+import { createRoot } from 'react-dom/client'
+import ReactFlow, { Background, Controls, applyNodeChanges } from 'reactflow'
+import 'reactflow/dist/style.css'
+import { Terminal } from 'xterm'
+import { FitAddon } from 'xterm-addon-fit'
+import 'xterm/css/xterm.css'
+import writeXlsxFile from 'write-excel-file/browser'
+import {
+  Activity,
+  Boxes,
+  Cable,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  CirclePlay,
+  CircleStop,
+  Copy,
+  Database,
+  Download,
+  Eye,
+  EyeOff,
+  File,
+  FilePlus,
+  Folder,
+  FolderPlus,
+  HardDrive,
+  History,
+  Power,
+  PowerOff,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  Save,
+  Server,
+  Settings,
+  ShieldCheck,
+  SquarePen,
+  SquareTerminal,
+  Star,
+  Trash2,
+  Upload,
+  Workflow,
+  X
+} from 'lucide-react'
+import './styles.css'
+
+const LANGUAGE_OPTIONS = [
+  { value: 'en-US', label: 'English' },
+  { value: 'zh-CN', label: '简体中文' }
+]
+
+const THEME_OPTIONS = ['system', 'light', 'dark']
+
+const PRODUCT_NAME = 'Ops Flow Plus'
+const PRODUCT_AUTHOR = '秦屿'
+const PRODUCT_EMAIL = '734052482@qq.com'
+const PRODUCT_SOURCE_URL = 'https://github.com/qinyouxuan/ops-flow'
+
+const I18N_MESSAGES = {
+  'en-US': {},
+  'zh-CN': {
+    'app.desktopTitle': 'Ops Flow 需要在桌面应用中运行',
+    'app.desktopDescription': 'SSH、SFTP、数据库和 Redis 操作需要 Electron preload bridge。',
+    'app.noServerSelected': '未选择服务器',
+    'app.serverOperations': '服务器运维',
+    'app.addServer': '添加服务器',
+    'app.noServers': '暂无服务器',
+    'app.addFirstSsh': '添加第一个 SSH 连接。',
+    'app.toolLog': '工具日志',
+    'language.label': '语言',
+    'settings.title': '设置',
+    'settings.description': '语言、主题、帮助和软件信息。',
+    'settings.nav.general': '常规',
+    'settings.nav.security': '配置安全',
+    'settings.general.title': '常规设置',
+    'settings.general.language': '界面语言',
+    'settings.general.theme': '主题',
+    'settings.general.damengTitle': '达梦数据库',
+    'settings.general.damengHint': '仅在使用达梦数据库时配置。',
+    'settings.general.damengConfigured': '已配置',
+    'settings.general.damengNotConfigured': '未配置',
+    'settings.general.damengSelect': '选择驱动目录',
+    'settings.general.damengReplace': '更换驱动目录',
+    'settings.general.damengClear': '取消使用',
+    'settings.general.damengClearConfirm': '移除当前达梦驱动配置？',
+    'settings.general.damengSelected': '达梦驱动已配置。',
+    'settings.general.damengCleared': '已移除达梦驱动配置。',
+    'settings.general.damengSecurity': '只选择合法取得的官方 dmdb 驱动。驱动和本机路径不会随配置备份导出。',
+    'settings.general.damengInstall': '示例：在独立目录运行 npm install dmdb，然后选择该目录下的 node_modules/dmdb。驱动路径仅保存在本机，不随配置导出。',
+    'settings.general.damengDriverReady': '驱动已就绪',
+    'settings.general.damengLegacyTitle': '兼容旧版达梦',
+    'settings.general.damengLegacyHint': '只有连接提示“旧加密算法”或 Unknown cipher 时才开启。',
+    'settings.general.damengLegacyReady': '兼容环境已就绪',
+    'settings.general.damengLegacyNeedsSetup': '兼容环境需要设置',
+    'settings.general.damengAdvanced': '高级设置与诊断',
+    'settings.general.damengDriverPath': '驱动目录',
+    'settings.general.damengLegacyEnabled': '兼容模式已启用。',
+    'settings.general.damengLegacyDisabled': '兼容模式已关闭。',
+    'settings.general.damengLegacyRuntime': '兼容运行时',
+    'settings.general.damengLegacyRuntimeDetected': '自动探测',
+    'settings.general.damengLegacyRuntimeSelected': '手动选择',
+    'settings.general.damengLegacyRuntimeMissing': '运行时不可用',
+    'settings.general.damengLegacySelectNode': '选择 Node.js 运行时',
+    'settings.general.damengLegacyClearNode': '恢复自动探测',
+    'settings.general.damengLegacyNodeSelected': '兼容模式 Node.js 运行时已配置。',
+    'settings.general.damengLegacyNodeCleared': '已恢复自动探测 Node.js 运行时。',
+    'settings.general.damengLegacyWarning': '兼容功能只影响达梦连接，并在独立进程中运行。数据库服务端可以升级时，建议关闭兼容。',
+    'settings.theme.light': '亮色',
+    'settings.theme.dark': '暗黑',
+    'settings.theme.system': '跟随系统',
+    'settings.security.title': '配置安全与迁移',
+    'settings.security.intro': '连接密码和私钥由系统凭据保护；跨电脑迁移时请使用带独立密码的加密备份。',
+    'settings.security.localTitle': '本机凭据保护',
+    'settings.security.localEnabled': '已启用',
+    'settings.security.localUnavailable': '当前不可用',
+    'settings.security.localHint': 'Windows 使用当前登录用户的系统加密能力。复制原始配置文件到其他电脑后无法直接解密，请使用下方导出功能。',
+    'settings.security.exportTitle': '导出加密配置',
+    'settings.security.exportHint': '生成 .opsflow-backup 文件。至少使用 8 个字符的密码，并通过安全渠道单独传递密码。',
+    'settings.security.password': '加密密码',
+    'settings.security.confirmPassword': '确认密码',
+    'settings.security.includeCredentials': '包含连接密码和私钥',
+    'settings.security.includeCredentialsHint': '默认不包含；勾选后可在新电脑直接使用连接，但备份密码必须妥善保管。',
+    'settings.security.includeHistory': '包含传输历史',
+    'settings.security.export': '选择位置并导出',
+    'settings.security.importTitle': '解密并导入',
+    'settings.security.importHint': '先解密预览数量，确认后覆盖当前配置。导入前会自动创建一份同密码的加密回滚备份。',
+    'settings.security.selectFile': '选择加密配置',
+    'settings.security.preview': '解密预览',
+    'settings.security.apply': '覆盖导入并重启界面',
+    'settings.security.noFile': '尚未选择文件',
+    'settings.security.servers': '服务器',
+    'settings.security.databases': '数据库',
+    'settings.security.redis': 'Redis',
+    'settings.security.workflows': '工作流',
+    'settings.security.transferTasks': '传输记录',
+    'settings.security.credentialsIncluded': '包含凭据',
+    'settings.security.credentialsExcluded': '不含凭据',
+    'settings.security.progress.export': '正在导出加密配置',
+    'settings.security.progress.preview': '正在解密并验证配置',
+    'settings.security.progress.apply': '正在覆盖导入配置',
+    'settings.security.progress.elapsed': '已用时 {seconds} 秒',
+    'settings.security.progress.completed': '操作已完成',
+    'settings.security.progress.failed': '操作失败',
+    'settings.security.progress.canceled': '操作已取消',
+    'settings.security.exportCanceled': '已取消导出，没有创建配置备份文件。',
+    'settings.security.importSucceeded': '配置导入成功，已创建导入前回滚备份。界面即将重新加载。',
+    'settings.security.stage.preparing': '整理配置',
+    'settings.security.stage.selecting': '选择保存位置',
+    'settings.security.stage.encrypting': '派生密钥并加密',
+    'settings.security.stage.writingExport': '写入备份文件',
+    'settings.security.stage.reading': '读取备份文件',
+    'settings.security.stage.decrypting': '派生密钥并解密',
+    'settings.security.stage.validatingPreview': '验证配置内容',
+    'settings.security.stage.validatingApply': '检查导入会话',
+    'settings.security.stage.backingUp': '创建当前配置回滚备份',
+    'settings.security.stage.writingImport': '写入新配置',
+    'topbar.transfers': '传输',
+    'topbar.connect': '连接',
+    'topbar.connecting': '连接中',
+    'topbar.edit': '编辑',
+    'topbar.disconnect': '断开',
+    'topbar.remove': '移除',
+    'topbar.settings': '设置',
+    'tab.backupRecovery': '备份恢复',
+    'backup.title': '备份与恢复',
+    'help.title': '帮助与关于',
+    'help.description': '操作指南、安全说明和软件信息。',
+    'help.nav.quick': '快速开始',
+    'help.nav.features': '功能说明',
+    'help.nav.files': '文件与搜索',
+    'help.nav.workflow': '工作流与权限',
+    'help.nav.backup': '备份与恢复',
+    'help.nav.data': '数据与传输',
+    'help.nav.safety': '安全操作',
+    'help.nav.faq': '常见问题',
+    'help.nav.about': '关于',
+    'help.quick.title': '快速开始',
+    'help.quick.intro': '建议先完成连接测试，再按“选择服务器 → 连接 → 执行功能 → 核对结果”的顺序操作。',
+    'help.support.title': '当前支持范围',
+    'help.support.text': '桌面客户端支持 Windows。SSH、SFTP、命令、部署、服务、运行环境、备份恢复和主机管理目前以 Linux 远程服务器为目标；数据库和 Redis 可通过直连或 Linux SSH 转发访问。Windows Server 远程部署和服务管理尚未完整支持。',
+    'help.quick.server.title': '1. 添加服务器',
+    'help.quick.server.text': '点击左侧“添加服务器”，填写地址、SSH 端口、用户名和认证信息。先测试连接，成功后再保存。',
+    'help.quick.connect.title': '2. 建立连接',
+    'help.quick.connect.text': '从左侧选择服务器并点击“连接”。连接成功后，基本信息、远程文件和各功能模块才会加载。',
+    'help.quick.module.title': '3. 选择功能',
+    'help.quick.module.text': '命令用于临时操作；数据库和 Redis 用于数据维护；工作流用于重复任务；审计用于检查；安装部署和主机管理用于系统级操作。',
+    'help.quick.verify.title': '4. 执行后核对',
+    'help.quick.verify.text': '查看页面结果、工具日志和服务器输出。涉及删除、重启、部署或防火墙变更时，应再次确认目标服务器和参数。',
+    'help.features.title': '功能说明',
+    'help.features.intro': '功能按日常运维路径划分：先连接服务器，再根据任务进入命令、文件、数据、自动化、安全检查或系统管理模块。每个模块会尽量先展示当前状态，再执行会改变服务器的操作。',
+    'help.features.terminal.title': '命令终端',
+    'help.features.terminal.text': '连接成功后提供交互式 SSH 终端，适合临时排查、执行一次性命令和查看实时输出。可把常用命令保存为带名称、标签和备注的模板；点击模板只粘贴到当前命令行，不自动发送回车。',
+    'help.features.files.title': '远程文件',
+    'help.features.files.text': '通过 SFTP 浏览、搜索、上传、下载、编辑、重命名、备份和删除远程文件。最近路径和收藏路径按服务器保存，可快速切换目录；权限不足时可临时启用 sudo 或 su 特权访问。',
+    'help.features.database.title': '数据库管理',
+    'help.features.database.text': '维护数据库连接，查看表和字段，执行 SQL 或选择本地 SQL/GZIP 文件批量运行；大型脚本会流式执行。内置逻辑备份无需另装命令行客户端，可把表结构、数据、索引、外键、视图、触发器和存储程序保存到本机。',
+    'help.features.redis.title': 'Redis 管理',
+    'help.features.redis.text': '维护 Redis 连接，加载键列表、查看键内容，并对确认无误的键执行删除操作。可将当前逻辑库导出为 .opsredis，也可选择冲突策略恢复到目标逻辑库，全程不需要 redis-cli。',
+    'help.features.workflow.title': '工作流',
+    'help.features.workflow.text': '把命令、文件、数据库、Redis、服务检查和回滚节点编排成可复用流程。支持目标服务器角色、按服务器或按步骤运行、并行或滚动执行，以及 sudo/su 运行身份。',
+    'help.features.audit.title': '安全审计',
+    'help.features.audit.text': '基于检查类工作流生成审计报告，可按服务器或步骤查看结果，帮助发现配置、权限、端口、服务和运行环境中的异常项。',
+    'help.features.deployer.title': '安装部署',
+    'help.features.deployer.text': '检测运行环境，按在线源、下载 URL 或离线包方式安装软件。执行前会整理版本、安装路径、端口、校验和与生成命令，便于先核对再操作。',
+    'help.features.host.title': '主机管理',
+    'help.features.host.text': '查看系统运行环境，管理系统服务和用户定时任务，并检测防火墙控制器、放行规则、监听端口和持久化状态。高风险变更会依赖权限和规则识别结果。',
+    'help.features.transfer.title': '传输中心',
+    'help.features.transfer.text': '集中查看上传、下载、部署、保存和 SQL 文件任务。成功任务自动收起，错误会保留；进行中的上传、下载和 SQL 文件执行可直接取消或停止。',
+    'help.features.backup.title': '备份与恢复',
+    'help.features.backup.text': '扫描 crontab、cron.d 和 systemd timer 中已有的备份任务，识别数据库、业务服务和文件资源备份，配置恢复目标后扫描、校验、查看并恢复备份产物。',
+    'help.files.title': '远程文件、搜索与特权访问',
+    'help.files.intro': '远程文件区域默认以当前 SSH 用户通过 SFTP 操作。搜索范围和权限范围不同，使用前先确认当前路径、特权状态以及结果是否完整。',
+    'help.files.browse.title': '浏览、复制与文件操作',
+    'help.files.browse.text': '单击目录进入，使用“上级目录”返回；工具栏可新建文件夹、新建文本文件、上传、下载、删除、刷新和启用特权访问。同名目标不会覆盖；新建文件成功后直接进入编辑器。普通目录列表中单击名称复制当前显示的文件名；全局结果显示并复制完整路径。编辑器支持 Ctrl+F 查找、高亮、上一处/下一处及单个或全部替换，保存前可在同目录创建时间戳备份。',
+    'help.files.paths.title': '最近路径与收藏路径',
+    'help.files.paths.text': '路径栏的时钟按钮显示当前服务器最近成功打开的目录和收藏目录。最近记录自动去重并保留最近 20 条；星标可收藏或取消收藏当前路径。记录按服务器隔离，点击路径会直接打开；清空最近记录不会删除收藏。',
+    'help.files.commands.title': '常用命令',
+    'help.files.commands.text': '常用命令可保存名称、命令内容、标签、备注，并设置为全部服务器通用或仅当前服务器可见。搜索后点击命令会直接粘贴到当前 SSH 命令行，不会自动发送回车；请核对当前服务器、光标位置和命令内容后手动按 Enter。',
+    'help.files.localSearch.title': '当前目录筛选',
+    'help.files.localSearch.text': '点击名称列旁的搜索图标后输入关键字，只筛选当前目录已经加载的项目，响应快且不会访问子目录。清空输入、点击关闭或按 Esc 可恢复当前目录全部内容。',
+    'help.files.globalSearch.title': '全局文件名搜索',
+    'help.files.globalSearch.text': '输入至少 2 个字符后点击“全局搜索”，应用从服务器根目录递归匹配文件名。结果每页显示 10 条，可上一页/下一页；单次最多保留 500 条，最长搜索 25 秒，达到限制时显示当前已找到的结果。关闭全局结果即可返回原目录。',
+    'help.files.searchPermission.title': '搜索结果与目录权限',
+    'help.files.searchPermission.text': '全局搜索只能进入当前身份有权读取的目录；出现“部分目录无访问权限”时，结果并不完整。可先启用特权访问再重新搜索，但最终范围仍受 sudo/su 配置、服务器安全策略和挂载权限限制。搜索不会改变任何文件。',
+    'help.files.privilege.title': '以管理员权限打开',
+    'help.files.privilege.text': '点击盾牌按钮，或在“无权访问此路径”提示中选择“以管理员权限打开”，再选自动检测、sudo 或 su。sudo 输入当前 SSH 用户的密码，su 输入 root 密码。特权模式只临时读取或提交目标文件，不会执行 chmod/chown；点击特权标签的关闭按钮即可退出。',
+    'help.files.transfer.title': '取消上传与下载',
+    'help.files.transfer.text': '打开顶部“传输”，进行中的上传和下载右侧会显示停止按钮。取消下载会清理本地未完成文件；取消上传会停止当前 SFTP 会话并尝试清理正在写入的远端残留。目录上传中已经完整完成的文件会保留，避免误删原目录。',
+    'help.workflow.title': '工作流运行、权限与回滚',
+    'help.workflow.intro': '工作流用于把重复运维步骤保存为可复用流程。运行前应确认当前选中的工作流、目标服务器、服务器角色、运行顺序和提权身份。',
+    'help.workflow.select.title': '选择、复制与编辑工作流',
+    'help.workflow.select.text': '左侧列表中选中的工作流才是编辑和运行目标。复制后会创建独立副本，可直接修改名称、描述、节点和命令；命令节点支持多行命令并按顺序执行。节点的 App、Script、Database、Nginx 范围只会在匹配角色的服务器上运行，其他服务器标记为跳过。',
+    'help.workflow.create.title': '新增工作流与节点',
+    'help.workflow.create.text': '点击“添加”可从空白流程或模板开始；点击“编辑”进入节点编辑器。将左侧节点拖入画布，选中节点后在配置区填写参数，按实际执行顺序连接节点。保存前会检查缺少必填项、无效路径和未配置连接等问题。',
+    'help.workflow.nodes.title': '节点类型与用途',
+    'help.workflow.nodes.text': '流程节点包括开始、结束和输出格式；文件节点包括上传、下载；连接器包括数据库和 Redis；执行器包括命令、HTTP 请求、Cron、依赖检查和自定义回滚；发布安全节点包括创建发布备份和恢复发布备份。输出格式节点用于 Excel、CSV、SQL、TXT 或 JSON 结果，依赖检查用于在部署前确认服务存在或正在运行。',
+    'help.workflow.nodeConfig.title': '节点参数、范围与执行策略',
+    'help.workflow.nodeConfig.text': '文件节点需要核对本地路径和远端绝对路径；数据库、Redis 节点需要选择已保存的连接；命令节点每行一条并顺序执行。执行范围 App、Script、Database、Nginx 只匹配带对应角色的服务器；并行、滚动或分批策略控制匹配服务器的推进方式。',
+    'help.workflow.identity.title': '运行身份：自动、当前用户、sudo、su',
+    'help.workflow.identity.text': '“自动检测”会先按当前 SSH 用户尝试，并在节点需要系统权限时使用已验证的提权方式；“当前 SSH 用户”不会提权；sudo 使用当前 SSH 用户密码；su 使用 root 密码。服务器禁止 root 直接 SSH 登录并不影响通过允许的 sudo/su 提权。',
+    'help.workflow.password.title': '提权密码的保存范围',
+    'help.workflow.password.text': '密码只保存在应用当前进程的内存中，不写入服务器配置、工作流或本地持久化存储，退出程序后清除。同一服务器、同一 SSH 用户和同一提权方式可在远程文件、工作流、安装部署和主机管理间复用；服务器或身份不同会重新验证。',
+    'help.workflow.order.title': '运行顺序与并发',
+    'help.workflow.order.text': '“按服务器”让每台服务器依次完成整条流程；“按步骤”先连接全部目标，再让所有匹配服务器完成当前节点后推进。并行模式受并发数限制，滚动模式逐台执行。失败策略可选择继续汇总或首次失败停止。',
+    'help.workflow.logs.title': '命令进度与统一状态',
+    'help.workflow.logs.text': '命令节点会逐条输出开始、命令内容、标准输出、错误输出和退出结果。运行详情可按服务器或按步骤查看；上传、下载和相关任务同时出现在顶部“传输”中。长时间无输出通常表示当前命令仍在运行，应根据最后一条命令定位。',
+    'help.workflow.cancel.title': '取消运行',
+    'help.workflow.cancel.text': '运行中的工作流可点击“取消”。尚未开始的服务器和步骤停止排队，当前 SSH 命令会尝试中断，已经完成的命令不会自动撤销。取消是整次工作流运行级操作，不是只取消界面中选中的某个步骤。',
+    'help.workflow.rollback.title': '自动回滚节点',
+    'help.workflow.rollback.text': '发布流程可使用“创建发布备份”节点生成绑定本次发布编号的 tar.gz 备份及 SHA-256 校验值，再由“恢复发布备份”节点在失败或手动停止时精确恢复。正常运行会跳过恢复节点；没有创建成功的本次备份时不会猜测或恢复其他历史文件。普通回滚节点仍可用于自定义恢复命令。',
+    'help.backup.title': '备份与恢复',
+    'help.backup.intro': '该模块用于发现服务器上已经存在的备份任务和产物，并在明确配置恢复目标、完成校验和人工确认后执行恢复。它不会替代备份系统，也不会在目标不明确时猜测恢复位置。',
+    'help.backup.scan.title': '1. 扫描备份任务',
+    'help.backup.scan.text': '连接服务器后选择扫描权限并点击“扫描任务”。应用读取用户 crontab、/etc/cron.d 和 systemd timer 及其关联命令或脚本，识别数据库、业务服务、配置和文件资源备份。识别置信度低的任务会要求人工核对。',
+    'help.backup.target.title': '2. 配置恢复目标',
+    'help.backup.target.text': '数据库任务需要关联当前服务器上兼容的数据库连接；文件类任务可以恢复到一个明确的文件或目录，也可以按压缩包内原始相对路径恢复到指定根目录。目标必须是绝对路径，单目标模式禁止直接使用服务器根目录；关联服务可用于恢复前停止、恢复后启动。',
+    'help.backup.artifact.title': '3. 扫描、校验与查看备份产物',
+    'help.backup.artifact.text': '点击“扫描备份”后才会读取任务可能产生的实际文件。恢复前使用“校验”检查文件存在、压缩格式、路径安全、校验值和可读取内容；压缩包可查看条目列表。未通过校验或格式无法安全识别时不应恢复。',
+    'help.backup.restore.title': '4. 执行恢复',
+    'help.backup.restore.text': '点击恢复后再次核对备份文件、目标、数据库连接和关联服务，并输入 RESTORE 确认。文件类恢复会尽量先停止关联服务、创建恢复前快照或副本、分阶段替换目标，再重新启动服务；恢复日志和停止操作会显示在传输中心。',
+    'help.backup.database.title': '数据库恢复边界',
+    'help.backup.database.text': '数据库恢复依赖备份格式、数据库客户端、连接权限和数据库自身事务能力。导入可能覆盖现有对象和数据，某些 DDL 或自定义备份格式无法完整回滚；正式恢复前仍应创建数据库原生备份并确认维护窗口。',
+    'help.backup.privilege.title': '扫描权限与凭据',
+    'help.backup.privilege.text': '可选择自动检测、当前 SSH 用户、sudo 或 su。普通权限可能无法读取系统计划任务或备份目录；验证成功的提权密码只在本次程序运行的内存中复用，退出程序后清除。',
+    'help.data.title': '数据库、SQL 文件与统一状态',
+    'help.data.intro': '数据库和传输类任务会把进度、成功、失败和取消状态集中到顶部“传输”。重要数据操作前仍应使用数据库自身的备份和恢复机制。',
+    'help.data.database.title': '数据库对象与 SQL 编辑器',
+    'help.data.database.text': '数据库和 Redis 连接是独立的全局资源，不随左侧当前服务器切换。直接连接不要求 SSH，127.0.0.1 表示运行 Ops Flow 的 Windows 电脑，也可填写其他可访问的数据库或 Redis 地址；SSH 模式需固定选择一台已保存服务器作为跳板，但不必先连接命令终端。MySQL SSH 模式还可选择 Unix Socket。达梦连接需要先在“设置 → 常规”选择用户自行取得的官方 dmdb 外部驱动；旧服务端若只能协商旧算法，可显式开启隔离运行的兼容模式。驱动、兼容开关和运行时路径不会进入配置备份。已保存连接可复制复用，表名和字段名支持模糊筛选，SQL 可直接运行或从本地文件加载后检查再执行。',
+    'help.data.sqlFile.title': '2. 导入 SQL 或 GZIP 备份',
+    'help.data.sqlFile.text': '先选择要写入的目标数据库连接；完整恢复建议使用空数据库或空模式。点击 SQL 区域右上角“执行脚本”，选择任意工具导出的 .sql 或 .sql.gz 文件；同目录存在 .sha256 时会先校验，没有校验文件也可以正常执行。小文件会加载到编辑器供检查；超过 10 MB 的脚本不会加载到界面，而由主进程分两遍流式扫描和执行，因此不受编辑器大小限制。脚本会按数据库方言拆分并顺序运行，支持 MySQL/MariaDB DELIMITER、PostgreSQL 美元引用、SQL Server GO，以及 Oracle/达梦的“/”块结束符。',
+    'help.data.sqlRollback.title': '3. 异常回滚与停止并回滚',
+    'help.data.sqlRollback.text': '加载 SQL 文件后默认启用“异常/停止时回滚”。批次异常会回滚事务；运行中可点击 SQL 区域或“传输”中的“停止并回滚”，应用等待当前批次结束后在安全边界回滚。MySQL、Oracle、达梦的部分 DDL 会隐式提交，数据库管理语句也可能不支持事务，因此界面会提示无法保证完整回滚。',
+    'help.data.logicalBackup.title': '1. 导出数据库逻辑备份',
+    'help.data.logicalBackup.text': '选择数据库连接后，在数据库工具栏点击“备份”。依次选择范围、内容及 SQL/GZIP 输出格式，再点击“选择位置并开始”。结构备份除字段和主键外，还会按数据库方言导出二级索引、外键、检查/唯一约束、视图、触发器及存储过程、函数或包；恢复脚本按表、数据、约束与索引、存储程序、视图、触发器的顺序生成。进度、停止和结果显示在弹窗与顶部“传输”，成功后同时生成 SHA-256 校验文件；停止或失败会删除残缺文件。',
+    'help.data.redis.title': '4. Redis 逻辑库备份与恢复',
+    'help.data.redis.text': '选择 Redis 连接及逻辑库后，点击“备份”可把当前 db 的 Redis DUMP 数据、绝对过期时间和毫秒 TTL 保存为 .opsredis，并生成 SHA-256 校验文件。点击“恢复”选择文件和同名键策略（跳过、覆盖或报错），输入 RESTORE 后恢复到当前 db；恢复会验证文件完整性和可用的校验文件，并显示进度。该文件不是原生 RDB 且未加密，恢复取消不会回滚已经写入的键。',
+    'help.data.status.title': '5. 在传输中心查看进度',
+    'help.data.status.text': '“传输”保存最近的上传、下载、保存、删除、部署和 SQL 文件任务。全部成功或主动取消后面板会自动收起；发生错误时保持打开并保留错误信息，直到手动关闭提示或清除记录。',
+    'help.safety.title': '高风险操作说明',
+    'help.safety.warning': '连接生产服务器前请确认已有可用备份和其他登录通道。不要在不了解影响范围时执行删除、停止、卸载或防火墙修改。',
+    'help.safety.permission.title': '权限与只读状态',
+    'help.safety.permission.text': '普通权限只能查看部分信息。需要修改受保护文件、系统服务、定时任务或防火墙时，请选择 sudo 或 su 并提供正确凭据；复杂或无法安全识别的规则会保持只读。不要为了方便直接递归放宽系统目录权限。',
+    'help.safety.credentials.title': '凭据与内存复用',
+    'help.safety.credentials.text': 'sudo 密码是当前 SSH 用户的密码，su 密码是 root 密码。应用只在当前运行进程内缓存验证成功的提权密码，并按服务器、SSH 用户和提权方式隔离；退出程序后自动清除。不要在工作流命令、备注或文件中写入明文密码。',
+    'help.safety.firewall.title': '防火墙与端口',
+    'help.safety.firewall.text': '“监听端口”表示程序正在监听，“放行端口”表示防火墙规则允许访问，两者不是同一概念。应用会保护当前 SSH 端口，并在变更前备份规则到 /var/lib/ops-flow/firewall-backups/。',
+    'help.safety.controller.title': '防火墙控制器',
+    'help.safety.controller.text': '应避免同时管理 firewalld、UFW、nftables 和 iptables。检测到控制器冲突、权限不足、重复规则或复杂 iptables 条件时，请先在服务器上人工核对。',
+    'help.safety.data.title': '数据与系统变更',
+    'help.safety.data.text': '删除表、字段、Redis 键，执行 SQL，停止或重启服务，修改 Cron，以及安装或卸载软件都可能造成不可逆影响。操作前确认服务器、库、表、命令和回滚方式。',
+    'help.safety.rollback.title': '回滚能力的边界',
+    'help.safety.rollback.text': '工作流回滚依赖预先配置的回滚节点；SQL 回滚依赖数据库事务；文件备份依赖保存前创建的副本。这些能力都不是整机快照。DDL 隐式提交、已经完成的远程命令、外部脚本副作用和网络中断可能无法自动恢复。',
+    'help.safety.configMigration.title': '加密配置导出与迁移',
+    'help.safety.configMigration.text': '设置中的“配置安全”可把服务器、数据库、Redis、工作流、备份恢复目标和常用命令导出为加密文件。是否包含连接凭据和历史记录由导出选项控制；导入时先解密预览，确认后覆盖本机配置，并自动创建一份同密码的导入前回滚备份。请通过不同渠道传递备份文件和密码。',
+    'help.faq.title': '常见问题',
+    'help.faq.readonly.q': '为什么按钮显示只读或不可用？',
+    'help.faq.readonly.a': '常见原因包括未连接服务器、权限不足、防火墙控制器未确认或冲突，以及规则包含来源地址、状态匹配、多端口等复杂条件。',
+    'help.faq.ports.q': '为什么放行端口和监听端口不一致？',
+    'help.faq.ports.a': '防火墙规则和程序监听是两个独立状态。端口已放行但没有程序监听时服务仍不可用；程序正在监听但未放行时，外部连接仍可能被拦截。',
+    'help.faq.inspect.q': '为什么巡检信息为空或提示需要权限？',
+    'help.faq.inspect.a': '请先连接服务器，再选择合适的服务权限并重新巡检。某些发行版缺少对应命令时，部分检测项也可能显示未知。',
+    'help.faq.search.q': '当前目录搜索和全局搜索有什么区别？',
+    'help.faq.search.a': '当前目录搜索只筛选已加载的列表；全局搜索从根目录递归访问子目录，最多保留 500 条并按每页 10 条显示。清空或关闭搜索可恢复原列表，两种搜索都不会修改文件。',
+    'help.faq.globalPermission.q': '为什么全局搜索提示结果可能不完整？',
+    'help.faq.globalPermission.a': '搜索身份无权进入部分目录。启用特权访问后重新搜索通常能扩大范围，但 sudoers、SELinux、挂载选项或服务器策略仍可能限制访问。提示存在权限拒绝时，不应把当前结果当作完整清单。',
+    'help.faq.privilegePassword.q': 'sudo 和 su 应该输入哪个密码？为什么有时不再询问？',
+    'help.faq.privilegePassword.a': 'sudo 通常输入当前 SSH 用户密码，su 输入 root 密码。验证成功后，应用会在本次运行内按同一服务器、SSH 用户和提权方式复用内存凭据，所以跨模块可能不再重复询问；退出程序后清除。',
+    'help.faq.workflowCancel.q': '取消工作流会撤销已经完成的步骤吗？',
+    'help.faq.workflowCancel.a': '普通工作流取消只会停止后续步骤；发布流程同时启用“自动回滚”和“手动停止时恢复”后，会先中断当前 SSH 命令，再对已成功创建本次发布备份的服务器执行恢复节点。未创建备份的服务器不会自动恢复。',
+    'help.faq.sqlRollback.q': '为什么 SQL 显示已回滚，部分结构变化仍然存在？',
+    'help.faq.sqlRollback.a': '部分数据库的 CREATE、ALTER、DROP、TRUNCATE 等 DDL 会隐式提交，某些管理语句也不能放在事务中。应用会在识别到风险时提醒，但无法覆盖数据库自身的事务限制。',
+    'help.faq.transferCancel.q': '取消上传或下载后会留下文件吗？',
+    'help.faq.transferCancel.a': '下载会清理本地未完成文件；上传会尝试删除当前远端残留。目录上传中此前已经完整上传的文件会保留。如果取消时网络已经断开，建议重新连接后检查目标目录。',
+    'help.faq.dameng.q': '为什么达梦数据库需要单独选择驱动？',
+    'help.faq.dameng.a': '达梦官方 dmdb 驱动采用厂商许可，Ops Flow 不会把它打进安装包或源码仓库。请自行安装官方 dmdb 包，再到“设置 → 常规 → 达梦数据库”选择其目录。旧服务端出现 Unknown cipher 时，可开启“兼容旧版达梦”：程序会自动准备独立兼容进程，主进程配置加密和其他数据库不受影响。驱动路径、兼容开关和运行时路径均只保存在本机。',
+    'help.about.title': '关于 Ops Flow Plus',
+    'help.about.summary': '运行于 Windows、主要用于 Linux 远程服务器 SSH、SFTP、数据库、Redis、工作流和运维管理的桌面工具。',
+    'help.about.product': '产品',
+    'help.about.version': '版本',
+    'help.about.author': '作者',
+    'help.about.email': '联系邮箱',
+    'help.about.source': '源代码',
+    'help.about.copyright': '版权所有 © 2026 秦屿。',
+    'help.about.license': '本软件的自有源代码依据 Mozilla Public License 2.0（MPL-2.0）发布。你可以在该许可证允许的范围内使用、修改和分发源码。',
+    'help.about.sourceNotice': '安装包对应源码可从上方项目仓库的同版本标签或发行页获取；如无法获取，请通过联系邮箱联系维护者。',
+    'help.about.thirdParty': '本软件包含的第三方开源组件，其权利和使用条件遵循各自的开源许可证。',
+    'metric.load': '负载',
+    'metric.memory': '内存',
+    'metric.cpu': 'CPU',
+    'metric.status': '状态',
+    'status.connected': '已连接',
+    'status.connecting': '连接中',
+    'status.disconnected': '未连接',
+    'status.error': '异常',
+    'status.pending': '等待中',
+    'panel.basicInfo': '基本信息',
+    'info.machine': '主机名',
+    'info.kernel': '内核',
+    'info.osArch': '系统 / 架构',
+    'info.uptime': '运行时间',
+    'info.clickCopy': '点击复制：{value}',
+    'transfer.history': '{count} 条记录',
+    'transfer.noActivity': '暂无活动',
+    'transfer.clear': '清除',
+    'transfer.empty': '暂无传输记录。',
+    'transfer.cancel': '取消传输',
+    'transfer.cancelled': '传输已取消',
+    'tab.command': '命令',
+    'tab.database': '数据库',
+    'tab.redis': 'Redis',
+    'tab.workflow': '工作流',
+    'tab.audit': '审计',
+    'tab.deployer': '安装部署',
+    'tab.inspector': '主机管理',
+    'tab.scrollLeft': '向左滚动',
+    'tab.scrollRight': '向右滚动',
+    'workflow.title': '工作流编排',
+    'workflow.description': '组合文件、连接器、输出和执行节点，用于可复用的运维操作。',
+    'workflow.add': '添加',
+    'workflow.edit': '编辑',
+    'workflow.copy': '复制',
+    'workflow.delete': '删除',
+    'workflow.run': '运行',
+    'workflow.instances': '工作流实例',
+    'workflow.flows': '{count} 个工作流',
+    'workflow.nodes': '{count} 个节点',
+    'workflow.runDetails': '运行详情',
+    'workflow.cancelRun': '取消本次运行',
+    'workflow.cancelling': '取消中…',
+    'workflow.cancelConfirm': '确定取消本次工作流吗？\n\n尚未开始的步骤将停止，当前 SSH 命令会尝试中断；已经完成的步骤不会撤销。',
+    'workflow.cancelRollbackConfirm': '确定停止本次工作流并恢复发布备份吗？\n\n当前 SSH 命令会尝试中断；已经为本次发布创建备份的服务器随后会执行恢复节点。',
+    'workflow.cancelled': '工作流已取消',
+    'workflow.byServer': '按服务器',
+    'workflow.byStep': '按步骤',
+    'workflow.queued': '排队中',
+    'workflow.emptyRunServer': '运行工作流后，可在这里查看每台服务器。',
+    'workflow.emptyRunPrompt': '运行工作流后，可在这里查看每台服务器和每个步骤的日志，运行历史也会保留在当前会话中。',
+    'workflow.runDialogTitle': '运行工作流',
+    'workflow.runDialogDescription': '选择目标服务器和执行策略；未连接的服务器将自动连接。',
+    'workflow.noDescription': '暂无描述。',
+    'workflow.targetServers': '目标服务器',
+    'workflow.selectedCount': '已选择 {count} 台',
+    'workflow.runOrder': '运行顺序',
+    'workflow.runByServer': '按服务器：每台服务器运行完整流程',
+    'workflow.runByStep': '按步骤：按集群拓扑顺序执行',
+    'workflow.executionMode': '执行模式',
+    'workflow.parallel': '并行批量执行',
+    'workflow.rolling': '逐台滚动执行',
+    'workflow.uploadStrategy': '上传策略',
+    'workflow.reuseRemoteFiles': '使用服务器已有发布包（跳过上传）',
+    'workflow.reuseRemoteFilesHelp': '按上传节点配置的远程路径检查文件；文件不存在时运行会失败，不会使用固定包名。',
+    'workflow.concurrency': '并发数',
+    'workflow.failureStrategy': '失败策略',
+    'workflow.continueSummary': '继续执行并汇总',
+    'workflow.stopFirstFailure': '首次失败时停止',
+    'workflow.autoRollback': '自动回滚',
+    'workflow.rollbackFailed': '在失败的服务器上运行回滚节点',
+    'workflow.rollbackOnCancel': '手动停止时也恢复本次发布备份',
+    'workflow.retryRollback': '重试回滚',
+    'workflow.runVariables': '发布变量',
+    'workflow.runVariablesHelp': '每行填写 KEY=value；路径和命令中使用 {{KEY}}。内置变量包括 {{release.id}}、{{server.name}} 和 {{backup.path}}。',
+    'workflow.runNote': '运行备注',
+    'workflow.runNotePlaceholder': '可选的发布备注',
+    'workflow.privilege': '运行身份',
+    'workflow.privilegeAuto': '自动检测（推荐）',
+    'workflow.privilegeCurrent': '当前 SSH 用户',
+    'workflow.privilegePassword': '提权密码',
+    'workflow.privilegeMemoryHint': '密码仅保存在本次程序运行的内存中，退出程序后自动清除；同一服务器、SSH 用户和提权方式可跨模块复用。',
+    'workflow.runHint': '按服务器会在每台服务器上运行完整工作流；按步骤会先连接全部已选服务器，再根据匹配的服务器角色逐节点推进。',
+    'workflow.runAndConnect': '运行并连接',
+    'workflow.runNow': '运行工作流',
+    'workflow.selectedReady': '已选服务器均已连接，可直接运行工作流。',
+    'workflow.selectedItems': '已选择 {count} 项',
+    'workflow.templateMarket': '工作流模板市场',
+    'workflow.templateDescription': '选择一个运维场景，保存前可继续调整节点和参数。',
+    'workflow.blank': '空白工作流',
+    'workflow.searchPlaceholder': '搜索部署、MySQL、Redis...',
+    'workflow.all': '全部',
+    'workflow.general': '通用',
+    'workflow.addTitle': '添加工作流',
+    'workflow.editTitle': '编辑工作流',
+    'workflow.editorDescription': '先构建线性工作流；每个节点之后可映射到实际执行器。',
+    'workflow.name': '名称',
+    'workflow.descriptionField': '描述',
+    'workflow.step': '步骤 {count}',
+    'workflow.up': '上移',
+    'workflow.down': '下移',
+    'workflow.nodeName': '节点名称',
+    'workflow.configEmpty': '从左侧面板拖入节点，然后点击节点进行配置。',
+    'workflow.issuesReview': '有 {count} 个问题需要检查',
+    'workflow.ready': '工作流已就绪',
+    'workflow.saveWorkflow': '保存工作流',
+    'workflow.config.format': '格式',
+    'workflow.config.outputPath': '输出路径',
+    'workflow.config.localPath': '本地文件或目录',
+    'workflow.config.browse': '浏览',
+    'workflow.config.remotePath': '远程目标路径',
+    'workflow.config.downloadTo': '下载到',
+    'workflow.config.connection': '连接',
+    'workflow.config.selectDatabase': '选择数据库连接',
+    'workflow.config.tables': '数据表',
+    'workflow.config.loadingTables': '正在加载数据表...',
+    'workflow.config.selectTables': '选择数据表',
+    'workflow.config.noTables': '未加载数据表',
+    'workflow.config.selectConnectionFirst': '请先选择连接',
+    'workflow.config.multiTableHelp': '多表导出会输出每个表的全部字段。',
+    'workflow.config.fields': '字段',
+    'workflow.config.loadingFields': '正在加载字段...',
+    'workflow.config.allFields': '全部字段（*）',
+    'workflow.config.noFields': '未加载字段',
+    'workflow.config.selectOneTable': '请先选择一个表',
+    'workflow.config.allFieldsHelp': '留空表示输出当前表的全部字段（*）。',
+    'workflow.config.multiTableFields': '字段：* · 多表导出会保留各表自身的字段。',
+    'workflow.config.filter': '筛选条件',
+    'workflow.config.selectRedis': '选择 Redis 连接',
+    'workflow.config.keyPattern': '键匹配模式',
+    'workflow.config.command': '命令',
+    'workflow.config.commandHelp': '每行一条命令；本步骤内按顺序执行。仅当中间需要插入其他节点时，才拆分为多个命令节点。',
+    'workflow.config.method': '请求方法',
+    'workflow.config.existingTask': '现有任务',
+    'workflow.config.createManual': '新建或手动输入',
+    'workflow.config.requiredServices': '依赖服务',
+    'workflow.config.serviceHelp': '每行一个服务；缺少服务或服务未运行时，本步骤失败。',
+    'workflow.config.statusRule': '状态规则',
+    'workflow.config.mustActive': '必须处于运行状态',
+    'workflow.config.requireExists': '仅要求服务存在',
+    'workflow.config.extraCheck': '附加检查命令',
+    'workflow.config.extraCheckHelp': '可选。服务检查后执行；非零退出码会使节点失败。',
+    'workflow.config.releaseAppName': '应用名称',
+    'workflow.config.releaseSourcePath': '当前部署路径',
+    'workflow.config.releaseBackupDir': '备份根目录',
+    'workflow.config.advancedBackup': '高级备份设置',
+    'workflow.config.autoFromPath': '根据部署路径自动生成',
+    'workflow.config.releaseServiceName': '服务名称',
+    'workflow.config.releaseRetention': '保留备份数量',
+    'workflow.config.releaseBackupConsistency': '备份一致性',
+    'workflow.config.stopBeforeBackup': '创建备份前停止正在运行的服务',
+    'workflow.config.releaseBackupHelp': '备份路径包含本次发布编号，并直接传递给“恢复发布备份”节点，不再查找所谓最新文件。',
+    'workflow.config.restoreVerifyCommand': '恢复后验证命令',
+    'workflow.config.restoreVerifyHelp': '可选。留空时，如果原服务处于运行状态，将使用 systemctl is-active 验证。',
+    'workflow.config.releaseRestoreHelp': '正常执行会跳过此节点；它只恢复当前服务器在本次流程中创建并记录的备份。',
+    'workflow.config.rollbackCommand': '回滚命令',
+    'workflow.config.rollbackHelp': '正常执行时会跳过回滚节点；仅在启用自动回滚且前序步骤失败后运行。',
+    'workflow.config.rollbackFailure': '回滚失败策略',
+    'workflow.config.rollbackContinue': '记录失败并继续回滚',
+    'workflow.config.rollbackStop': '失败时停止回滚',
+    'workflow.config.note': '备注',
+    'workflow.config.executionScope': '执行范围',
+    'workflow.config.allServers': '全部服务器',
+    'workflow.config.scopeHelp': '仅匹配执行范围的服务器会运行此节点，其他服务器标记为已跳过。',
+    'workflow.config.executionPolicy': '执行策略',
+    'workflow.config.parallelMatched': '在匹配的服务器上并行执行',
+    'workflow.config.rolling': '逐台滚动执行',
+    'workflow.config.batch': '分批发布',
+    'workflow.config.policyHelp': '集群模式下，该设置控制匹配服务器执行此节点的方式；批次值为累计百分比。',
+    'audit.title': '安全审计报告',
+    'audit.description': '运行在工作流中创建的审计流程，然后在此查看结果摘要和执行日志。',
+    'audit.workflow': '审计工作流',
+    'audit.run': '运行',
+    'audit.noWorkflows': '没有审计工作流',
+    'audit.score': '评分',
+    'audit.noScore': '暂无评分',
+    'audit.highRisks': '高风险',
+    'audit.warnings': '警告',
+    'audit.targetsDone': '完成目标',
+    'audit.reportFiles': '报告文件',
+    'audit.filesGenerated': '已生成 {count} 个文件',
+    'audit.generatedAfterRun': '运行后生成',
+    'audit.outputNode': '输出节点',
+    'audit.configureOutput': '请在工作流中配置“输出格式”节点以生成审计报告文件。',
+    'audit.riskDistribution': '风险分布',
+    'audit.findingsCount': '{count} 个问题',
+    'audit.total': '总计',
+    'audit.high': '高风险',
+    'audit.warning': '警告',
+    'audit.low': '低风险',
+    'audit.passed': '通过',
+    'audit.riskFindings': '风险问题',
+    'audit.parsedCount': '已解析 {count} 条',
+    'audit.noFindings': '暂无问题',
+    'audit.runForFindings': '运行审计工作流后生成风险分布和问题列表。',
+    'audit.runStatus': '运行状态',
+    'audit.runForProgress': '运行审计工作流后查看服务器进度。',
+    'audit.emptyTitle': '暂无可用的审计工作流',
+    'audit.emptyDescription': '请先在工作流中创建审计流程或添加审计标记；此页面仅用于运行审计和查看报告。',
+    'audit.openWorkflow': '打开工作流',
+    'remote.title': '远程文件',
+    'remote.name': '名称',
+    'remote.type': '类型',
+    'remote.size': '大小',
+    'remote.permissions': '权限',
+    'remote.owner': '所有者',
+    'remote.modified': '修改时间',
+    'remote.resizeColumn': '拖动调整列宽',
+    'remote.transferring': '正在传输文件...',
+    'remote.clickCopyValue': '单击复制显示内容',
+    'remote.noFiles': '没有文件',
+    'remote.loading': '正在加载远程目录...',
+    'remote.loadingFile': '正在加载远程文件...',
+    'remote.searchName': '搜索文件名',
+    'remote.globalSearch': '全局搜索',
+    'remote.globalSearching': '正在搜索整台服务器...',
+    'remote.globalResults': '全局结果：{count} 条',
+    'remote.globalSearchHint': '输入至少 2 个字符后，从服务器根目录递归搜索文件名。',
+    'remote.partialSearchResults': '部分目录无访问权限，结果可能不完整。',
+    'remote.searchTimedOut': '搜索已达到 25 秒限制，当前显示已找到的结果。',
+    'remote.searchTruncated': '结果超过 500 条，仅保留前 500 条。',
+    'remote.previousPage': '上一页',
+    'remote.nextPage': '下一页',
+    'remote.searchPage': '第 {page}/{pages} 页',
+    'remote.noMatches': '没有匹配的文件。',
+    'remote.connectPrompt': '连接服务器后浏览文件。',
+    'remote.upload': '上传',
+    'remote.newFile': '新建文件',
+    'remote.newFolder': '新建文件夹',
+    'remote.createFileTitle': '新建远程文件',
+    'remote.createFolderTitle': '新建远程文件夹',
+    'remote.createDescription': '将在当前目录创建；同名文件或文件夹不会被覆盖。',
+    'remote.createName': '名称',
+    'remote.createFile': '创建并编辑',
+    'remote.createFolder': '创建文件夹',
+    'remote.invalidCreateName': '请输入有效名称，不能使用 /、\\、. 或 ..。',
+    'remote.fileCreated': '文件已创建：{name}',
+    'remote.folderCreated': '文件夹已创建：{name}',
+    'remote.rename': '重命名',
+    'remote.renameTitle': '重命名远程文件或文件夹',
+    'remote.renameDescription': '只修改当前项目的名称；不会移动到其他目录，也不会覆盖已有项目。',
+    'remote.newName': '新名称',
+    'remote.invalidRenameName': '请输入有效的新名称，不能使用 /、\\、. 或 ..。',
+    'remote.renameSameName': '新名称必须与当前名称不同。',
+    'remote.renamed': '已重命名：{oldName} → {newName}',
+    'remote.download': '下载',
+    'remote.delete': '删除',
+    'remote.refresh': '刷新',
+    'remote.parent': '上级目录',
+    'remote.privilegedAccess': '特权访问',
+    'remote.privilegedActive': '特权访问：root',
+    'remote.exitPrivilege': '退出特权访问',
+    'remote.permissionDeniedTitle': '当前 SSH 用户无权访问此路径',
+    'remote.openAsRoot': '以管理员权限打开',
+    'remote.privilegeDialogTitle': '启用特权文件访问',
+    'remote.privilegeDialogDescription': '使用 sudo 或 su 临时读取受保护的文件；不会修改目标目录的永久权限。',
+    'remote.privilegeMode': '提权方式',
+    'remote.privilegePasswordHint': '密码只保存在本次程序运行的内存中，并与工作流、安装部署和主机管理共享。',
+    'remote.enablePrivilege': '验证并启用',
+    'remote.privilegeEnabled': '已启用特权文件访问。',
+    'remote.privilegeDisabled': '已退出特权文件访问。',
+    'remote.copyBackup': '复制备份',
+    'remote.copyingBackup': '复制中',
+    'remote.backupCreated': '备份已创建：{path}',
+    'remote.pathHistory': '路径记录',
+    'remote.pathHistoryHint': '快速打开最近访问或收藏的目录',
+    'remote.recentPaths': '最近访问',
+    'remote.favoritePaths': '收藏路径',
+    'remote.favoriteCurrent': '收藏当前路径',
+    'remote.unfavoriteCurrent': '取消收藏当前路径',
+    'remote.noRecentPaths': '暂无最近访问目录',
+    'remote.noFavoritePaths': '暂无收藏目录',
+    'remote.clearRecentPaths': '清空最近记录',
+    'command.savedTitle': '常用命令',
+    'command.savedDescription': '点击后直接粘贴到当前命令行，不会自动执行。',
+    'command.manageSaved': '管理常用命令',
+    'command.addSaved': '新增命令',
+    'command.searchSaved': '搜索名称、标签、备注或命令',
+    'command.noSaved': '暂无常用命令',
+    'command.noMatches': '没有匹配的常用命令',
+    'command.name': '名称',
+    'command.namePlaceholder': '例如：重启管理端',
+    'command.command': '命令',
+    'command.commandPlaceholder': '输入单行或多行命令',
+    'command.tags': '标签',
+    'command.tagsPlaceholder': '例如：部署, Nginx',
+    'command.note': '备注',
+    'command.notePlaceholder': '记录用途、适用环境和注意事项',
+    'command.scope': '适用范围',
+    'command.scopeAll': '所有服务器',
+    'command.scopeCurrent': '仅当前服务器',
+    'command.fill': '粘贴到命令行',
+    'command.filled': '命令已粘贴到终端，请确认后按 Enter 执行。',
+    'command.execute': '执行',
+    'command.executeHint': '点击执行或按 Ctrl+Enter',
+    'command.editorPlaceholder': '输入命令，或从“常用命令”中选择；Ctrl+Enter 执行',
+    'command.required': '请填写命令名称和命令内容。',
+    'command.sensitiveWarning': '命令可能包含密码、令牌或密钥。仍要保存吗？',
+    'command.confirmDelete': '删除常用命令“{name}”？',
+    'common.close': '关闭',
+    'common.save': '保存',
+    'common.delete': '删除',
+    'common.cancel': '取消',
+    'common.selectServer': '选择服务器',
+    'resource.direct': '直连',
+    'resource.sshServer': 'SSH：{name}',
+    'resource.missingSshServer': 'SSH：服务器已缺失',
+    'common.add': '添加',
+    'common.edit': '编辑',
+    'common.refresh': '刷新',
+    'common.rename': '重命名',
+    'common.create': '创建',
+    'common.saving': '保存中',
+    'common.testing': '测试中',
+    'common.testConnection': '测试连接',
+    'common.saveChanges': '保存修改',
+    'common.connectFirst': '请先连接服务器。',
+    'common.copy': '复制',
+    'common.clear': '清除',
+    'common.search': '搜索',
+    'common.clearSearch': '清除搜索',
+    'common.replaceWith': '替换为',
+    'common.replaceCurrent': '替换当前',
+    'common.replaceAll': '全部替换',
+    'common.replacedCount': '已替换 {count} 处',
+    'common.loading': '加载中',
+    'common.yes': '是',
+    'common.no': '否',
+    'maintenance.description': '仅在当前服务器需要此维护能力时进行配置。',
+    'toast.clipboardEmpty': '剪贴板为空',
+    'toast.connectBeforePaste': '请先连接再粘贴',
+    'toast.copied': '已复制',
+    'toast.openTerminal': '点击“连接”打开 SSH 终端。',
+    'toast.sshClosed': 'SSH 连接已关闭',
+    'toast.serverSaveFailed': '服务器保存失败',
+    'toast.sshConnected': 'SSH 已连接',
+    'toast.sshFailed': 'SSH 连接失败',
+    'toast.addServerFirst': '请先添加服务器。',
+    'toast.selectWorkflow': '请先选择工作流。',
+    'toast.addServerForWorkflow': '请先添加至少一台服务器。',
+    'toast.selectServer': '请至少选择一台服务器。',
+    'toast.workflowDuplicated': '工作流已复制',
+    'toast.keepWorkflow': '至少保留一个工作流。',
+    'toast.workflowDeleted': '工作流已删除',
+    'toast.enterWorkflowName': '请输入工作流名称。',
+    'toast.workflowSavedReview': '工作流已保存，但仍有项目需要检查',
+    'toast.workflowSaved': '工作流已保存',
+    'toast.addWorkflowNode': '请至少添加一个工作流节点。',
+    'toast.inspectorLoaded': '主机信息已加载',
+    'toast.privilegePassword': '请先输入权限密码。',
+    'toast.unsupportedService': '不支持的服务名称。',
+    'toast.scheduleRequired': '计划时间和命令均为必填项。',
+    'toast.cronUpdated': '定时任务已更新。',
+    'toast.selectExportTables': '请选择要导出的数据表。',
+    'toast.selectDatabase': '请先选择数据库连接。',
+    'toast.selectRedis': '请先选择 Redis 连接。',
+    'toast.testingRedis': '正在测试 Redis 连接...',
+    'toast.redisConnected': 'Redis 已连接',
+    'toast.redisFailed': 'Redis 连接失败',
+    'toast.selectTable': '请先选择数据表。',
+    'toast.tableRequired': '请填写必填的数据表信息。',
+    'toast.tableUpdated': '数据表已更新。',
+    'toast.selectField': '请先选择字段。',
+    'toast.columnRequired': '请填写必填的字段信息。',
+    'toast.columnUpdated': '字段已更新。',
+    'toast.selectRedisKey': '请先选择 Redis 键。',
+    'toast.keyDeleted': '键已删除。',
+    'toast.firstKeys': '已加载前 1000 个键。',
+    'toast.uploadFailed': '上传失败',
+    'toast.packageUploaded': '安装包已上传',
+    'toast.confirmOperation': '请先确认此操作。',
+    'toast.enterPackageUrl': '请先输入可下载的安装包 URL。',
+    'toast.uploadPackagePath': '请上传安装包或输入远程路径。',
+    'confirm.removeServer': '移除服务器“{name}”？\n\n关联这台服务器的 SSH 数据库和 Redis 连接也会被移除；直接连接会保留。',
+    'confirm.deleteWorkflow': '删除工作流“{name}”？\n\n此操作无法撤销。',
+    'confirm.deleteCron': '删除此定时任务？\n{line}',
+    'confirm.deletePath': '删除 {path}？',
+    'confirm.deleteDatabase': '删除数据库连接 {name}？',
+    'confirm.deleteRedis': '删除 Redis 连接 {name}？',
+    'confirm.deleteTable': '删除数据表 {name}？此操作无法撤销。',
+    'confirm.deleteColumn': '删除字段 {name}？',
+    'confirm.target': '操作对象',
+    'confirm.databaseTitle': '删除数据库连接',
+    'confirm.databaseWarningShort': '只删除本地连接配置，不会删除服务器数据库和数据。',
+    'confirm.databaseAction': '删除连接',
+    'confirm.tableTitle': '删除数据表',
+    'confirm.tableWarningShort': '将永久删除选中的数据表及其全部数据，无法恢复。',
+    'confirm.tableAction': '删除数据表',
+    'confirm.tableBatchAction': '删除 {count} 个数据表',
+    'confirm.columnTitle': '删除字段',
+    'confirm.columnWarningShort': '将永久删除该字段及字段数据，无法恢复。',
+    'confirm.columnAction': '删除字段',
+    'confirm.deleteKey': '删除键 {name}？',
+    'confirm.clearRedis': '清空 Redis db{db}？此操作无法撤销。',
+    'server.dialog.editTitle': '编辑服务器',
+    'server.dialog.addTitle': '添加服务器',
+    'server.dialog.editDescription': '更新 SSH 连接信息。',
+    'server.dialog.addDescription': '在本地保存 SSH 连接信息。',
+    'server.field.name': '名称',
+    'server.field.env': '环境',
+    'server.field.host': '主机',
+    'server.field.port': '端口',
+    'server.field.username': '用户名',
+    'server.field.auth': '认证方式',
+    'server.field.password': '密码',
+    'server.field.passphrase': '密钥口令',
+    'server.field.privateKey': '私钥',
+    'server.auth.password': '密码',
+    'server.auth.privateKey': '私钥',
+    'server.saveServer': '保存服务器',
+    'server.duplicateConnection': '复制为新连接',
+    'server.copyNameSuffix': '副本',
+    'server.copyReady': '已复制连接信息，请修改名称或主机后保存为新连接。',
+    'database.dialog.editTitle': '编辑数据库',
+    'database.dialog.addTitle': '添加数据库',
+    'database.dialog.editDescription': '更新连接信息。',
+    'database.dialog.addDescription': '保存连接信息并浏览可见的数据表。',
+    'database.field.name': '名称',
+    'database.field.engine': '数据库类型',
+    'database.field.connectionMethod': '连接方式',
+    'database.field.sshServer': 'SSH 跳板服务器',
+    'database.field.sshTransport': 'SSH 内数据库连接',
+    'database.field.host': '主机',
+    'database.field.port': '端口',
+    'database.field.socketPath': 'Unix Socket 路径',
+    'database.field.database': '数据库',
+    'database.field.username': '用户名',
+    'database.field.password': '密码',
+    'database.connection.ssh': '通过指定服务器 SSH',
+    'database.connection.direct': '直接连接',
+    'database.connection.tcp': 'TCP（远端主机和端口）',
+    'database.connection.socket': 'Unix Socket（MySQL）',
+    'database.saveConfig': '保存配置',
+    'database.connectFirst': '请先连接服务器再使用数据库工具。',
+    'database.emptyTitle': '尚未配置数据库',
+    'database.addDatabase': '添加数据库',
+    'database.searchTable': '搜索表名',
+    'database.searchColumn': '搜索字段名',
+    'database.noMatchingTables': '没有匹配的数据表。',
+    'database.noMatchingColumns': '没有匹配的字段。',
+    'database.connection': '连接',
+    'database.addConnection': '添加连接',
+    'database.editConnection': '编辑连接',
+    'database.duplicateConnection': '复制连接',
+    'database.copyNameSuffix': '副本',
+    'database.deleteConnection': '删除连接',
+    'database.deleteConnectionShort': '删连接',
+    'database.connectionDeleted': '已删除数据库连接：{name}',
+    'database.refreshTables': '刷新数据表',
+    'database.checkPrivileges': '检查权限',
+    'database.checking': '检查中',
+    'database.privileges': '权限',
+    'database.checkingPrivileges': '正在检查权限...',
+    'database.privilegesNotChecked': '尚未检查权限',
+    'database.tables': '数据表',
+    'database.exportSql': '导出 SQL',
+    'database.exportCsv': '导出 CSV',
+    'database.noCreatePermission': '没有 CREATE 权限',
+    'database.noAlterPermission': '没有 ALTER 权限',
+    'database.noDropPermission': '没有 DROP 权限',
+    'database.addTable': '添加表',
+    'database.renameTable': '重命名表',
+    'database.deleteTable': '删除表',
+    'database.clickCopy': '点击复制：{value}',
+    'database.noTablesLoaded': '未加载数据表。',
+    'database.loading': '加载中',
+    'database.loadTables': '加载数据表',
+    'database.resizeSchema': '拖动调整表和字段区域',
+    'database.fields': '字段',
+    'database.addField': '添加字段',
+    'database.editField': '编辑字段',
+    'database.deleteField': '删除字段',
+    'database.header.name': '名称',
+    'database.header.type': '类型',
+    'database.header.nullable': '可空',
+    'database.header.default': '默认值',
+    'database.doubleClickTable': '双击数据表查看字段。',
+    'database.ctrlEnter': 'Ctrl+Enter 运行',
+    'database.run': '运行',
+    'database.runFile': '执行脚本',
+    'database.selectSqlFile': '选择 SQL 或压缩 SQL 脚本',
+    'database.sqlFileLoaded': 'SQL 文件已加载：{name}',
+    'database.sqlFileSource': '来源：{name} · {size} · {encoding}',
+    'database.sqlFileModified': '已修改',
+    'database.replaceSqlConfirm': '使用 {name} 替换当前 SQL 编辑器内容？',
+    'database.clearSqlConfirm': '清除已加载的 SQL 文件及编辑器内容？',
+    'database.sqlRunning': '执行中',
+    'database.rollbackOnStop': '异常/停止时回滚',
+    'database.rollbackRiskConfirm': '脚本包含可能发生隐式提交的 DDL 或数据库管理语句，无法保证完整回滚。仍以事务模式执行吗？',
+    'database.stopRollback': '停止并回滚',
+    'database.stopRequested': '已请求停止，当前 SQL 批次结束后将执行回滚。',
+    'database.resizeSql': '拖动调整 SQL 和结果区域高度',
+    'database.result': '结果',
+    'database.emptySqlResult': '运行 SQL 后在这里查看结果。',
+    'database.table.renameTitle': '重命名表',
+    'database.table.addTitle': '添加表',
+    'database.table.renameDescription': '此处只修改表名；字段请在字段编辑器中修改。',
+    'database.table.addDescription': '创建数据表并设置初始字段。',
+    'database.table.currentName': '当前表名',
+    'database.table.newName': '新表名',
+    'database.table.tableName': '表名',
+    'database.table.initialFields': '初始字段',
+    'database.table.addField': '添加字段',
+    'database.table.nullable': '可空',
+    'database.table.notNull': '非空',
+    'database.table.removeField': '移除字段',
+    'database.table.createTable': '创建表',
+    'database.column.editTitle': '编辑字段',
+    'database.column.addTitle': '添加字段',
+    'database.column.editDescription': '更新字段名称、类型、是否可空和默认值。',
+    'database.column.addDescription': '在当前数据表上创建新字段。',
+    'database.column.currentName': '当前名称',
+    'database.column.newName': '新名称',
+    'database.column.name': '名称',
+    'database.column.type': '类型',
+    'database.column.nullable': '可空',
+    'database.column.default': '默认值',
+    'database.column.yes': '是',
+    'database.column.no': '否',
+    'redis.dialog.editTitle': '编辑 Redis',
+    'redis.dialog.addTitle': '添加 Redis',
+    'redis.dialog.description': '在本地保存 Redis 连接信息。',
+    'redis.field.name': '名称',
+    'redis.field.connectionMethod': '连接方式',
+    'redis.field.sshServer': 'SSH 跳板服务器',
+    'redis.field.host': '主机',
+    'redis.field.port': '端口',
+    'redis.field.database': '数据库',
+    'redis.field.password': '密码',
+    'redis.field.tls': 'TLS',
+    'redis.connection.ssh': '通过指定服务器 SSH',
+    'redis.connection.direct': '直接连接',
+    'redis.saveRedis': '保存 Redis',
+    'redis.connectFirst': '请先连接服务器再使用 Redis 工具。',
+    'redis.emptyTitle': '尚未配置 Redis',
+    'redis.addRedis': '添加 Redis',
+    'redis.addConnection': '添加连接',
+    'redis.editConnection': '编辑连接',
+    'redis.deleteConnection': '删除连接',
+    'redis.loading': '加载中',
+    'redis.load': '加载',
+    'redis.databases': '数据库',
+    'redis.keys': '键',
+    'redis.clearDb': '清空 DB',
+    'redis.patternPlaceholder': '匹配模式，例如 user:*',
+    'redis.search': '搜索',
+    'redis.loadingKeys': '正在加载键...',
+    'redis.noKeysLoaded': '未加载键。',
+    'redis.resizeKeys': '拖动调整键和值区域',
+    'redis.value': '值',
+    'redis.deleteKey': '删除键',
+    'redis.type': '类型',
+    'redis.ttl': 'TTL',
+    'redis.selectKey': '选择一个键查看值。',
+    'inspector.connectFirst': '请先连接服务器再查看系统信息。',
+    'inspector.title': '主机管理',
+    'inspector.description': '查看运行环境，管理系统服务、用户定时任务和防火墙端口。',
+    'inspector.servicePrivilege': '服务权限',
+    'inspector.loading': '加载中',
+    'inspector.loadingHint': '正在读取系统清单，超过 60 秒会自动中止。',
+    'inspector.cancel': '取消巡检',
+    'inspector.inspect': '巡检',
+    'inspector.clickInspect': '点击巡检加载服务器清单。',
+    'inspector.runtime': '运行时',
+    'inspector.noRuntimeData': '没有运行时数据。',
+    'inspector.detectionTimedOut': '检测超时',
+    'inspector.services': '服务',
+    'inspector.service': '服务',
+    'inspector.searchServices': '搜索服务名称',
+    'inspector.serviceMatches': '{matched}/{total} 个服务',
+    'inspector.status': '状态',
+    'inspector.descriptionColumn': '描述',
+    'inspector.action': '操作',
+    'inspector.start': '启动',
+    'inspector.stop': '停止',
+    'inspector.restart': '重启',
+    'inspector.systemdOnly': '仅支持 systemd 服务',
+    'inspector.noServices': '未加载服务',
+    'inspector.noServiceMatches': '没有匹配的服务。',
+    'inspector.cron': '定时任务',
+    'inspector.noCron': '没有用户定时任务',
+    'inspector.system': '系统',
+    'inspector.noData': '没有数据',
+    'firewall.title': '防火墙与端口',
+    'firewall.backend': '控制器',
+    'firewall.state': '状态',
+    'firewall.state.active': '运行中',
+    'firewall.state.inactive': '未运行',
+    'firewall.state.rules-present': '存在规则',
+    'firewall.state.permission-required': '需要权限',
+    'firewall.state.unknown': '未知',
+    'firewall.zone': '区域',
+    'firewall.persistence': '持久化',
+    'firewall.persistence.supported': '支持',
+    'firewall.persistence.managed': '由 UFW 管理',
+    'firewall.persistence.configured': '已配置',
+    'firewall.persistence.not-configured': '未配置',
+    'firewall.persistence.unknown': '未知',
+    'firewall.conflict': '检测到多个防火墙控制器同时运行。解决冲突前已禁用修改操作。',
+    'firewall.notDetected': '未检测到支持的防火墙控制器。',
+    'firewall.inspectTimeout': '防火墙检测超时，已跳过该项；其他巡检结果不受影响。',
+    'firewall.unknown': '未知',
+    'firewall.permissionRequired': '读取防火墙规则需要 root 权限，请选择 sudo 或 su 并输入正确密码后重新巡检。',
+    'firewall.allowedPorts': '放行端口',
+    'firewall.listeningPorts': '监听端口',
+    'firewall.noAllowedPorts': '没有检测到简单的端口放行规则。',
+    'firewall.noListeningPorts': '没有检测到 TCP 或 UDP 监听端口。',
+    'firewall.addPort': '添加端口',
+    'firewall.addPortTitle': '添加放行端口',
+    'firewall.addPortDescription': '规则将写入当前活动的防火墙控制器；持久化规则在重启后仍然有效。',
+    'firewall.port': '端口',
+    'firewall.protocol': '协议',
+    'firewall.persistent': '重启后仍然生效',
+    'firewall.permanent': '永久',
+    'firewall.runtimeOnly': '仅当前运行',
+    'firewall.anywhere': '任意来源',
+    'firewall.sshProtected': 'SSH 保护',
+    'firewall.readOnly': '只读',
+    'firewall.readOnlyRule': '此规则无法被安全、精确地识别，因此只能查看。',
+    'firewall.protectSsh': '不能删除当前 SSH 连接端口对应的规则。',
+    'firewall.enable': '启用防火墙',
+    'firewall.disable': '停用防火墙',
+    'firewall.invalidPort': '请输入 1 到 65535 之间的端口。',
+    'firewall.notManageable': '当前防火墙后端无法被安全管理。',
+    'firewall.addFailed': '添加防火墙规则失败。',
+    'firewall.added': '防火墙规则已添加。',
+    'firewall.deleteFailed': '删除防火墙规则失败。',
+    'firewall.deleted': '防火墙规则已删除。',
+    'firewall.confirmDelete': '删除防火墙规则 {port}/{protocol}？',
+    'firewall.toggleUnsupported': '只有明确识别出的 firewalld 或 UFW 后端支持启停操作。',
+    'firewall.confirmEnable': '启用 {backend}？系统会先放行当前 SSH 端口 {port}/tcp。',
+    'firewall.confirmDisable': '停用防火墙会暴露此主机。输入 DISABLE 继续。',
+    'firewall.toggleFailed': '防火墙状态修改失败。',
+    'firewall.enabled': '防火墙已启用。',
+    'firewall.disabled': '防火墙已停用。',
+    'firewall.backendNote': '检测到的后端：{backend}',
+    'deployer.connectFirst': '请先连接服务器再打开安装部署。',
+    'deployer.title': '安装部署',
+    'deployer.description': '在选中服务器上安装、配置和卸载常用运行环境。',
+    'deployer.privilege': '权限',
+    'deployer.components': '组件',
+    'deployer.checking': '检查中',
+    'deployer.refreshStatus': '刷新状态',
+    'deployer.installed': '已安装',
+    'deployer.running': '运行中',
+    'deployer.notChecked': '未检测',
+    'deployer.notCheckedHint': '尚未执行安装状态检测。',
+    'deployer.notInstalled': '未安装',
+    'deployer.installTitle': '{name} 安装',
+    'deployer.offlineVersionNote': '离线包使用上传文件中的版本。',
+    'deployer.installDescription': '选择软件源、版本和安装参数。',
+    'deployer.source': '来源',
+    'deployer.sourceOnline': '在线包管理',
+    'deployer.sourceUrl': '安装包 URL',
+    'deployer.sourceOffline': '上传离线包',
+    'deployer.version': '版本',
+    'deployer.detectedAfterInstall': '安装后将显示检测到的版本。',
+    'deployer.targetSystem': '目标系统',
+    'deployer.detectingTarget': '正在检测系统版本和架构…',
+    'deployer.targetUnavailable': '请先连接服务器，检测系统版本和架构后再选择安装包。',
+    'deployer.installPath': '安装路径',
+    'deployer.port': '端口',
+    'deployer.consolePort': '控制台端口',
+    'deployer.password': '密码',
+    'deployer.adminPassword': '管理员密码',
+    'deployer.confirmPassword': '确认管理员密码',
+    'deployer.mysqlPasswordPlaceholder': '至少 8 位，安装后写入 MySQL',
+    'deployer.minioPasswordPlaceholder': '至少 8 位，安装后写入 MinIO',
+    'deployer.showPassword': '显示密码',
+    'deployer.hidePassword': '隐藏密码',
+    'deployer.serviceUser': '服务用户',
+    'deployer.adminUser': '管理员用户',
+    'deployer.checksum': '校验和',
+    'deployer.packageUrl': '安装包 URL',
+    'deployer.remotePackagePath': '远程安装包路径',
+    'deployer.uploading': '上传中',
+    'deployer.upload': '上传',
+    'deployer.configSaved': '参数记录已保存（不代表服务或认证验证通过）',
+    'deployer.detected': '检测到：{value}',
+    'deployer.configSavedLocal': '配置已在本地保存，但尚未检测安装状态。',
+    'deployer.notDetected': '未安装或未检测到。',
+    'deployer.runningUnverified': '运行中/未验证',
+    'deployer.authVerified': '认证通过',
+    'deployer.configurationRequired': '已安装/认证失败',
+    'deployer.continueConfiguration': '继续配置',
+    'deployer.repairAuthentication': '修复认证',
+    'deployer.configuring': '配置中',
+    'deployer.mysqlAuthPending': 'mysqld 正在运行，但管理员认证尚未验证。',
+    'deployer.mysqlAuthFailed': '管理员认证未通过，需要重新配置或输入正确密码。',
+    'deployer.hideAdvanced': '隐藏高级设置',
+    'deployer.advancedCommand': '高级命令',
+    'deployer.commandEditor': '命令编辑器',
+    'deployer.commandEditorHint': '需要覆盖默认脚本时，可在此服务器上临时编辑。',
+    'deployer.resetCommand': '重置命令',
+    'deployer.confirmTitle': '安装或卸载前需要确认',
+    'deployer.downloading': '下载中',
+    'deployer.download': '下载',
+    'deployer.testing': '测试中',
+    'deployer.test': '测试',
+    'deployer.installing': '安装中',
+    'deployer.install': '安装',
+    'deployer.uninstall': '卸载',
+    'deployer.progress': '进度',
+    'deployer.remoteOutput': '远程服务器输出将显示在这里。',
+    'cron.editTitle': '编辑定时任务',
+    'cron.addTitle': '添加定时任务',
+    'cron.description': '选择计划时间，或输入要运行的命令/脚本路径。',
+    'cron.schedule': '计划',
+    'cron.interval': '间隔',
+    'cron.minute': '分钟',
+    'cron.hour': '小时',
+    'cron.weekday': '星期',
+    'cron.day': '日期',
+    'cron.expression': '表达式',
+    'cron.command': '命令',
+    'cron.everyMinute': '每分钟',
+    'cron.everyNMinutes': '每 N 分钟',
+    'cron.hourly': '每小时',
+    'cron.daily': '每天',
+    'cron.weekly': '每周',
+    'cron.monthly': '每月',
+    'cron.advancedExpression': '高级表达式',
+    'cron.everyMinutes': '每 {count} 分钟',
+    'cron.preview': '预览',
+    'cron.commandPlaceholder': '<命令>'
+  }
+}
+
+function createTranslator(language) {
+  const messages = I18N_MESSAGES[language] || I18N_MESSAGES['en-US']
+  return (key, fallback, values = {}) => {
+    const template = messages[key] || fallback || key
+    return String(template).replace(/\{(\w+)\}/g, (_match, name) => (
+      Object.prototype.hasOwnProperty.call(values, name) ? values[name] : `{${name}}`
+    ))
+  }
+}
+
+const I18nContext = React.createContext({
+  language: 'en-US',
+  t: createTranslator('en-US')
+})
+
+function useI18n() {
+  return React.useContext(I18nContext)
+}
+
+const emptyServer = {
+  id: '',
+  name: 'No server selected',
+  hostname: '-',
+  host: '-',
+  port: 22,
+  username: '-',
+  env: '-',
+  status: '-',
+  load: '-',
+  memory: '-',
+  cpuUsage: null,
+  memoryUsage: null,
+  cpu: '-',
+  arch: '-',
+  os: '-',
+  kernel: '-',
+  uptime: '-'
+}
+
+const workflowNodes = [
+  { id: 'upload', position: { x: 20, y: 90 }, data: { label: 'Upload' } },
+  { id: 'unpack', position: { x: 180, y: 90 }, data: { label: 'Unpack' } },
+  { id: 'stop', position: { x: 340, y: 90 }, data: { label: 'Stop service' } },
+  { id: 'replace', position: { x: 520, y: 90 }, data: { label: 'Replace' } },
+  { id: 'start', position: { x: 700, y: 90 }, data: { label: 'Start service' } },
+  { id: 'verify', position: { x: 880, y: 90 }, data: { label: 'Verify' } }
+]
+
+const workflowEdges = [
+  { id: 'e1', source: 'upload', target: 'unpack', animated: true },
+  { id: 'e2', source: 'unpack', target: 'stop', animated: true },
+  { id: 'e3', source: 'stop', target: 'replace', animated: true },
+  { id: 'e4', source: 'replace', target: 'start', animated: true },
+  { id: 'e5', source: 'start', target: 'verify', animated: true }
+]
+
+const workflowModuleGroups = [
+  {
+    id: 'control',
+    name: 'Flow',
+    modules: [
+      { id: 'start', name: 'Start', label: 'Start', description: 'Entry node for a workflow.' },
+      { id: 'end', name: 'End', label: 'End', description: 'Final node and result boundary.' },
+      { id: 'output-format', name: 'Output format', label: 'Output format', description: 'Declare excel, csv, sql, txt or json output.' }
+    ]
+  },
+  {
+    id: 'file',
+    name: 'Files',
+    modules: [
+      { id: 'file-upload', name: 'File upload', label: 'Upload file', description: 'Upload local package or SQL file to a server.' },
+      { id: 'file-download', name: 'File download', label: 'Download file', description: 'Download generated artifact from a server.' }
+    ]
+  },
+  {
+    id: 'connector',
+    name: 'Connectors',
+    modules: [
+      { id: 'connector-database', name: 'Database', label: 'Database', description: 'Configure connection, table, fields and filters.' },
+      { id: 'connector-redis', name: 'Redis', label: 'Redis', description: 'Read or write Redis keys as a workflow step.' }
+    ]
+  },
+  {
+    id: 'executor',
+    name: 'Executors',
+    modules: [
+      { id: 'executor-command', name: 'Command', label: 'Run command', description: 'Run shell commands over SSH.' },
+      { id: 'executor-http', name: 'HTTP request', label: 'HTTP request', description: 'Call an HTTP API.' },
+      { id: 'executor-cron', name: 'Cron task', label: 'Cron task', description: 'Create or run a scheduled task.' },
+      { id: 'dependency-check', name: 'Dependency check', label: 'Dependency check', description: 'Check required services before the next deployment step.' },
+      { id: 'rollback', name: 'Rollback', label: 'Rollback', description: 'Run only when a previous step fails and auto rollback is enabled.' }
+    ]
+  },
+  {
+    id: 'release-safety',
+    name: 'Release safety',
+    modules: [
+      { id: 'release-backup', name: 'Release backup', label: 'Create release backup', description: 'Create a verified backup bound to this workflow run.' },
+      { id: 'release-restore', name: 'Release restore', label: 'Restore release backup', description: 'Restore the exact backup created by this run after failure or cancellation.' }
+    ]
+  }
+]
+
+const workflowExecutionScopes = [
+  { id: 'app', label: 'App' },
+  { id: 'script', label: 'Script' },
+  { id: 'database', label: 'Database' },
+  { id: 'nginx', label: 'Nginx' }
+]
+
+const workflowTemplates = [
+  {
+    id: 'deploy-package',
+    name: 'Deploy package',
+    description: 'Upload package, stop service, backup, unpack, start and verify.',
+    nodes: [
+      createWorkflowNode('start', 'start', 20, 110),
+      createWorkflowNode('upload', 'file-upload', 190, 110, { localPath: 'C:\\release\\app.tar.gz', remotePath: '/opt/releases/app.tar.gz' }),
+      createWorkflowNode('backup', 'release-backup', 410, 110, {
+        sourcePath: '/opt/apps/demo', serviceName: 'demo.service'
+      }),
+      createWorkflowNode('deploy-script', 'executor-command', 650, 110, {
+        command: [
+          'systemctl stop {{release.service}}',
+          'find "{{release.source}}" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +',
+          'tar -zxf /opt/releases/app.tar.gz -C "{{release.source}}"',
+          'systemctl start {{release.service}}',
+          'systemctl is-active {{release.service}}'
+        ].join('\n')
+      }),
+      createWorkflowNode('restore', 'release-restore', 890, 110),
+      createWorkflowNode('end', 'end', 1120, 110)
+    ],
+    edges: buildSequentialWorkflowEdges(['start', 'upload', 'backup', 'deploy-script', 'restore', 'end'])
+  },
+  {
+    id: 'database-maintenance',
+    name: 'Database maintenance',
+    description: 'Upload SQL, connect database, backup, run SQL and finish.',
+    nodes: [
+      createWorkflowNode('start', 'start', 20, 110),
+      createWorkflowNode('upload-sql', 'file-upload', 190, 110, { localPath: 'C:\\sql\\change.sql', remotePath: '/opt/sql/change.sql' }),
+      createWorkflowNode('database', 'connector-database', 390, 110, { table: 'orders', tables: [{ schema: '-', name: 'orders' }], fields: '*' }),
+      createWorkflowNode('sql-script', 'executor-command', 650, 110, {
+        command: [
+          'mysql --force < /opt/sql/change.sql --dry-run',
+          'mysqldump app > /opt/backups/app-$(date +%F).sql',
+          'mysql app < /opt/sql/change.sql'
+        ].join('\n')
+      }),
+      createWorkflowNode('end', 'end', 930, 110)
+    ],
+    edges: buildSequentialWorkflowEdges(['start', 'upload-sql', 'database', 'sql-script', 'end'])
+  },
+  {
+    id: 'export-data',
+    name: 'Export data',
+    description: 'Query data, set output format, then download result file.',
+    nodes: [
+      createWorkflowNode('start', 'start', 20, 110),
+      createWorkflowNode('database', 'connector-database', 190, 110, { table: 'orders', tables: [{ schema: '-', name: 'orders' }], fields: 'id, amount, status', selectedFields: ['id', 'amount', 'status'], filter: 'status = "paid"' }),
+      createWorkflowNode('format', 'output-format', 430, 110, { format: 'excel', outputPath: '/tmp/orders.xlsx' }),
+      createWorkflowNode('download', 'file-download', 650, 110, { localDir: 'C:\\exports' }),
+      createWorkflowNode('end', 'end', 860, 110)
+    ],
+    edges: buildSequentialWorkflowEdges(['start', 'database', 'format', 'download', 'end'])
+  }
+]
+
+const workflowTemplateCatalog = [
+  ...workflowTemplates,
+  {
+    id: 'deploy-dotnet-app',
+    name: 'Deploy .NET app',
+    description: 'Upload release package, stop service, backup, unpack, start and verify .NET service.',
+    category: 'Deployment',
+    tags: ['.NET', 'service', 'rollback'],
+    nodes: [
+      createWorkflowNode('start', 'start', 20, 110),
+      createWorkflowNode('upload', 'file-upload', 190, 110, { localPath: 'C:\\release\\app.zip', remotePath: '/opt/releases/app.zip', targetScopes: ['app'] }),
+      createWorkflowNode('dependency', 'dependency-check', 400, 110, { services: 'nginx.service', requireActive: true, targetScopes: ['app'] }),
+      createWorkflowNode('backup', 'release-backup', 630, 110, {
+        targetScopes: ['app'], sourcePath: '/opt/apps/demo-dotnet', serviceName: 'demo-dotnet.service'
+      }),
+      createWorkflowNode('deploy', 'executor-command', 860, 110, {
+        targetScopes: ['app'],
+        executionPolicy: 'rolling',
+        command: [
+          'systemctl stop {{release.service}}',
+          'find "{{release.source}}" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +',
+          'unzip -o /opt/releases/app.zip -d "{{release.source}}"',
+          'systemctl start {{release.service}}',
+          'systemctl is-active {{release.service}}'
+        ].join('\n')
+      }),
+      createWorkflowNode('restore', 'release-restore', 1090, 110, {
+        targetScopes: ['app'],
+        verifyCommand: 'systemctl is-active --quiet demo-dotnet.service'
+      }),
+      createWorkflowNode('end', 'end', 1320, 110)
+    ],
+    edges: buildSequentialWorkflowEdges(['start', 'upload', 'dependency', 'backup', 'deploy', 'restore', 'end'])
+  },
+  {
+    id: 'deploy-java-package',
+    name: 'Deploy Java package',
+    description: 'Upload jar package, backup current jar, restart systemd service and verify status.',
+    category: 'Deployment',
+    tags: ['Java', 'jar', 'rolling'],
+    nodes: [
+      createWorkflowNode('start', 'start', 20, 110),
+      createWorkflowNode('upload', 'file-upload', 190, 110, { localPath: 'C:\\release\\app.jar', remotePath: '/opt/releases/app.jar', targetScopes: ['app'] }),
+      createWorkflowNode('backup', 'release-backup', 420, 110, {
+        targetScopes: ['app'], sourcePath: '/opt/apps/demo-java/app.jar', serviceName: 'demo-java.service'
+      }),
+      createWorkflowNode('deploy', 'executor-command', 650, 110, {
+        targetScopes: ['app'],
+        executionPolicy: 'rolling',
+        command: [
+          'systemctl stop {{release.service}}',
+          'cp -f /opt/releases/app.jar "{{release.source}}"',
+          'systemctl start {{release.service}}',
+          'systemctl is-active {{release.service}}'
+        ].join('\n')
+      }),
+      createWorkflowNode('restore', 'release-restore', 880, 110, {
+        targetScopes: ['app'],
+        verifyCommand: 'systemctl is-active --quiet demo-java.service'
+      }),
+      createWorkflowNode('end', 'end', 1110, 110)
+    ],
+    edges: buildSequentialWorkflowEdges(['start', 'upload', 'backup', 'deploy', 'restore', 'end'])
+  },
+  {
+    id: 'backup-mysql',
+    name: 'Backup MySQL',
+    description: 'Create timestamped MySQL backup file and keep recent backup history.',
+    category: 'Database',
+    tags: ['MySQL', 'backup'],
+    nodes: [
+      createWorkflowNode('start', 'start', 20, 110),
+      createWorkflowNode('backup', 'executor-command', 220, 110, {
+        targetScopes: ['database'],
+        command: [
+          'mkdir -p /opt/backups/mysql',
+          'mysqldump --single-transaction --routines --triggers app > /opt/backups/mysql/app-$(date +%F-%H%M%S).sql',
+          'find /opt/backups/mysql -name "app-*.sql" -type f -mtime +14 -delete'
+        ].join('\n')
+      }),
+      createWorkflowNode('end', 'end', 520, 110)
+    ],
+    edges: buildSequentialWorkflowEdges(['start', 'backup', 'end'])
+  },
+  {
+    id: 'redis-clean-keys',
+    name: 'Redis clean keys',
+    description: 'Preview and delete Redis keys by pattern with an explicit command node.',
+    category: 'Redis',
+    tags: ['Redis', 'cleanup'],
+    nodes: [
+      createWorkflowNode('start', 'start', 20, 110),
+      createWorkflowNode('redis', 'connector-redis', 220, 110, { keyPattern: 'cache:*' }),
+      createWorkflowNode('clean', 'executor-command', 460, 110, {
+        command: [
+          'redis-cli --scan --pattern "cache:*" | head -200',
+          'redis-cli --scan --pattern "cache:*" | xargs -r redis-cli del'
+        ].join('\n')
+      }),
+      createWorkflowNode('end', 'end', 740, 110)
+    ],
+    edges: buildSequentialWorkflowEdges(['start', 'redis', 'clean', 'end'])
+  },
+  {
+    id: 'nginx-update-config',
+    name: 'Nginx update config',
+    description: 'Upload nginx config, validate syntax, reload service and rollback on failure.',
+    category: 'Deployment',
+    tags: ['Nginx', 'config', 'rollback'],
+    nodes: [
+      createWorkflowNode('start', 'start', 20, 110),
+      createWorkflowNode('upload', 'file-upload', 190, 110, { localPath: 'C:\\release\\nginx.conf', remotePath: '/tmp/nginx.conf', targetScopes: ['nginx'] }),
+      createWorkflowNode('backup', 'release-backup', 420, 110, {
+        targetScopes: ['nginx'], appName: 'nginx-conf', sourcePath: '/etc/nginx/nginx.conf', serviceName: 'nginx.service', retentionCount: 10
+      }),
+      createWorkflowNode('apply', 'executor-command', 650, 110, {
+        targetScopes: ['nginx'],
+        command: [
+          'cp -f /tmp/nginx.conf "{{release.source}}"',
+          'nginx -t',
+          'systemctl reload {{release.service}}'
+        ].join('\n')
+      }),
+      createWorkflowNode('restore', 'release-restore', 880, 110, {
+        targetScopes: ['nginx'],
+        verifyCommand: 'nginx -t && systemctl reload nginx'
+      }),
+      createWorkflowNode('end', 'end', 1110, 110)
+    ],
+    edges: buildSequentialWorkflowEdges(['start', 'upload', 'backup', 'apply', 'restore', 'end'])
+  },
+  {
+    id: 'linux-security-inspection',
+    name: 'Linux security inspection',
+    description: 'Run common Linux inspection commands and output a text report file.',
+    category: 'Audit',
+    tags: ['Linux', 'security', 'report'],
+    nodes: [
+      createWorkflowNode('start', 'start', 20, 110),
+      createWorkflowNode('inspect', 'executor-command', 190, 110, {
+        command: buildLinuxSecurityAuditCommand()
+      }),
+      createWorkflowNode('report', 'output-format', 430, 110, { format: 'txt', outputPath: '/tmp/ops-flow-reports/linux-inspection.txt' }),
+      createWorkflowNode('download', 'file-download', 680, 110, { localDir: 'C:\\exports' }),
+      createWorkflowNode('end', 'end', 900, 110)
+    ],
+    edges: buildSequentialWorkflowEdges(['start', 'inspect', 'report', 'download', 'end'])
+  }
+]
+
+function isAuditWorkflow(workflow) {
+  if (!workflow) return false
+  const text = [
+    workflow.category,
+    workflow.name,
+    workflow.description,
+    ...(workflow.tags || [])
+  ].filter(Boolean).join(' ').toLowerCase()
+  return workflow.category === 'Audit' || /audit|inspection|security|巡检|审计|报告/.test(text)
+}
+
+function buildLinuxSecurityAuditCommand() {
+  return [
+    'set +e',
+    'report="/tmp/ops-flow-reports/linux-inspection.txt"',
+    'mkdir -p "$(dirname "$report")"',
+    'score=100',
+    'high=0',
+    'medium=0',
+    'low=0',
+    'passed=0',
+    'pass(){ echo "[PASS] $1"; passed=$((passed+1)); }',
+    'lowrisk(){ echo "[LOW] $1"; low=$((low+1)); score=$((score-2)); }',
+    'warn(){ echo "[WARN] $1"; medium=$((medium+1)); score=$((score-5)); }',
+    'risk(){ echo "[HIGH] $1"; high=$((high+1)); score=$((score-15)); }',
+    'section(){ echo ""; echo "## $1"; }',
+    '{',
+    'echo "# Ops Flow Linux security audit"',
+    'echo "Generated at: $(date)"',
+    'echo "Host: $(hostname 2>/dev/null || echo unknown)"',
+    'echo "Kernel: $(uname -srmo 2>/dev/null || echo unknown)"',
+    'echo ""',
+    'section "System baseline"',
+    'id root >/dev/null 2>&1 && pass "root account exists for administration checks" || warn "root account not readable"',
+    'if command -v getenforce >/dev/null 2>&1; then selinux=$(getenforce 2>/dev/null); [ "$selinux" = "Enforcing" ] && pass "SELinux is Enforcing" || warn "SELinux is $selinux"; else lowrisk "SELinux command not found"; fi',
+    'if systemctl is-active --quiet auditd 2>/dev/null; then pass "auditd is active"; else warn "auditd is not active"; fi',
+    'if systemctl is-active --quiet rsyslog 2>/dev/null || systemctl is-active --quiet systemd-journald 2>/dev/null; then pass "system logging is active"; else warn "no active system logging service detected"; fi',
+    'section "Account and password policy"',
+    'if [ -f /etc/login.defs ]; then minlen=$(awk \'/^PASS_MIN_LEN/{print $2}\' /etc/login.defs | tail -1); [ -n "$minlen" ] && [ "$minlen" -ge 8 ] 2>/dev/null && pass "PASS_MIN_LEN is $minlen" || warn "PASS_MIN_LEN is weak or not configured"; maxdays=$(awk \'/^PASS_MAX_DAYS/{print $2}\' /etc/login.defs | tail -1); [ -n "$maxdays" ] && [ "$maxdays" -le 180 ] 2>/dev/null && pass "PASS_MAX_DAYS is $maxdays" || warn "PASS_MAX_DAYS is too long or not configured"; else warn "/etc/login.defs missing"; fi',
+    'empty_users=$(awk -F: \'($2==""){print $1}\' /etc/shadow 2>/dev/null | paste -sd, -)',
+    '[ -z "$empty_users" ] && pass "no empty-password users found" || risk "empty-password users: $empty_users"',
+    'uid0_users=$(awk -F: \'($3==0){print $1}\' /etc/passwd 2>/dev/null | paste -sd, -)',
+    '[ "$uid0_users" = "root" ] && pass "only root has UID 0" || risk "extra UID 0 users: $uid0_users"',
+    'section "SSH hardening"',
+    'sshd_config="$(sshd -T 2>/dev/null)"',
+    'if [ -n "$sshd_config" ]; then echo "$sshd_config" | grep -qi "^permitrootlogin no" && pass "SSH root login is disabled" || risk "SSH root login is not disabled"; echo "$sshd_config" | grep -qi "^passwordauthentication no" && pass "SSH password authentication is disabled" || warn "SSH password authentication is enabled"; echo "$sshd_config" | grep -qi "^x11forwarding no" && pass "SSH X11 forwarding is disabled" || lowrisk "SSH X11 forwarding is enabled or default"; else warn "cannot read sshd effective config"; fi',
+    'section "Firewall and exposed ports"',
+    'if systemctl is-active --quiet firewalld 2>/dev/null || systemctl is-active --quiet ufw 2>/dev/null || command -v nft >/dev/null 2>&1 || command -v iptables >/dev/null 2>&1; then pass "firewall tooling/service detected"; else risk "no firewall service or tooling detected"; fi',
+    'ports="$(ss -lntup 2>/dev/null || netstat -lntup 2>/dev/null || true)"',
+    'echo "$ports" | sed -n "1,80p"',
+    'echo "$ports" | grep -Eq "0\\.0\\.0\\.0:(3306|6379|9200|9300)|\\[::\\]:(3306|6379|9200|9300)" && risk "database/cache/search ports are exposed on all interfaces" || pass "sensitive database/cache ports are not broadly exposed"',
+    'section "Nginx checks"',
+    'if command -v nginx >/dev/null 2>&1; then nginx_conf="$(nginx -T 2>/dev/null)"; echo "$nginx_conf" | grep -qi "server_tokens[[:space:]]*on" && warn "Nginx server_tokens is on" || pass "Nginx server_tokens is not on"; echo "$nginx_conf" | grep -qi "autoindex[[:space:]]*on" && risk "Nginx autoindex is enabled" || pass "Nginx autoindex is not enabled"; echo "$nginx_conf" | grep -Eqi "ssl_protocols.*(SSLv3|TLSv1[ ;]|TLSv1\\.1)" && risk "Nginx enables old TLS protocols" || pass "Nginx old TLS protocols not detected"; echo "$nginx_conf" | grep -qi "add_header[[:space:]]\\+X-Frame-Options" && pass "Nginx X-Frame-Options header configured" || lowrisk "Nginx X-Frame-Options header not detected"; else lowrisk "Nginx not installed or not in PATH"; fi',
+    'section "MySQL checks"',
+    'mysql_files="/etc/my.cnf /etc/mysql/my.cnf /etc/mysql/mysql.conf.d/mysqld.cnf"',
+    'mysql_text="$(cat $mysql_files 2>/dev/null)"',
+    'if command -v mysqld >/dev/null 2>&1 || [ -n "$mysql_text" ]; then echo "$mysql_text" | grep -Eqi "^[[:space:]]*bind-address[[:space:]]*=[[:space:]]*(0\\.0\\.0\\.0|::)" && risk "MySQL binds to all interfaces" || pass "MySQL all-interface bind not detected"; echo "$mysql_text" | grep -Eqi "^[[:space:]]*local_infile[[:space:]]*=[[:space:]]*(1|ON|on|true)" && warn "MySQL local_infile is enabled" || pass "MySQL local_infile is not enabled"; echo "$mysql_text" | grep -Eqi "skip-grant-tables" && risk "MySQL skip-grant-tables detected" || pass "MySQL skip-grant-tables not detected"; else lowrisk "MySQL not installed or config not detected"; fi',
+    'section "Redis checks"',
+    'redis_files="/etc/redis.conf /etc/redis/redis.conf /usr/local/etc/redis.conf"',
+    'redis_text="$(cat $redis_files 2>/dev/null)"',
+    'if command -v redis-server >/dev/null 2>&1 || [ -n "$redis_text" ]; then echo "$redis_text" | grep -Eqi "^[[:space:]]*protected-mode[[:space:]]+no" && risk "Redis protected-mode is disabled" || pass "Redis protected-mode disabled not detected"; echo "$redis_text" | grep -Eqi "^[[:space:]]*bind[[:space:]]+0\\.0\\.0\\.0" && risk "Redis binds to all interfaces" || pass "Redis all-interface bind not detected"; echo "$redis_text" | grep -Eqi "^[[:space:]]*requirepass[[:space:]]+[^[:space:]]+" && pass "Redis requirepass configured" || warn "Redis requirepass not detected"; else lowrisk "Redis not installed or config not detected"; fi',
+    'section "File permissions"',
+    'world_writable="$(find / -xdev -type d -perm -0002 ! -perm -1000 2>/dev/null | head -10 | paste -sd, -)"',
+    '[ -z "$world_writable" ] && pass "no world-writable directories without sticky bit found on root filesystem" || warn "world-writable directories without sticky bit: $world_writable"',
+    'suid_count="$(find / -xdev -perm -4000 -type f 2>/dev/null | wc -l | tr -d " ")"',
+    '[ "$suid_count" -le 50 ] 2>/dev/null && pass "SUID file count is $suid_count" || lowrisk "SUID file count is high: $suid_count"',
+    '[ "$score" -lt 0 ] && score=0',
+    '[ "$score" -gt 100 ] && score=100',
+    'rating="PASS"',
+    '[ "$score" -lt 80 ] && rating="WARNING"',
+    '[ "$score" -lt 60 ] && rating="RISK"',
+    'section "Summary"',
+    'echo "Score: $score/100"',
+    'echo "Rating: $rating"',
+    'echo "High risks: $high"',
+    'echo "Warnings: $medium"',
+    'echo "Low risks: $low"',
+    'echo "Passed checks: $passed"',
+    'echo "OPS_AUDIT_SCORE=$score"',
+    'echo "OPS_AUDIT_RATING=$rating"',
+    'echo "OPS_AUDIT_HIGH=$high"',
+    'echo "OPS_AUDIT_MEDIUM=$medium"',
+    'echo "OPS_AUDIT_LOW=$low"',
+    'echo "OPS_AUDIT_PASS=$passed"',
+    '} | tee "$report"',
+    'echo "Audit report saved: $report"'
+  ].join('\n')
+}
+
+const defaultCommand = `cd /opt/apps/demo
+systemctl status demo-app
+tail -n 80 logs/app.log`
+
+const sqlTemplate = ''
+
+const emptyServerForm = {
+  name: '',
+  host: '',
+  port: 22,
+  username: '',
+  password: '',
+  privateKey: '',
+  passphrase: '',
+  env: 'dev',
+  authType: 'password'
+}
+
+const emptyDatabaseForm = {
+  name: '',
+  engine: 'mysql',
+  connectionMode: 'ssh',
+  sshServerId: '',
+  sshTransport: 'tcp',
+  host: '127.0.0.1',
+  port: 3306,
+  socketPath: '',
+  database: '',
+  username: '',
+  password: ''
+}
+
+const emptyDatabaseCreateDialog = {
+  step: 'form',
+  sourceMode: 'manual',
+  sourceDatabaseId: '',
+  engine: 'mysql',
+  connectionMode: 'direct',
+  sshServerId: '',
+  sshTransport: 'tcp',
+  host: '127.0.0.1',
+  port: 3306,
+  socketPath: '',
+  maintenanceDatabase: '',
+  username: '',
+  password: '',
+  databaseName: '',
+  charset: '',
+  collation: '',
+  saveConnection: true,
+  charsets: [],
+  collations: [],
+  optionsLoaded: false,
+  optionsSourceKey: '',
+  loadingOptions: false,
+  running: false,
+  notice: null
+}
+
+const emptyRedisForm = {
+  name: '',
+  connectionMode: 'ssh',
+  sshServerId: '',
+  host: '127.0.0.1',
+  port: 6379,
+  password: '',
+  database: 0,
+  tls: false
+}
+
+const emptyColumnForm = {
+  name: '',
+  newName: '',
+  type: 'varchar(255)',
+  nullable: true,
+  defaultValue: ''
+}
+
+const emptyTableForm = {
+  name: '',
+  newName: '',
+  columns: [
+    { id: 'column-1', name: 'id', type: 'int', nullable: false, defaultValue: '' }
+  ]
+}
+
+const emptyCronForm = {
+  scheduleType: 'daily',
+  minute: '0',
+  hour: '2',
+  dayOfMonth: '*',
+  month: '*',
+  weekday: '*',
+  everyMinutes: '5',
+  expression: '0 2 * * *',
+  command: ''
+}
+
+const emptyFirewallPortForm = {
+  port: '',
+  protocol: 'tcp',
+  zone: '',
+  persistent: true
+}
+
+const deployPackageCatalog = [
+  {
+    id: 'dotnet',
+    name: '.NET',
+    runtimeName: '.NET',
+    packageName: 'dotnet-sdk-8.0',
+    serviceName: '',
+    versions: ['8.0.418', '8.0.416', '6.0.425'],
+    defaultPort: '',
+    defaultDir: '/home/dotnet',
+    githubUrl: '',
+    packageHint: 'dotnet-sdk-8.0.418-linux-{arch}.tar.gz',
+    fields: ['installDir', 'checksum']
+  },
+  {
+    id: 'java',
+    name: 'Java',
+    runtimeName: 'Java',
+    packageName: 'java-17-openjdk',
+    serviceName: '',
+    versions: ['21', '17', '11', '8'],
+    defaultPort: '',
+    defaultDir: '/usr/local/java',
+    githubUrl: '',
+    packageHint: 'jdk-17_linux-{arch}_bin.tar.gz',
+    fields: ['installDir', 'checksum']
+  },
+  {
+    id: 'node',
+    name: 'Node.js',
+    runtimeName: 'Node.js',
+    packageName: 'nodejs',
+    serviceName: '',
+    versions: ['20.15.1', '22', '20', '18', '16'],
+    defaultPort: '',
+    defaultDir: '/usr/local/node',
+    githubUrl: 'https://nodejs.org/dist/v20.15.1/node-v20.15.1-linux-{arch}.tar.xz',
+    packageHint: 'node-v20.15.1-linux-{arch}.tar.xz',
+    fields: ['installDir', 'checksum']
+  },
+  {
+    id: 'python',
+    name: 'Python',
+    runtimeName: 'Python',
+    packageName: 'python3',
+    serviceName: '',
+    versions: ['3.12', '3.11', '3.10', '3.9'],
+    defaultPort: '',
+    defaultDir: '/opt/ops-packages/python',
+    githubUrl: '',
+    packageHint: 'python3.rpm',
+    fields: ['checksum']
+  },
+  {
+    id: 'go',
+    name: 'Go',
+    runtimeName: 'Go',
+    packageName: 'golang',
+    serviceName: '',
+    versions: ['1.23', '1.22', '1.21'],
+    defaultPort: '',
+    defaultDir: '/usr/local/go',
+    githubUrl: '',
+    packageHint: 'go1.22.5.linux-{arch}.tar.gz',
+    fields: ['installDir', 'checksum']
+  },
+  {
+    id: 'maven',
+    name: 'Maven',
+    runtimeName: 'Maven',
+    packageName: 'maven',
+    serviceName: '',
+    versions: ['3.9.9', '3.9.8', '3.8.8'],
+    defaultPort: '',
+    defaultDir: '/usr/local/maven',
+    githubUrl: '',
+    packageHint: 'apache-maven-3.9.9-bin.tar.gz',
+    fields: ['installDir', 'checksum']
+  },
+  {
+    id: 'git',
+    name: 'Git',
+    runtimeName: 'Git',
+    packageName: 'git',
+    serviceName: '',
+    versions: ['2.x', 'latest'],
+    defaultPort: '',
+    defaultDir: '/opt/ops-packages/git',
+    githubUrl: '',
+    packageHint: 'git.rpm',
+    fields: ['checksum']
+  },
+  {
+    id: 'redis',
+    name: 'Redis',
+    runtimeName: 'Redis',
+    packageName: 'redis',
+    serviceName: 'redis.service',
+    versions: ['7.2.5', '7.0', '6.2'],
+    defaultPort: '6379',
+    defaultDir: '/opt/ops-packages/redis',
+    githubUrl: 'https://github.com/redis/redis/archive/refs/tags/7.2.5.tar.gz',
+    packageHint: 'redis-7.2.5.tar.gz',
+    fields: ['installDir', 'serviceName', 'port', 'password', 'runUser', 'checksum']
+  },
+  {
+    id: 'mysql',
+    name: 'MySQL',
+    runtimeName: 'MySQL',
+    packageName: 'mysql-server',
+    serviceName: 'mysqld.service',
+    versions: ['8.0', '5.7'],
+    defaultPort: '3306',
+    defaultDir: '/opt/ops-packages/mysql',
+    githubUrl: '',
+    packageHint: 'mysql-8.0.33-linux-glibc2.28-{arch}.tar.gz',
+    fields: ['installDir', 'serviceName', 'port', 'adminUser', 'password', 'passwordConfirm', 'checksum']
+  },
+  {
+    id: 'nginx',
+    name: 'Nginx',
+    runtimeName: 'Nginx',
+    packageName: 'nginx',
+    serviceName: 'nginx.service',
+    versions: ['1.26.1', '1.24', '1.20'],
+    defaultPort: '80',
+    defaultDir: '/opt/ops-packages/nginx',
+    githubUrl: 'https://github.com/nginx/nginx/archive/refs/tags/release-1.26.1.tar.gz',
+    packageHint: 'nginx-1.26.1.tar.gz',
+    fields: ['installDir', 'serviceName', 'port', 'runUser', 'checksum']
+  },
+  {
+    id: 'minio',
+    name: 'MinIO',
+    runtimeName: 'MinIO',
+    packageName: 'minio',
+    serviceName: 'minio.service',
+    versions: ['latest', '2025', '2024'],
+    defaultPort: '9000',
+    defaultConsolePort: '9001',
+    defaultDir: '/opt/minio',
+    githubUrl: 'https://dl.min.io/server/minio/release/linux-{arch}/minio',
+    packageHint: 'minio',
+    fields: ['installDir', 'serviceName', 'port', 'consolePort', 'runUser', 'adminUser', 'password', 'passwordConfirm', 'checksum']
+  },
+  {
+    id: 'tomcat',
+    name: 'Tomcat',
+    runtimeName: 'Tomcat',
+    packageName: 'tomcat',
+    serviceName: 'tomcat.service',
+    versions: ['10.1', '9.0', '8.5'],
+    defaultPort: '8080',
+    defaultDir: '/opt/ops-packages/tomcat',
+    githubUrl: '',
+    packageHint: 'apache-tomcat-10.1.tar.gz',
+    fields: ['installDir', 'serviceName', 'port', 'runUser', 'checksum']
+  },
+  {
+    id: 'lynis',
+    name: 'Lynis',
+    runtimeName: 'Lynis',
+    packageName: 'lynis',
+    serviceName: '',
+    versions: ['3.1.1', '3.0'],
+    defaultPort: '',
+    defaultDir: '/opt/ops-packages/lynis',
+    githubUrl: 'https://github.com/CISOfy/lynis/archive/refs/tags/3.1.1.tar.gz',
+    packageHint: 'lynis-3.1.1.tar.gz',
+    fields: ['installDir', 'checksum']
+  }
+]
+
+function DesktopOnly() {
+  const t = createTranslator(navigator.language?.startsWith('zh') ? 'zh-CN' : 'en-US')
+  return (
+    <div className="desktop-only">
+      <section>
+        <div className="brand-mark"><Boxes size={24} /></div>
+        <h1>{t('app.desktopTitle', 'Ops Flow runs in the desktop app')}</h1>
+        <p>{t('app.desktopDescription', 'SSH, SFTP, database and Redis operations require the Electron preload bridge.')}</p>
+        <code>npm.cmd run dev</code>
+      </section>
+    </div>
+  )
+}
+
+export default function App() {
+  if (!window.opsFlow) return <DesktopOnly />
+
+  const [language, setLanguage] = useState('en-US')
+  const [themeMode, setThemeMode] = useState('light')
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia?.('(prefers-color-scheme: dark)').matches || false)
+  const resolvedTheme = themeMode === 'system' ? (systemDark ? 'dark' : 'light') : themeMode
+  const t = useMemo(() => createTranslator(language), [language])
+  const [servers, setServers] = useState([])
+  const [databases, setDatabases] = useState([])
+  const [redisStores, setRedisStores] = useState([])
+  const [selectedServerId, setSelectedServerId] = useState('')
+  const [activeModule, setActiveModule] = useState('command')
+  const [command, setCommand] = useState(defaultCommand)
+  const [sqlScript, setSqlScript] = useState(sqlTemplate)
+  const [sqlFileInfo, setSqlFileInfo] = useState(null)
+  const [isSqlRunning, setIsSqlRunning] = useState(false)
+  const [sqlExecutionTaskId, setSqlExecutionTaskId] = useState('')
+  const [remotePath, setRemotePath] = useState('/')
+  const [remoteServerId, setRemoteServerId] = useState('')
+  const [remoteItems, setRemoteItems] = useState([])
+  const [remoteSort, setRemoteSort] = useState({ key: 'name', direction: 'asc' })
+  const [pendingRemoteFocusName, setPendingRemoteFocusName] = useState('')
+  const [remoteFilesScrollTop, setRemoteFilesScrollTop] = useState(0)
+  const [selectedRemoteItem, setSelectedRemoteItem] = useState(null)
+  const [isRemoteLoading, setIsRemoteLoading] = useState(false)
+  const [isFileTransferRunning, setIsFileTransferRunning] = useState(false)
+  const [remotePrivilege, setRemotePrivilege] = useState({ enabled: false, serverId: '', mode: 'auto', cached: false })
+  const [remotePrivilegeDialog, setRemotePrivilegeDialog] = useState(null)
+  const [remoteCreateDialog, setRemoteCreateDialog] = useState(null)
+  const [remoteRenameDialog, setRemoteRenameDialog] = useState(null)
+  const [remotePermissionError, setRemotePermissionError] = useState(null)
+  const [transferPanelOpen, setTransferPanelOpen] = useState(false)
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false)
+  const [settingsSection, setSettingsSection] = useState('general')
+  const [transferTasks, setTransferTasks] = useState([])
+  const [previewFile, setPreviewFile] = useState(null)
+  const [previewContent, setPreviewContent] = useState('')
+  const [isPreviewSaving, setIsPreviewSaving] = useState(false)
+  const [isPreviewCopying, setIsPreviewCopying] = useState(false)
+  const [workflows, setWorkflows] = useState(workflowTemplates)
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState(workflowTemplates[0].id)
+  const [workflowDialog, setWorkflowDialog] = useState(null)
+  const [workflowDraft, setWorkflowDraft] = useState(null)
+  const [workflowTemplateMarketOpen, setWorkflowTemplateMarketOpen] = useState(false)
+  const [workflowReturnMode, setWorkflowReturnMode] = useState('')
+  const [workflowPendingResource, setWorkflowPendingResource] = useState(null)
+  const [workflowRunLogs, setWorkflowRunLogs] = useState({})
+  const [selectedWorkflowLogNodeId, setSelectedWorkflowLogNodeId] = useState('')
+  const [workflowRunTargets, setWorkflowRunTargets] = useState([])
+  const [workflowRunViewMode, setWorkflowRunViewMode] = useState('server')
+  const [selectedWorkflowRunTargetId, setSelectedWorkflowRunTargetId] = useState('')
+  const [workflowSplit, setWorkflowSplit] = useState(30)
+  const [workflowRunDialogOpen, setWorkflowRunDialogOpen] = useState(false)
+  const [workflowRunWorkflowId, setWorkflowRunWorkflowId] = useState('')
+  const [workflowRunConfig, setWorkflowRunConfig] = useState(() => defaultWorkflowRunConfig())
+  const activeWorkflowRunRef = useRef(null)
+  const workflowLogOutputRef = useRef(null)
+  const [dryRun] = useState(false)
+  const [isServerDialogOpen, setIsServerDialogOpen] = useState(false)
+  const [serverForm, setServerForm] = useState(emptyServerForm)
+  const [editingServerId, setEditingServerId] = useState('')
+  const [serverNotice, setServerNotice] = useState(null)
+  const [isDatabaseDialogOpen, setIsDatabaseDialogOpen] = useState(false)
+  const [databaseForm, setDatabaseForm] = useState(emptyDatabaseForm)
+  const [editingDatabaseId, setEditingDatabaseId] = useState('')
+  const [isDatabaseTesting, setIsDatabaseTesting] = useState(false)
+  const [databaseNotice, setDatabaseNotice] = useState(null)
+  const [databaseCreateDialog, setDatabaseCreateDialog] = useState(null)
+  const [databasePrivileges, setDatabasePrivileges] = useState({})
+  const [selectedRedisId, setSelectedRedisId] = useState('')
+  const [selectedRedisDb, setSelectedRedisDb] = useState(0)
+  const [redisDatabases, setRedisDatabases] = useState([])
+  const [redisKeys, setRedisKeys] = useState([])
+  const [redisKeyPattern, setRedisKeyPattern] = useState('*')
+  const [selectedRedisKey, setSelectedRedisKey] = useState('')
+  const [redisKeyDetail, setRedisKeyDetail] = useState(null)
+  const [isRedisLoading, setIsRedisLoading] = useState(false)
+  const [isRedisBackupRunning, setIsRedisBackupRunning] = useState(false)
+  const [redisRestoreDialog, setRedisRestoreDialog] = useState(null)
+  const [isRedisDialogOpen, setIsRedisDialogOpen] = useState(false)
+  const [editingRedisId, setEditingRedisId] = useState('')
+  const [redisForm, setRedisForm] = useState(emptyRedisForm)
+  const [redisNotice, setRedisNotice] = useState(null)
+  const [isRedisTesting, setIsRedisTesting] = useState(false)
+  const [isPrivilegeLoading, setIsPrivilegeLoading] = useState(false)
+  const [selectedDatabaseId, setSelectedDatabaseId] = useState('')
+  const [selectedDbTable, setSelectedDbTable] = useState(null)
+  const [selectedDbColumn, setSelectedDbColumn] = useState(null)
+  const [tableColumns, setTableColumns] = useState([])
+  const [isTableLoading, setIsTableLoading] = useState(false)
+  const databaseMetadataRequestRef = useRef({ tables: '', columns: '' })
+  const [tableDialog, setTableDialog] = useState(null)
+  const [tableForm, setTableForm] = useState(emptyTableForm)
+  const [columnDialog, setColumnDialog] = useState(null)
+  const [columnForm, setColumnForm] = useState(emptyColumnForm)
+  const [dangerConfirm, setDangerConfirm] = useState(null)
+  const [databaseBackupDialog, setDatabaseBackupDialog] = useState(null)
+  const [sqlResult, setSqlResult] = useState('')
+  const [isTestingServer, setIsTestingServer] = useState(false)
+  const [isCommandRunning, setIsCommandRunning] = useState(false)
+  const [systemInspectorResult, setSystemInspectorResult] = useState(null)
+  const [isSystemInspectorLoading, setIsSystemInspectorLoading] = useState(false)
+  const [systemInspectorStage, setSystemInspectorStage] = useState('')
+  const [backupRecoveryResult, setBackupRecoveryResult] = useState(null)
+  const [isBackupRecoveryLoading, setIsBackupRecoveryLoading] = useState(false)
+  const [backupRecoveryStage, setBackupRecoveryStage] = useState('')
+  const [selectedBackupTaskId, setSelectedBackupTaskId] = useState('')
+  const [backupRecoveryProfiles, setBackupRecoveryProfiles] = useState({})
+  const [backupRestoreDialog, setBackupRestoreDialog] = useState(null)
+  const [backupTargetDialog, setBackupTargetDialog] = useState(null)
+  const [backupContentDialog, setBackupContentDialog] = useState(null)
+  const [inspectorBusyKey, setInspectorBusyKey] = useState('')
+  const [servicePrivilege, setServicePrivilege] = useState({ mode: 'auto', password: '', cached: false })
+  const [serviceSearch, setServiceSearch] = useState({ open: false, query: '' })
+  const [cronDialog, setCronDialog] = useState(null)
+  const [cronForm, setCronForm] = useState(emptyCronForm)
+  const [firewallPortDialogOpen, setFirewallPortDialogOpen] = useState(false)
+  const [firewallPortForm, setFirewallPortForm] = useState(emptyFirewallPortForm)
+  const [terminalInput, setTerminalInput] = useState('')
+  const [remotePathHistory, setRemotePathHistory] = useState({})
+  const [commandSnippets, setCommandSnippets] = useState([])
+  const [terminalOutput, setTerminalOutput] = useState([
+    'Add a server, then click Connect to start the SSH terminal.',
+    ''
+  ].join('\n'))
+  const [resourceHistory, setResourceHistory] = useState(() => makeInitialUsageHistory())
+  const [toast, setToast] = useState(null)
+  const [appSidebarWidth, setAppSidebarWidth] = useState(270)
+  const workflowLayoutRef = useRef(null)
+  const terminalOutputRef = useRef(null)
+  const terminalTextRef = useRef(terminalOutput)
+  const terminalHostRef = useRef(null)
+  const moduleTabsRef = useRef(null)
+  const terminalRef = useRef(null)
+  const fitAddonRef = useRef(null)
+  const shellSessionRef = useRef(null)
+  const shellServerIdRef = useRef('')
+  const shellSessionsRef = useRef({})
+  const connectingServerIdRef = useRef('')
+  const terminalAutoOpenRef = useRef('')
+  const intentionalShellCloseRef = useRef('')
+  const activeModuleRef = useRef(activeModule)
+  const redisAutoLoadKeyRef = useRef('')
+  const systemInspectorAutoLoadKeyRef = useRef('')
+  const systemInspectorExecutionRef = useRef('')
+  const serversLiveRef = useRef(servers)
+  const shellRecoveryRef = useRef(new Set())
+  const serverInspectInFlightRef = useRef(new Set())
+  const transferPanelTimerRef = useRef(null)
+  const activeTransferIdsRef = useRef(new Set())
+  const transferSessionHasErrorRef = useRef(false)
+  const databaseTableDeleteCancelRef = useRef(new Set())
+  const toastTimerRef = useRef(null)
+  const workspaceCacheRef = useRef({})
+  const servicesScrollTopRef = useRef(0)
+  const remoteFilesScrollTopRef = useRef(0)
+  const remoteDirectoryRequestRef = useRef(0)
+  const lastWorkspaceServerIdRef = useRef('')
+  const selectedServerIdLiveRef = useRef('')
+  const [logs, setLogs] = useState([
+    '[09:30:12] Ops Flow ready',
+    '[09:30:13] No server configured'
+  ])
+
+  useEffect(() => {
+    window.opsFlow.getStore('language').then((savedLanguage) => {
+      if (LANGUAGE_OPTIONS.some((option) => option.value === savedLanguage)) {
+        setLanguage(savedLanguage)
+      }
+    })
+    window.opsFlow.getStore('theme').then((savedTheme) => {
+      if (THEME_OPTIONS.includes(savedTheme)) setThemeMode(savedTheme)
+    })
+    window.opsFlow.getStore('backupRecoveryProfiles').then((savedProfiles) => {
+      if (savedProfiles && typeof savedProfiles === 'object' && !Array.isArray(savedProfiles)) {
+        setBackupRecoveryProfiles(savedProfiles)
+      }
+    })
+    window.opsFlow.getStore('remotePathHistory').then((savedHistory) => {
+      setRemotePathHistory(normalizeRemotePathHistory(savedHistory))
+    })
+    window.opsFlow.getStore('commandSnippets').then((savedSnippets) => {
+      setCommandSnippets(normalizeCommandSnippets(savedSnippets))
+    })
+    loadState().then((saved) => {
+      if (!saved) return
+      const realServers = (saved.servers || [])
+        .filter((server) => !isDemoServer(server))
+        .map(normalizeSavedServer)
+      const realDatabases = (saved.databases || []).filter((item) => !isDemoResource(item))
+      const filteredRedisStores = (saved.redisStores || []).filter((item) => !isDemoResource(item))
+      const realRedisStores = ensureUniqueResourceIds(filteredRedisStores, 'redis')
+      const repairedRedisIds = realRedisStores.some((item, index) => item.id !== filteredRedisStores[index]?.id)
+
+      const shouldPersistCleanState =
+        realServers.length !== saved.servers?.length ||
+        realDatabases.length !== saved.databases?.length ||
+        realRedisStores.length !== saved.redisStores?.length ||
+        repairedRedisIds ||
+        (saved.servers || []).some((server) => server.status === 'connected')
+
+      if (shouldPersistCleanState) {
+        persist({ servers: realServers, databases: realDatabases, redisStores: realRedisStores })
+      }
+
+      if (realServers.length) {
+        setServers(realServers)
+        setSelectedServerId(realServers[0].id)
+      }
+      setDatabases(realDatabases)
+      setRedisStores(realRedisStores)
+    })
+    window.opsFlow.getStore('workflows').then((savedWorkflows) => {
+      const normalized = normalizeWorkflows(savedWorkflows)
+      if (!normalized.length) return
+      setWorkflows(normalized)
+      setSelectedWorkflowId(normalized[0].id)
+      if (workflowStoreNeedsMigration(savedWorkflows, normalized)) {
+        window.opsFlow.setStore('workflows', normalized)
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+    if (!media) return undefined
+    const updateSystemTheme = (event) => setSystemDark(event.matches)
+    setSystemDark(media.matches)
+    media.addEventListener?.('change', updateSystemTheme)
+    return () => media.removeEventListener?.('change', updateSystemTheme)
+  }, [])
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = resolvedTheme
+    document.documentElement.style.colorScheme = resolvedTheme
+  }, [resolvedTheme])
+
+  function changeLanguage(nextLanguage) {
+    if (!LANGUAGE_OPTIONS.some((option) => option.value === nextLanguage)) return
+    setLanguage(nextLanguage)
+    window.opsFlow.setStore('language', nextLanguage)
+  }
+
+  function changeTheme(nextTheme) {
+    if (!THEME_OPTIONS.includes(nextTheme)) return
+    setThemeMode(nextTheme)
+    window.opsFlow.setStore('theme', nextTheme)
+  }
+
+  const selectedServer = useMemo(
+    () => servers.find((server) => server.id === selectedServerId) || emptyServer,
+    [servers, selectedServerId]
+  )
+  const selectedRemotePathHistory = remotePathHistory[selectedServer.id] || { recent: [], favorites: [] }
+  const visibleCommandSnippets = useMemo(
+    () => commandSnippets.filter((snippet) => snippet.scope === 'all' || snippet.scope === selectedServer.id),
+    [commandSnippets, selectedServer.id]
+  )
+
+  function updateRemotePathHistoryForServer(serverId, updater) {
+    if (!serverId) return
+    setRemotePathHistory((current) => {
+      const existing = current[serverId] || { recent: [], favorites: [] }
+      const nextEntry = updater(existing)
+      const next = { ...current, [serverId]: nextEntry }
+      window.opsFlow.setStore('remotePathHistory', next)
+      return next
+    })
+  }
+
+  function rememberRemotePath(serverId, value) {
+    const path = normalizeRemoteHistoryPath(value)
+    updateRemotePathHistoryForServer(serverId, (current) => ({
+      ...current,
+      recent: [path, ...current.recent.filter((item) => item !== path)].slice(0, 20)
+    }))
+  }
+
+  function toggleRemotePathFavorite(value) {
+    if (!selectedServer.id) return
+    const path = normalizeRemoteHistoryPath(value)
+    updateRemotePathHistoryForServer(selectedServer.id, (current) => {
+      const isFavorite = current.favorites.includes(path)
+      return {
+        ...current,
+        favorites: isFavorite
+          ? current.favorites.filter((item) => item !== path)
+          : [path, ...current.favorites].slice(0, 30)
+      }
+    })
+  }
+
+  function clearRecentRemotePaths() {
+    if (!selectedServer.id) return
+    updateRemotePathHistoryForServer(selectedServer.id, (current) => ({ ...current, recent: [] }))
+  }
+
+  function saveCommandSnippet(draft) {
+    const normalized = normalizeCommandSnippet(draft, selectedServer.id)
+    if (!normalized) {
+      showToast('error', t('command.required', 'Enter a command name and command.'))
+      return false
+    }
+    if (commandContainsPotentialSecret(normalized.command) && !window.confirm(t(
+      'command.sensitiveWarning',
+      'This command may contain a password, token or key. Save it anyway?'
+    ))) {
+      return false
+    }
+    setCommandSnippets((current) => {
+      const exists = current.some((item) => item.id === normalized.id)
+      const next = exists
+        ? current.map((item) => item.id === normalized.id ? normalized : item)
+        : [normalized, ...current]
+      window.opsFlow.setStore('commandSnippets', next)
+      return next
+    })
+    return true
+  }
+
+  function deleteCommandSnippet(snippet) {
+    if (!snippet?.id || !window.confirm(t(
+      'command.confirmDelete',
+      'Delete saved command "{name}"?',
+      { name: snippet.name }
+    ))) return
+    setCommandSnippets((current) => {
+      const next = current.filter((item) => item.id !== snippet.id)
+      window.opsFlow.setStore('commandSnippets', next)
+      return next
+    })
+  }
+
+  function fillCommandSnippet(snippet) {
+    const command = String(snippet?.command || '')
+    const sessionId = getShellSessionId(selectedServer.id)
+    if (!command || selectedServer.status !== 'connected' || !sessionId || !terminalRef.current) {
+      showToast('error', t('common.connectFirst', 'Connect server first.'))
+      return false
+    }
+    shellSessionRef.current = sessionId
+    shellServerIdRef.current = selectedServer.id
+    terminalRef.current.focus()
+    terminalRef.current.paste(command)
+    terminalRef.current.scrollToBottom()
+    showToast('info', t('command.filled', 'Command pasted into the terminal. Review it, then press Enter to run.'))
+    return true
+  }
+
+  const runnableServers = useMemo(
+    () => servers.filter((server) => server.id),
+    [servers]
+  )
+
+  const selectedDatabases = databases
+  const selectedRedisStores = redisStores
+  const selectedDatabase = selectedDatabases.find((item) => item.id === selectedDatabaseId) || selectedDatabases[0] || null
+  const selectedRedis = selectedRedisStores.find((item) => item.id === selectedRedisId) || selectedRedisStores[0] || null
+  const selectedWorkflow = workflows.find((item) => item.id === selectedWorkflowId) || workflows[0] || workflowTemplates[0]
+  const workflowRunWorkflow = workflows.find((item) => item.id === workflowRunWorkflowId) || selectedWorkflow
+  const workflowRunIsActive = workflowRunTargets.some((target) => ['pending', 'running', 'cancelling'].includes(target.status))
+  const workflowRunIsCancelling = workflowRunTargets.some((target) => target.status === 'cancelling')
+  const auditWorkflows = useMemo(() => workflows.filter(isAuditWorkflow), [workflows])
+  const selectedAuditWorkflow = auditWorkflows.find((item) => item.id === selectedWorkflowId) || auditWorkflows[0] || null
+  const visibleWorkflowRunTargets = useMemo(
+    () => workflowRunTargets.filter((target) => target.serverId === selectedServer.id),
+    [workflowRunTargets, selectedServer.id]
+  )
+  const auditOutputNodes = useMemo(
+    () => selectedAuditWorkflow?.nodes?.filter((node) => node.data?.kind === 'output-format') || [],
+    [selectedAuditWorkflow]
+  )
+  const auditDownloadNodes = useMemo(
+    () => selectedAuditWorkflow?.nodes?.filter((node) => node.data?.kind === 'file-download') || [],
+    [selectedAuditWorkflow]
+  )
+  const auditArtifacts = useMemo(
+    () => visibleWorkflowRunTargets.flatMap((target) => (
+      (target.artifacts || []).map((artifact) => ({ ...artifact, serverName: target.serverName, status: target.status }))
+    )),
+    [visibleWorkflowRunTargets]
+  )
+  const auditScoreSummary = useMemo(() => summarizeAuditRun(visibleWorkflowRunTargets), [visibleWorkflowRunTargets])
+  const auditFindingRows = useMemo(() => collectAuditFindings(visibleWorkflowRunTargets), [visibleWorkflowRunTargets])
+  const auditRiskTotal = (auditScoreSummary.high || 0) + (auditScoreSummary.medium || 0) + (auditScoreSummary.low || 0)
+  const auditRiskDonutStyle = useMemo(
+    () => buildAuditRiskDonutStyle(auditScoreSummary),
+    [auditScoreSummary.high, auditScoreSummary.medium, auditScoreSummary.low]
+  )
+  const auditRunStats = useMemo(() => {
+    const stats = { total: visibleWorkflowRunTargets.length, done: 0, running: 0, failed: 0, pending: 0 }
+    visibleWorkflowRunTargets.forEach((target) => {
+      const status = target.status || 'pending'
+      if (status === 'done') stats.done += 1
+      else if (status === 'running') stats.running += 1
+      else if (status === 'failed') stats.failed += 1
+      else stats.pending += 1
+    })
+    return stats
+  }, [visibleWorkflowRunTargets])
+  const visibleModuleIds = useMemo(() => ['command', 'database', 'redis', 'workflow', 'security-audit', 'package-deployer', 'backup-recovery', 'system-inspector'], [])
+  const isRemoteViewCurrent = remoteServerId === selectedServer.id
+  const displayedRemotePath = isRemoteViewCurrent ? remotePath : '/'
+  const displayedRemoteItems = isRemoteViewCurrent ? remoteItems : []
+
+  useEffect(() => {
+    if (!visibleWorkflowRunTargets.length) {
+      if (selectedWorkflowRunTargetId) setSelectedWorkflowRunTargetId('')
+      return
+    }
+    if (!visibleWorkflowRunTargets.some((target) => target.runId === selectedWorkflowRunTargetId)) {
+      setSelectedWorkflowRunTargetId(visibleWorkflowRunTargets[0].runId)
+    }
+  }, [visibleWorkflowRunTargets, selectedWorkflowRunTargetId])
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const output = workflowLogOutputRef.current
+      if (output) output.scrollTop = output.scrollHeight
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [workflowRunTargets, workflowRunViewMode, selectedWorkflowRunTargetId, selectedWorkflowLogNodeId])
+
+  useEffect(() => {
+    if (connectingServerIdRef.current === selectedServer.id) return
+    if (!selectedServer.id) {
+      resetServerWorkspace()
+      return
+    }
+
+    const cached = workspaceCacheRef.current[selectedServer.id]
+    if (cached && selectedServer.status === 'connected') {
+      restoreServerWorkspace(cached)
+      return
+    }
+
+    if (selectedServer.status !== 'connected') {
+      setDisconnectedWorkspace(selectedServer)
+      setResourceHistory(makeInitialUsageHistory())
+    } else {
+      setConnectedWorkspace(selectedServer)
+    }
+  }, [selectedServerId, selectedServer.status])
+
+  useEffect(() => {
+    if (!selectedServerId) return
+    if (selectedServer.status !== 'connected') return
+    if (lastWorkspaceServerIdRef.current !== selectedServerId) {
+      lastWorkspaceServerIdRef.current = selectedServerId
+      return
+    }
+    workspaceCacheRef.current[selectedServerId] = buildWorkspaceSnapshot()
+  }, [
+    selectedServerId,
+    remoteServerId,
+    remotePath,
+    remoteItems,
+    remoteSort,
+    remoteFilesScrollTop,
+    selectedRemoteItem,
+    remotePrivilege,
+    previewFile,
+    previewContent,
+    selectedDatabaseId,
+    selectedDbTable,
+    tableColumns,
+    sqlResult,
+    terminalInput,
+    terminalOutput,
+    resourceHistory,
+    systemInspectorResult,
+    servicePrivilege,
+    selectedWorkflowId,
+    activeModule,
+    workflowRunLogs,
+    selectedWorkflowLogNodeId,
+    selectedServer.status
+  ])
+  serversLiveRef.current = servers
+
+  useEffect(() => {
+    setSelectedDatabaseId((current) => (
+      databases.some((item) => item.id === current) ? current : databases[0]?.id || ''
+    ))
+  }, [databases])
+
+  useEffect(() => {
+    databaseMetadataRequestRef.current = { tables: '', columns: '' }
+    setSelectedDbTable(null)
+    setSelectedDbColumn(null)
+    setTableColumns([])
+    setIsTableLoading(false)
+    const database = databases.find((item) => item.id === selectedDatabaseId)
+    if (!database || !resourceConnectionAvailable(database, servers)) return undefined
+    const timer = window.setTimeout(() => {
+      refreshDatabaseTables(database)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [selectedDatabaseId])
+
+  useEffect(() => {
+    const repaired = ensureUniqueResourceIds(redisStores, 'redis')
+    const idsChanged = repaired.some((item, index) => item.id !== redisStores[index]?.id)
+    if (idsChanged) {
+      setRedisStores(repaired)
+      setSelectedRedisId(repaired[0]?.id || '')
+      persist({ servers, databases, redisStores: repaired })
+      return
+    }
+    setSelectedRedisId((current) => (
+      redisStores.some((item) => item.id === current) ? current : redisStores[0]?.id || ''
+    ))
+  }, [redisStores])
+
+  useEffect(() => {
+    setBackupRecoveryResult(null)
+    setSelectedBackupTaskId('')
+    setBackupRestoreDialog(null)
+    setBackupTargetDialog(null)
+    setBackupContentDialog(null)
+    setIsBackupRecoveryLoading(false)
+    setBackupRecoveryStage('')
+  }, [selectedServer.id])
+
+  useEffect(() => {
+    activeModuleRef.current = activeModule
+  }, [activeModule])
+
+  useEffect(() => {
+    selectedServerIdLiveRef.current = selectedServer.id || ''
+  }, [selectedServer.id])
+
+  useEffect(() => {
+    if (!visibleModuleIds.includes(activeModule)) {
+      setActiveModule('command')
+    }
+  }, [activeModule, visibleModuleIds])
+
+  useEffect(() => {
+    if (activeModule !== 'redis' || !selectedRedis || !resourceConnectionAvailable(selectedRedis, servers)) return
+    const loadKey = `${selectedRedis.id}:${selectedRedis.serverId || 'direct'}:${selectedRedis.host}:${selectedRedis.port}:${selectedRedis.database}`
+    if (redisAutoLoadKeyRef.current === loadKey) return
+    redisAutoLoadKeyRef.current = loadKey
+    refreshRedisDatabases(selectedRedis)
+  }, [activeModule, selectedRedis?.id, selectedRedis?.serverId, selectedRedis?.host, selectedRedis?.port, selectedRedis?.database, servers])
+
+  useEffect(() => {
+    redisAutoLoadKeyRef.current = ''
+    setRedisDatabases([])
+    setRedisKeys([])
+    setSelectedRedisKey('')
+    setRedisKeyDetail(null)
+  }, [selectedRedis?.id, selectedRedis?.serverId, selectedRedis?.host, selectedRedis?.port, selectedRedis?.database])
+
+  useEffect(() => {
+    if (!selectedServer.id || selectedServer.status !== 'connected') return undefined
+    const timer = window.setInterval(() => {
+      if (document.hidden || serverInspectInFlightRef.current.has(selectedServer.id)) return
+      inspectServer({ silent: true })
+    }, 30000)
+    return () => window.clearInterval(timer)
+  }, [selectedServer.id, selectedServer.status])
+
+  useEffect(() => {
+    if (activeModule !== 'package-deployer') return
+    if (selectedServer.status !== 'connected') return
+    if (isSystemInspectorLoading || systemInspectorResult?.runtimes?.length || systemInspectorResult?.ok === false) return
+    const loadKey = `${selectedServer.id}:package-deployer`
+    if (systemInspectorAutoLoadKeyRef.current === loadKey) return
+    systemInspectorAutoLoadKeyRef.current = loadKey
+    loadSystemInspector({ silent: true })
+  }, [activeModule, selectedServer.id, selectedServer.status, isSystemInspectorLoading, systemInspectorResult])
+
+  useEffect(() => {
+    terminalTextRef.current = terminalOutput
+    window.requestAnimationFrame(() => {
+      if (!terminalOutputRef.current) return
+      terminalOutputRef.current.scrollTop = terminalOutputRef.current.scrollHeight
+    })
+  }, [terminalOutput])
+
+  useEffect(() => {
+    if (!terminalHostRef.current || terminalRef.current) return undefined
+
+    const pasteIntoTerminal = async () => {
+      if (activeModuleRef.current !== 'command') return false
+      const text = await window.opsFlow.readClipboardText()
+      if (!text) {
+        showToast('error', 'Clipboard is empty')
+        return false
+      }
+      const sessionId = getShellSessionId(selectedServerIdLiveRef.current)
+      if (!sessionId) {
+        showToast('error', 'Connect before pasting')
+        return false
+      }
+      terminalRef.current?.focus()
+      window.opsFlow.writeSshShell(sessionId, text)
+      return true
+    }
+
+    const terminal = new Terminal({
+      cursorBlink: true,
+      fontFamily: 'Consolas, "Cascadia Mono", monospace',
+      fontSize: 13,
+      fontWeight: 700,
+      lineHeight: 1.35,
+      convertEol: false,
+      scrollback: 4000,
+      scrollOnUserInput: true,
+      theme: {
+        background: '#08111f',
+        foreground: '#f8fafc',
+        cursor: '#bae6fd',
+        selectionBackground: '#334155'
+      }
+    })
+    const fitAddon = new FitAddon()
+    terminal.loadAddon(fitAddon)
+    terminal.open(terminalHostRef.current)
+    terminal.writeln('Add a server, then click Connect to start the SSH terminal.')
+    fitAddon.fit()
+
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (event.type !== 'keydown' || !event.ctrlKey || !event.shiftKey) return true
+      const key = event.key.toLowerCase()
+      if (key === 'c') {
+        const selection = terminal.getSelection()
+        if (selection) {
+          window.opsFlow.writeClipboardText(selection)
+          terminal.clearSelection()
+          showToast('success', 'Copied')
+          return false
+        }
+      }
+      if (key === 'v') {
+        pasteIntoTerminal()
+        return false
+      }
+      return true
+    })
+
+    terminal.onData((data) => {
+      if (activeModuleRef.current !== 'command') return
+      const sessionId = getShellSessionId(selectedServerIdLiveRef.current)
+      if (sessionId) {
+        terminal.scrollToBottom()
+        shellSessionRef.current = sessionId
+        shellServerIdRef.current = selectedServerIdLiveRef.current
+        window.opsFlow.writeSshShell(sessionId, data)
+      } else {
+        showToast('error', 'Click Connect to open the SSH terminal.')
+      }
+    })
+
+    const removeTerminalPasteListener = window.opsFlow.onTerminalPasteRequest(() => {
+      pasteIntoTerminal()
+    })
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (activeModuleRef.current !== 'command') return
+      if (!terminalHostRef.current?.clientWidth || !terminalHostRef.current?.clientHeight) return
+      fitAddon.fit()
+      const sessionId = getShellSessionId(selectedServerIdLiveRef.current)
+      if (sessionId) {
+        window.opsFlow.resizeSshShell(sessionId, {
+          cols: terminal.cols,
+          rows: terminal.rows
+        })
+      }
+    })
+    resizeObserver.observe(terminalHostRef.current)
+
+    terminalRef.current = terminal
+    fitAddonRef.current = fitAddon
+
+    return () => {
+      removeTerminalPasteListener()
+      resizeObserver.disconnect()
+      terminal.dispose()
+      terminalRef.current = null
+      fitAddonRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    const removeDataListener = window.opsFlow.onSshShellData((payload) => {
+      const serverId = findShellServerId(payload.sessionId)
+      if (!serverId) return
+      appendTerminalOutputData(payload.data, serverId)
+    })
+    const removeCloseListener = window.opsFlow.onSshShellClose((payload) => {
+      const serverId = findShellServerId(payload.sessionId)
+      if (!serverId) {
+        if (intentionalShellCloseRef.current === payload.sessionId) intentionalShellCloseRef.current = ''
+        return
+      }
+      const wasIntentional = intentionalShellCloseRef.current === payload.sessionId
+      delete shellSessionsRef.current[serverId]
+      if (shellSessionRef.current === payload.sessionId) {
+        shellSessionRef.current = null
+        shellServerIdRef.current = ''
+      }
+      if (wasIntentional) intentionalShellCloseRef.current = ''
+      if (wasIntentional) return
+
+      const server = serversLiveRef.current.find((item) => item.id === serverId)
+      if (!server || server.status !== 'connected' || shellRecoveryRef.current.has(serverId)) return
+      shellRecoveryRef.current.add(serverId)
+      const message = payload.message || 'Terminal session closed.'
+      appendTerminalOutputData(`\r\n${message}\r\nVerifying the server connection…\r\n`, serverId)
+      appendLog(`${message} Verifying server connection: ${server.name}`)
+
+      void verifyServerReachability(server, (attempt, total, lastMessage) => {
+        if (attempt > 1) {
+          appendTerminalOutputData(`\r\nReconnect check ${attempt}/${total}: ${lastMessage || 'retrying'}\r\n`, serverId)
+          appendLog(`Reconnect check ${attempt}/${total}: ${server.name}`)
+        }
+      }).then(async (result) => {
+        const latestServer = serversLiveRef.current.find((item) => item.id === serverId)
+        if (!latestServer || latestServer.status !== 'connected') return
+        if (result?.ok) {
+          appendTerminalOutputData(`\r\nServer is reachable after ${result.attempts || 1} check(s). Reopening terminal…\r\n`, serverId)
+          appendLog(`Terminal transport recovered after ${result.attempts || 1} check(s): ${server.name}`)
+          const terminalIsVisible = serverId === selectedServerIdLiveRef.current && activeModuleRef.current === 'command'
+          if (terminalIsVisible) {
+            showToast('info', 'SSH 传输发生短暂中断，服务器已恢复连接。')
+            const reopened = await openTerminalShell(latestServer)
+            if (!reopened?.ok) appendLog(`Terminal reconnect deferred: ${reopened?.message || 'unknown error'}`)
+          }
+          return
+        }
+
+        setServers((currentServers) => {
+          const nextServers = currentServers.map((item) => (
+            item.id === serverId ? resetServerRuntime(item) : item
+          ))
+          serversLiveRef.current = nextServers
+          window.opsFlow.setStore('servers', nextServers)
+          return nextServers
+        })
+        if (serverId === selectedServerIdLiveRef.current) {
+          setRemoteItems([])
+          setSelectedRemoteItem(null)
+        }
+        appendLog(`Server connection check failed after ${result?.attempts || 1} attempts: ${result?.message || 'SSH unavailable'}`)
+        showToast('error', '服务器 SSH 已不可达，连接状态已更新。')
+      }).catch((error) => {
+        appendLog(`Server connection verification failed: ${error.message}`)
+      }).finally(() => {
+        shellRecoveryRef.current.delete(serverId)
+      })
+    })
+    const removeErrorListener = window.opsFlow.onSshShellError((payload) => {
+      const serverId = findShellServerId(payload.sessionId)
+      if (!serverId) return
+      appendTerminalOutputData(`\r\nConnection error: ${payload.message}\r\n`, serverId)
+    })
+
+    return () => {
+      removeDataListener()
+      removeCloseListener()
+      removeErrorListener()
+    }
+  }, [])
+
+  useEffect(() => {
+    window.opsFlow.getStore('transferTasks').then((savedTasks) => {
+      if (!Array.isArray(savedTasks)) return
+      setTransferTasks(savedTasks.map(normalizeStoredTransferTask).slice(0, 50))
+    })
+  }, [])
+
+  useEffect(() => {
+    return window.opsFlow.onTransferProgress((payload) => {
+      updateTransferTask(payload)
+    })
+  }, [])
+
+  useEffect(() => {
+    return window.opsFlow.onDatabaseBackupProgress((payload) => {
+      setDatabaseBackupDialog((current) => {
+        if (!current || current.operationId !== payload.operationId) return current
+        return { ...current, progress: payload }
+      })
+      const percent = databaseBackupProgressPercent(payload)
+      updateTransferTask({
+        id: payload.operationId,
+        type: 'database-backup',
+        transferred: percent,
+        total: 100,
+        status: payload.status === 'canceled' ? 'failed' : payload.status,
+        message: payload.message,
+        localPath: payload.path || '',
+        rows: payload.rows,
+        bytes: payload.bytes,
+        elapsedSeconds: payload.elapsedSeconds
+      })
+    })
+  }, [])
+
+  useEffect(() => {
+    return window.opsFlow.onRedisBackupProgress((payload) => {
+      if (['done', 'failed', 'canceled'].includes(payload.status)) setIsRedisBackupRunning(false)
+      const total = Math.max(1, Number(payload.totalKeys || 0))
+      const transferred = payload.status === 'done'
+        ? 100
+        : Math.min(99, Math.round((Number(payload.keys || 0) / total) * 100))
+      updateTransferTask({
+        id: payload.operationId,
+        type: 'redis-backup',
+        transferred,
+        total: 100,
+        status: payload.status === 'canceled' ? 'failed' : payload.status,
+        message: payload.message,
+        localPath: payload.path || '',
+        keys: payload.keys,
+        bytes: payload.bytes
+      })
+    })
+  }, [])
+
+  useEffect(() => {
+    return window.opsFlow.onRedisRestoreProgress((payload) => {
+      setRedisRestoreDialog((current) => {
+        if (!current || current.operationId !== payload.operationId) return current
+        return {
+          ...current,
+          running: !['done', 'failed', 'canceled'].includes(payload.status),
+          progress: payload
+        }
+      })
+      const total = Math.max(1, Number(payload.totalKeys || 0))
+      updateTransferTask({
+        id: payload.operationId,
+        type: 'redis-restore',
+        transferred: payload.status === 'done' ? 100 : Math.min(99, Math.round((Number(payload.keys || 0) / total) * 100)),
+        total: 100,
+        status: payload.status === 'canceled' ? 'failed' : payload.status,
+        message: payload.message,
+        keys: payload.keys
+      })
+    })
+  }, [])
+
+  useEffect(() => {
+    if (activeModule !== 'command') return
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        if (!terminalHostRef.current?.clientWidth || !terminalHostRef.current?.clientHeight) return
+        fitAddonRef.current?.fit()
+        terminalRef.current?.focus()
+        terminalRef.current?.scrollToBottom()
+        const sessionId = getShellSessionId(selectedServer.id)
+        if (sessionId && terminalRef.current) {
+          window.opsFlow.resizeSshShell(sessionId, {
+            cols: terminalRef.current.cols,
+            rows: terminalRef.current.rows
+          })
+        }
+        ensureCurrentTerminalShell()
+      }, 0)
+    })
+  }, [activeModule, selectedServer.id, selectedServer.status])
+
+  const openAddServer = () => {
+    setServerForm(emptyServerForm)
+    setEditingServerId('')
+    setServerNotice(null)
+    setIsServerDialogOpen(true)
+  }
+
+  const openEditServer = () => {
+    if (!selectedServer.id) {
+      appendLog('Edit skipped: no server selected')
+      return
+    }
+    setServerForm(buildFormFromServer(selectedServer))
+    setEditingServerId(selectedServer.id)
+    setServerNotice(null)
+    setIsServerDialogOpen(true)
+  }
+
+  const duplicateServerConnection = (formOverride = serverForm) => {
+    if (!editingServerId) return
+    const originalName = formOverride.name?.trim() || formOverride.host?.trim() || 'server'
+    const baseName = `${originalName} - ${t('server.copyNameSuffix', 'copy')}`
+    const existingNames = new Set(servers.map((server) => String(server.name || '').trim().toLocaleLowerCase()))
+    let copyName = baseName
+    let copyIndex = 2
+    while (existingNames.has(copyName.toLocaleLowerCase())) {
+      copyName = `${baseName} ${copyIndex}`
+      copyIndex += 1
+    }
+    setServerForm({ ...formOverride, name: copyName })
+    setEditingServerId('')
+    setServerNotice({
+      type: 'info',
+      text: t('server.copyReady', 'Connection details copied. Change the name or host, then save it as a new connection.')
+    })
+    appendLog(`Server connection copied as template: ${originalName}`)
+  }
+
+  const saveServer = (formOverride = serverForm) => {
+    const server = buildServerFromForm(formOverride)
+    if (!server.host || !server.username) {
+      appendLog('Server save failed: host and username are required')
+      setServerNotice({ type: 'error', text: 'Host and username are required.' })
+      showToast('error', 'Server save failed')
+      return
+    }
+
+    if (editingServerId) {
+      const previous = servers.find((item) => item.id === editingServerId)
+      const editedServer = {
+        ...previous,
+        ...server,
+        id: editingServerId,
+        hostname: '-',
+        status: 'disconnected',
+        load: '-',
+        memory: '-',
+        cpuUsage: null,
+        memoryUsage: null,
+        cpu: '-',
+        arch: '-',
+        os: '-',
+        kernel: '-',
+        uptime: '-'
+      }
+      const next = servers.map((item) => (item.id === editingServerId ? editedServer : item))
+      setServers(next)
+      setSelectedServerId(editingServerId)
+      setRemoteItems([])
+      setSelectedRemoteItem(null)
+      persist({ servers: next, databases, redisStores })
+      appendLog(`Server updated: ${editedServer.name}`)
+      const output = [
+        `Server updated: ${editedServer.name}`,
+        'Click Connect to reconnect with the new settings.',
+        ''
+      ].join('\n')
+      setTerminalOutput(output)
+      replaceTerminalDisplay(output)
+      showToast('success', `Server updated: ${editedServer.name}`)
+    } else {
+      const next = [...servers, server]
+      setServers(next)
+      setSelectedServerId(server.id)
+      persist({ servers: next, databases, redisStores })
+      appendLog(`Server saved: ${server.name}`)
+      const output = [
+        `Server saved: ${server.name}`,
+        'Click Connect to open the SSH terminal.',
+        ''
+      ].join('\n')
+      setTerminalOutput(output)
+      replaceTerminalDisplay(output)
+      showToast('success', `Server saved: ${server.name}`)
+    }
+
+    setIsServerDialogOpen(false)
+    setEditingServerId('')
+    setServerNotice(null)
+  }
+
+  const testServerConnection = async (formOverride = serverForm) => {
+    const server = buildServerFromForm(formOverride)
+    if (!server.host || !server.username) {
+      appendLog('Connection test skipped: host and username are required')
+      setServerNotice({ type: 'error', text: 'Host and username are required.' })
+      return
+    }
+
+    setIsTestingServer(true)
+    setServerNotice({ type: 'info', text: `Testing ${server.username}@${server.host}:${server.port} ...` })
+    appendLog(`Testing SSH: ${server.username}@${server.host}:${server.port}`)
+
+    try {
+      const result = await window.opsFlow.testSsh(server)
+      appendLog(result.ok ? `SSH connected: ${server.name}` : `SSH failed: ${result.message}`)
+      setServerNotice(
+        result.ok
+          ? { type: 'success', text: `SSH connected: ${server.username}@${server.host}:${server.port}` }
+          : { type: 'error', text: `Connection failed: ${result.message}` }
+      )
+      showToast(result.ok ? 'success' : 'error', result.ok ? 'SSH connected' : 'SSH connection failed')
+    } catch (error) {
+      appendLog(`SSH failed: ${error.message}`)
+      setServerNotice({ type: 'error', text: `Connection failed: ${error.message}` })
+      showToast('error', 'SSH connection failed')
+    } finally {
+      setIsTestingServer(false)
+    }
+  }
+
+  const selectServer = (server) => {
+    saveCurrentWorkspace()
+    selectedServerIdLiveRef.current = server.id || ''
+    setSelectedServerId(server.id)
+    appendLog(`Server selected: ${server.name}`)
+  }
+
+  const inspectServer = async (options = {}) => {
+    if (!selectedServer.id) {
+      appendLog('Inspect skipped: add a server first')
+      return null
+    }
+    if (serverInspectInFlightRef.current.has(selectedServer.id)) return null
+    serverInspectInFlightRef.current.add(selectedServer.id)
+    if (!options.silent) appendLog(`Refresh server info: ${selectedServer.name}`)
+    try {
+      const result = await window.opsFlow.inspectServer(selectedServer)
+      if (!result.ok) {
+        if (!options.silent) appendLog(`Refresh failed: ${result.message}`)
+        return null
+      }
+
+      const nextServer = {
+        ...selectedServer,
+        ...parseServerInspect(result.stdout),
+        status: 'connected'
+      }
+      setServers((currentServers) => {
+        const nextServers = currentServers.map((server) => (server.id === nextServer.id ? { ...server, ...nextServer } : server))
+        serversLiveRef.current = nextServers
+        window.opsFlow.setStore('servers', nextServers)
+        return nextServers
+      })
+      updateResourceHistory(nextServer)
+      if (!options.silent) appendLog('Server info refreshed')
+      return { server: nextServer, stdout: result.stdout }
+    } finally {
+      serverInspectInFlightRef.current.delete(selectedServer.id)
+    }
+  }
+
+  const runCommand = async () => {
+    if (!selectedServer.id) {
+      appendLog('Command skipped: connect a server first')
+      return
+    }
+    if (selectedServer.status !== 'connected') {
+      appendTerminal('Please click Connect before running commands.')
+      appendLog('Command skipped: server is not connected')
+      return
+    }
+    const command = terminalInput.trim()
+    if (!command) {
+      appendLog('Command skipped: empty input')
+      return
+    }
+
+    appendLog(`Command started: ${selectedServer.name}`)
+    setIsCommandRunning(true)
+    appendTerminal(`${promptFor(selectedServer)} ${command}`)
+
+    try {
+      const result = await window.opsFlow.execSsh(selectedServer, command)
+      appendTerminal(formatCommandOutput(command, result))
+      appendLog(result.ok ? 'Command finished' : `Command failed: ${result.message}`)
+      setTerminalInput('')
+    } finally {
+      setIsCommandRunning(false)
+    }
+  }
+
+  const openTerminalShell = async (server) => {
+    if (!terminalRef.current) return { ok: false, message: 'Terminal is not ready' }
+    const existingSessionId = getShellSessionId(server.id)
+    if (existingSessionId) {
+      shellSessionRef.current = existingSessionId
+      shellServerIdRef.current = server.id
+      terminalRef.current.focus()
+      fitAddonRef.current?.fit()
+      window.opsFlow.resizeSshShell(existingSessionId, {
+        cols: terminalRef.current.cols,
+        rows: terminalRef.current.rows
+      })
+      return { ok: true }
+    }
+
+    terminalRef.current.reset()
+    terminalRef.current.writeln(`Connecting to ${server.username}@${server.host}:${server.port} ...`)
+    fitAddonRef.current?.fit()
+
+    const result = await window.opsFlow.startSshShell(server, {
+      cols: terminalRef.current.cols,
+      rows: terminalRef.current.rows
+    })
+    if (!result.ok) {
+      terminalRef.current.writeln(`Connection failed: ${result.message}`)
+      return result
+    }
+
+    shellSessionsRef.current[server.id] = result.sessionId
+    shellSessionRef.current = result.sessionId
+    shellServerIdRef.current = server.id
+    terminalRef.current.focus()
+    return result
+  }
+
+  const ensureCurrentTerminalShell = async () => {
+    if (activeModuleRef.current !== 'command') return
+    if (!selectedServer.id || selectedServer.status !== 'connected') return
+    if (!terminalRef.current || !terminalHostRef.current?.clientWidth || !terminalHostRef.current?.clientHeight) return
+    const existingSessionId = getShellSessionId(selectedServer.id)
+    if (existingSessionId) {
+      shellSessionRef.current = existingSessionId
+      shellServerIdRef.current = selectedServer.id
+      terminalRef.current.focus()
+      return
+    }
+    if (terminalAutoOpenRef.current === selectedServer.id) return
+    terminalAutoOpenRef.current = selectedServer.id
+    try {
+      const result = await openTerminalShell(selectedServer)
+      if (!result.ok) {
+        appendLog(`Terminal restore failed: ${result.message}`)
+        showToast('error', `Terminal restore failed: ${result.message}`)
+      } else {
+        appendLog(`Terminal ready: ${selectedServer.name}`)
+      }
+    } finally {
+      if (terminalAutoOpenRef.current === selectedServer.id) {
+        terminalAutoOpenRef.current = ''
+      }
+    }
+  }
+
+  const closeTerminalShell = async (message) => {
+    const serverId = selectedServer.id || shellServerIdRef.current
+    const sessionId = getShellSessionId(serverId)
+    if (sessionId) {
+      intentionalShellCloseRef.current = sessionId
+      await window.opsFlow.stopSshShell(sessionId)
+      delete shellSessionsRef.current[serverId]
+    }
+    if (!serverId || shellServerIdRef.current === serverId) {
+      shellSessionRef.current = null
+      shellServerIdRef.current = ''
+    }
+    if (message) terminalRef.current?.writeln(`\r\n${message}`)
+  }
+
+  const connectServer = async () => {
+    if (!selectedServer.id) {
+      appendLog('Connect skipped: add a server first')
+      showToast('error', 'Add a server before connecting.')
+      return
+    }
+    appendLog(`Connecting: ${selectedServer.username}@${selectedServer.host}:${selectedServer.port}`)
+    connectingServerIdRef.current = selectedServer.id
+    setIsTestingServer(true)
+    const connectingServer = {
+      ...selectedServer,
+      status: 'connecting',
+      lastError: ''
+    }
+    const connectingServers = servers.map((server) => (server.id === connectingServer.id ? connectingServer : server))
+    setServers(connectingServers)
+    persist({ servers: connectingServers, databases, redisStores })
+
+    try {
+      const result = await window.opsFlow.testSsh(selectedServer)
+      if (!result.ok) {
+        const nextServer = markServerConnectionFailed(selectedServer, result.message)
+        const nextServers = connectingServers.map((server) => (server.id === nextServer.id ? nextServer : server))
+        setServers(nextServers)
+        persist({ servers: nextServers, databases, redisStores })
+        setRemoteItems([])
+        setSelectedRemoteItem(null)
+        appendLog(`Connect failed: ${result.message}`)
+        appendTerminal(`Connection failed: ${result.message}`)
+        showToast('error', `Connection failed: ${result.message}`)
+        return
+      }
+
+      const inspected = await inspectServer({ silent: true })
+      const connectedServer = { ...(inspected?.server || selectedServer), status: 'connected', lastError: '' }
+      const nextServers = connectingServers.map((server) => (server.id === connectedServer.id ? connectedServer : server))
+      setServers(nextServers)
+      persist({ servers: nextServers, databases, redisStores })
+      updateResourceHistory(connectedServer, true)
+      const shellResult = await openTerminalShell(connectedServer)
+      if (!shellResult.ok) {
+        const failedServer = markServerConnectionFailed(connectedServer, shellResult.message)
+        const failedServers = nextServers.map((server) => (server.id === failedServer.id ? failedServer : server))
+        setServers(failedServers)
+        persist({ servers: failedServers, databases, redisStores })
+        appendLog(`Terminal failed: ${shellResult.message}`)
+        showToast('error', `Terminal failed: ${shellResult.message}`)
+        return
+      }
+      const targetPath = remotePath || '/'
+      loadRemoteDirectory(targetPath, connectedServer)
+      appendLog(`Connected: ${selectedServer.name}`)
+      showToast('success', `Connected: ${connectedServer.name}`)
+    } catch (error) {
+      const nextServer = markServerConnectionFailed(selectedServer, error.message)
+      const nextServers = connectingServers.map((server) => (server.id === nextServer.id ? nextServer : server))
+      setServers(nextServers)
+      persist({ servers: nextServers, databases, redisStores })
+      appendLog(`Connect failed: ${error.message}`)
+      appendTerminal(`Connection failed: ${error.message}`)
+      showToast('error', `Connection failed: ${error.message}`)
+    } finally {
+      connectingServerIdRef.current = ''
+      setIsTestingServer(false)
+    }
+  }
+
+  const disconnectServer = () => {
+    if (!selectedServer.id) {
+      appendLog('Disconnect skipped: no server selected')
+      return
+    }
+    const nextServer = resetServerRuntime(selectedServer)
+    const nextServers = servers.map((server) => (server.id === nextServer.id ? nextServer : server))
+    setServers(nextServers)
+    persist({ servers: nextServers, databases, redisStores })
+    setRemotePath('/')
+    setRemoteServerId(selectedServer.id)
+    setRemoteItems([])
+    setSelectedRemoteItem(null)
+    setResourceHistory(makeInitialUsageHistory())
+    closeTerminalShell(`Connection closed: ${selectedServer.name}`)
+    workspaceCacheRef.current[selectedServer.id] = {
+      ...buildWorkspaceSnapshot(),
+      remoteItems: [],
+      selectedRemoteItem: null,
+      resourceHistory: makeInitialUsageHistory()
+    }
+    appendLog(`Disconnected: ${selectedServer.name}`)
+  }
+
+  const removeSelectedServer = () => {
+    if (!selectedServer.id) {
+      appendLog('Remove skipped: no server selected')
+      return
+    }
+    const linkedDatabaseCount = databases.filter((item) => resourceUsesSsh(item) && item.serverId === selectedServer.id).length
+    const linkedRedisCount = redisStores.filter((item) => resourceUsesSsh(item) && item.serverId === selectedServer.id).length
+    const confirmed = window.confirm(t(
+      'confirm.removeServer',
+      'Remove server "{name}"?\n\nSSH database and Redis connections linked to this server will also be removed. Direct connections are kept.',
+      { name: selectedServer.name, databaseCount: linkedDatabaseCount, redisCount: linkedRedisCount }
+    ))
+    if (!confirmed) {
+      appendLog('Remove server canceled')
+      return
+    }
+    stopShellForServer(selectedServer.id)
+    const nextServers = servers.filter((server) => server.id !== selectedServer.id)
+    const nextDatabases = databases.filter((item) => !resourceUsesSsh(item) || item.serverId !== selectedServer.id)
+    const nextRedisStores = redisStores.filter((item) => !resourceUsesSsh(item) || item.serverId !== selectedServer.id)
+    setServers(nextServers)
+    setDatabases(nextDatabases)
+    setRedisStores(nextRedisStores)
+    setSelectedServerId(nextServers[0]?.id || '')
+    persist({ servers: nextServers, databases: nextDatabases, redisStores: nextRedisStores })
+    const output = 'Add a server, then click Connect to start the SSH terminal.'
+    setTerminalOutput(output)
+    replaceTerminalDisplay(output)
+    appendLog(`Removed server: ${selectedServer.name}`)
+  }
+
+  const persistWorkflows = (nextWorkflows) => {
+    const normalized = normalizeWorkflows(nextWorkflows)
+    setWorkflows(normalized)
+    window.opsFlow.setStore('workflows', normalized)
+    if (!normalized.some((item) => item.id === selectedWorkflowId)) {
+      setSelectedWorkflowId(normalized[0]?.id || '')
+    }
+    return normalized
+  }
+
+  const openCreateWorkflow = () => {
+    setWorkflowTemplateMarketOpen(true)
+  }
+
+  const createWorkflowFromTemplate = (template = null) => {
+    const workflow = template
+      ? cloneWorkflowTemplate(template)
+      : makeWorkflowDefinition('New workflow', 'Describe the operation this flow automates.')
+    setWorkflowTemplateMarketOpen(false)
+    setWorkflowDialog('create')
+    setWorkflowDraft(workflow)
+  }
+
+  const openEditWorkflow = () => {
+    setWorkflowDialog('edit')
+    setWorkflowDraft(cloneWorkflow(selectedWorkflow))
+  }
+
+  const openWorkflowRunDialog = (requestedWorkflow) => {
+    const workflow = requestedWorkflow && Array.isArray(requestedWorkflow.nodes)
+      ? requestedWorkflow
+      : selectedWorkflow
+    if (!workflow) {
+      showToast('error', 'Select a workflow first.')
+      return
+    }
+    if (!runnableServers.length) {
+      showToast('error', 'Add at least one server first.')
+      return
+    }
+    setWorkflowRunWorkflowId(workflow.id)
+    setSelectedWorkflowId(workflow.id)
+    const runnableIds = new Set(runnableServers.map((server) => server.id))
+    const currentTargets = workflowRunConfig.targetServerIds.filter((id) => runnableIds.has(id))
+    const defaultTargets = selectedServer.id
+      ? [selectedServer.id]
+      : [runnableServers[0].id]
+    const targetServerIds = currentTargets.length ? currentTargets : defaultTargets
+    const serverScopes = Object.fromEntries(
+      targetServerIds.map((id) => [id, normalizeWorkflowScopes(workflowRunConfig.serverScopes?.[id], ['app'])])
+    )
+    const hasReleaseRestore = workflow.nodes.some((node) => node.data?.kind === 'release-restore')
+    setWorkflowRunConfig({
+      ...workflowRunConfig,
+      targetServerIds,
+      serverScopes,
+      autoRollback: hasReleaseRestore ? true : workflowRunConfig.autoRollback,
+      rollbackOnCancel: hasReleaseRestore ? true : workflowRunConfig.rollbackOnCancel
+    })
+    setWorkflowRunDialogOpen(true)
+  }
+
+  const updateWorkflowRunConfig = (patch) => {
+    setWorkflowRunConfig((current) => ({ ...current, ...patch }))
+  }
+
+  const toggleWorkflowRunTarget = (serverId) => {
+    setWorkflowRunConfig((current) => {
+      const selected = new Set(current.targetServerIds || [])
+      if (selected.has(serverId)) selected.delete(serverId)
+      else selected.add(serverId)
+      const targetServerIds = Array.from(selected)
+      const serverScopes = { ...(current.serverScopes || {}) }
+      if (selected.has(serverId) && !serverScopes[serverId]?.length) serverScopes[serverId] = ['app']
+      if (!selected.has(serverId)) delete serverScopes[serverId]
+      return { ...current, targetServerIds, serverScopes }
+    })
+  }
+
+  const toggleWorkflowRunServerScope = (serverId, scopeId) => {
+    setWorkflowRunConfig((current) => {
+      const serverScopes = { ...(current.serverScopes || {}) }
+      const selected = new Set(normalizeWorkflowScopes(serverScopes[serverId], ['app']))
+      if (selected.has(scopeId)) selected.delete(scopeId)
+      else selected.add(scopeId)
+      serverScopes[serverId] = selected.size ? Array.from(selected) : ['app']
+      return { ...current, serverScopes }
+    })
+  }
+
+  const cancelActiveWorkflowRun = async () => {
+    const control = activeWorkflowRunRef.current
+    if (!control || control.cancelled) return
+    const willRollback = Boolean(control.rollbackOnCancel)
+    const confirmed = window.confirm(willRollback
+      ? t('workflow.cancelRollbackConfirm', 'Stop this workflow run and restore the release backup?\n\nThe current SSH command will be interrupted when possible. Each server that already created a release backup will then run its restore nodes.')
+      : t('workflow.cancelConfirm', 'Cancel this workflow run?\n\nPending steps will stop, the current SSH command will be interrupted when possible, and completed steps will not be undone.'))
+    if (!confirmed) return
+
+    control.rollbackRequested = willRollback
+    control.cancelled = true
+    setWorkflowRunTargets((current) => current.map((target) => {
+      if (target.status === 'pending') {
+        return { ...target, status: 'cancelled', message: 'Cancelled before execution' }
+      }
+      if (target.status === 'running') {
+        return { ...target, status: 'cancelling', message: 'Cancelling current operation…' }
+      }
+      return target
+    }))
+
+    const commandIds = Array.from(control.commandIds)
+    await Promise.all(commandIds.map((executionId) => (
+      window.opsFlow.cancelSshExec?.(executionId).catch(() => null)
+    )))
+    showToast('info', t('workflow.cancelling', 'Cancelling…'))
+  }
+
+  const resolveSessionPrivilege = async (server, requested = { mode: 'auto', password: '' }) => {
+    if (!window.opsFlow.detectSshPrivilege || !window.opsFlow.verifySshPrivilege) {
+      return { ok: true, mode: 'normal', cached: false }
+    }
+
+    const requestedMode = requested?.mode || 'auto'
+    const password = String(requested?.password || '')
+    if (requestedMode === 'normal') return { ok: true, mode: 'normal', cached: false }
+
+    if (requestedMode === 'auto') {
+      const detected = await window.opsFlow.detectSshPrivilege(server)
+      if (!detected?.ok) return detected
+      if (!detected.passwordRequired) return detected
+      if (!password) {
+        return {
+          ...detected,
+          ok: false,
+          passwordRequired: true,
+          message: detected.mode === 'su' ? '请输入 root 密码后继续。' : '当前 SSH 用户需要 sudo 密码，请输入后继续。'
+        }
+      }
+      const verified = await window.opsFlow.verifySshPrivilege(server, { mode: detected.mode || 'sudo', password })
+      return { ...verified, mode: verified?.suggestedMode || detected.mode || 'sudo' }
+    }
+
+    const verified = await window.opsFlow.verifySshPrivilege(server, { mode: requestedMode, password })
+    return { ...verified, mode: verified?.suggestedMode || requestedMode }
+  }
+
+  const prepareServicePrivilege = async (server = selectedServer) => {
+    const requestedMode = servicePrivilege.mode || 'auto'
+    const resolved = await resolveSessionPrivilege(server, servicePrivilege)
+    if (!resolved?.ok) {
+      const suggestedMode = resolved?.suggestedMode || resolved?.mode || (requestedMode === 'su' ? 'su' : 'sudo')
+      setServicePrivilege({
+        mode: requestedMode,
+        suggestedMode,
+        password: '',
+        passwordRequired: Boolean(resolved?.passwordRequired),
+        cached: false
+      })
+      showToast('error', resolved?.message || `请输入 ${suggestedMode === 'su' ? 'root' : 'sudo'} 密码后重试。`)
+      return null
+    }
+    const executionMode = resolved.mode || 'normal'
+    const next = {
+      mode: requestedMode === 'auto' ? 'auto' : executionMode,
+      suggestedMode: executionMode,
+      password: '',
+      passwordRequired: false,
+      cached: executionMode !== 'normal' || Boolean(resolved.cached || resolved.passwordRequired === false)
+    }
+    setServicePrivilege(next)
+    return { mode: executionMode }
+  }
+
+  const forgetServicePrivilege = async () => {
+    const credentialMode = servicePrivilege.mode === 'auto' ? servicePrivilege.suggestedMode : servicePrivilege.mode
+    await window.opsFlow.forgetSshPrivilege?.(selectedServer, credentialMode)
+    setServicePrivilege({ mode: 'auto', password: '', cached: false })
+    showToast('info', '已清除当前服务器的会话提权凭据。')
+  }
+
+  const startWorkflowRunFromDialog = async () => {
+    const runWorkflowDefinition = workflowRunWorkflow || selectedWorkflow
+    const targetServers = runnableServers.filter((server) => workflowRunConfig.targetServerIds.includes(server.id))
+    if (!targetServers.length) {
+      showToast('error', 'Select at least one server.')
+      return
+    }
+    const blockingIssue = validateWorkflowDefinition(runWorkflowDefinition).find((issue) => issue.level === 'error')
+    if (blockingIssue) {
+      showToast('error', blockingIssue.message)
+      return
+    }
+    if (activeWorkflowRunRef.current && !activeWorkflowRunRef.current.finished) {
+      showToast('error', 'A workflow is already running. Cancel it or wait for it to finish.')
+      return
+    }
+
+    const privilegesByServerId = {}
+    for (const server of targetServers) {
+      const resolved = await resolveSessionPrivilege(server, workflowRunConfig.privilege)
+      if (!resolved?.ok) {
+        setWorkflowRunConfig((current) => ({
+          ...current,
+          privilege: {
+            ...(current.privilege || {}),
+            mode: resolved?.suggestedMode || current.privilege?.mode || 'auto',
+            password: '',
+            passwordRequired: true,
+            suggestedMode: resolved?.suggestedMode || resolved?.mode || 'sudo'
+          }
+        }))
+        showToast('error', `${server.name}: ${resolved?.message || '请输入提权密码后重试。'}`)
+        return
+      }
+      privilegesByServerId[server.id] = { mode: resolved.mode || 'normal' }
+    }
+    setWorkflowRunConfig((current) => ({
+      ...current,
+      privilege: { ...(current.privilege || {}), password: '', passwordRequired: false }
+    }))
+    setWorkflowRunDialogOpen(false)
+
+    const runControl = {
+      id: `workflow-batch-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      releaseId: createWorkflowReleaseId(),
+      cancelled: false,
+      rollbackRequested: false,
+      rollbackOnCancel: workflowRunConfig.autoRollback && workflowRunConfig.rollbackOnCancel !== false,
+      finished: false,
+      commandIds: new Set(),
+      privilegesByServerId
+    }
+    activeWorkflowRunRef.current = runControl
+
+    const runTargets = targetServers.map((server) => ({
+      runId: `workflow-run-${Date.now()}-${server.id}-${Math.random().toString(16).slice(2)}`,
+      serverId: server.id,
+      serverName: server.name,
+      status: 'pending',
+      currentStepId: '__connect__',
+      currentStepName: 'Connect server',
+      message: 'Queued',
+      progress: 0,
+      scopes: normalizeWorkflowScopes(workflowRunConfig.serverScopes?.[server.id], ['app']),
+      stepLogs: {}
+    }))
+    setWorkflowRunTargets(runTargets)
+    setWorkflowRunViewMode('server')
+    setSelectedWorkflowRunTargetId(runTargets[0]?.runId || '')
+    setSelectedWorkflowLogNodeId('__connect__')
+
+    const concurrency = workflowRunConfig.mode === 'rolling'
+      ? 1
+      : Math.max(1, Math.min(Number(workflowRunConfig.concurrency) || 1, targetServers.length))
+    const queue = [...targetServers]
+    const results = []
+    let stopRequested = false
+
+    appendLog(`Workflow batch started: ${runWorkflowDefinition.name} (${targetServers.length} server${targetServers.length === 1 ? '' : 's'})`)
+    showToast('success', `Workflow started on ${targetServers.length} server${targetServers.length === 1 ? '' : 's'}.`)
+
+    try {
+      if (workflowRunConfig.orchestrationMode === 'byStep') {
+        const stepResults = await runWorkflowByStep({
+          targetServers,
+          runTargets,
+          runConfig: workflowRunConfig,
+          workflow: runWorkflowDefinition,
+          runControl
+        })
+        if (runControl.cancelled) {
+          showToast('info', t('workflow.cancelled', 'Workflow cancelled'))
+        } else {
+          const failed = stepResults.filter((item) => !item.ok)
+          if (failed.length) {
+            showToast('error', `Cluster workflow finished with ${failed.length} failed server${failed.length === 1 ? '' : 's'}.`)
+          } else {
+            showToast('success', 'Cluster workflow completed.')
+          }
+        }
+        return
+      }
+
+      const worker = async () => {
+        while (queue.length && !stopRequested && !runControl.cancelled) {
+          const target = queue.shift()
+          const runTarget = runTargets.find((item) => item.serverId === target.id)
+          const ok = await runWorkflow({
+            server: target,
+            runConfig: workflowRunConfig,
+            runId: runTarget?.runId,
+            serverScopes: runTarget?.scopes || ['app'],
+            workflow: runWorkflowDefinition,
+            runControl
+          })
+          results.push({ server: target, ok })
+          if (!ok && workflowRunConfig.failureStrategy === 'stop' && !runControl.cancelled) {
+            stopRequested = true
+          }
+        }
+      }
+
+      await Promise.all(Array.from({ length: concurrency }, () => worker()))
+      if (runControl.cancelled) {
+        showToast('info', t('workflow.cancelled', 'Workflow cancelled'))
+      } else {
+        const failed = results.filter((item) => !item.ok)
+        if (failed.length) {
+          showToast('error', `Workflow batch finished with ${failed.length} failed server${failed.length === 1 ? '' : 's'}.`)
+        } else {
+          showToast('success', 'Workflow batch completed.')
+        }
+      }
+    } catch (error) {
+      setWorkflowRunTargets((current) => current.map((target) => (
+        ['pending', 'running', 'cancelling'].includes(target.status)
+          ? { ...target, status: runControl.cancelled ? 'cancelled' : 'failed', message: error.message || 'Workflow stopped unexpectedly' }
+          : target
+      )))
+      if (!runControl.cancelled) showToast('error', `Workflow stopped: ${error.message}`)
+    } finally {
+      runControl.finished = true
+      if (activeWorkflowRunRef.current?.id === runControl.id) activeWorkflowRunRef.current = null
+      if (runControl.cancelled) {
+        setWorkflowRunTargets((current) => current.map((target) => (
+          ['pending', 'running', 'cancelling'].includes(target.status)
+            ? { ...target, status: 'cancelled', message: 'Workflow cancelled' }
+            : target
+        )))
+      }
+    }
+  }
+
+  const duplicateWorkflow = () => {
+    const copy = {
+      ...cloneWorkflow(selectedWorkflow),
+      id: makeId('workflow'),
+      name: `${selectedWorkflow.name} copy`,
+      updatedAt: Date.now()
+    }
+    const next = [copy, ...workflows]
+    const normalized = persistWorkflows(next)
+    const savedCopy = normalized.find((item) => item.id === copy.id) || copy
+    setSelectedWorkflowId(savedCopy.id)
+    setWorkflowDraft(cloneWorkflow(savedCopy))
+    setWorkflowDialog('edit')
+    showToast('success', 'Workflow duplicated')
+  }
+
+  const deleteWorkflow = () => {
+    if (!selectedWorkflow?.id) return
+    if (workflows.length <= 1) {
+      showToast('error', 'Keep at least one workflow.')
+      return
+    }
+    const confirmed = window.confirm(t('confirm.deleteWorkflow', 'Delete workflow "{name}"?\n\nThis cannot be undone.', { name: selectedWorkflow.name }))
+    if (!confirmed) return
+    const next = workflows.filter((item) => item.id !== selectedWorkflow.id)
+    persistWorkflows(next)
+    showToast('success', 'Workflow deleted')
+  }
+
+  const saveWorkflowDraft = (draftOverride = null) => {
+    const draftToSave = draftOverride || workflowDraft
+    if (!draftToSave?.name?.trim()) {
+      showToast('error', 'Enter a workflow name.')
+      return
+    }
+    const issues = validateWorkflowDefinition(draftToSave)
+    const nextWorkflow = {
+      ...draftToSave,
+      name: draftToSave.name.trim(),
+      description: draftToSave.description?.trim() || 'No description.',
+      edges: buildSequentialWorkflowEdges(draftToSave.nodes.map((node) => node.id)),
+      updatedAt: Date.now()
+    }
+    const next = workflowDialog === 'create'
+      ? [nextWorkflow, ...workflows]
+      : workflows.map((item) => (item.id === nextWorkflow.id ? nextWorkflow : item))
+    persistWorkflows(next)
+    setSelectedWorkflowId(nextWorkflow.id)
+    setWorkflowDialog(null)
+    setWorkflowDraft(null)
+    showToast(issues.length ? 'info' : 'success', issues.length ? 'Workflow saved with items to review' : 'Workflow saved')
+  }
+
+  const leaveWorkflowForResource = (openResource, pendingResource = null) => {
+    setWorkflowReturnMode(workflowDialog || 'edit')
+    setWorkflowPendingResource(pendingResource)
+    setWorkflowDialog(null)
+    openResource()
+  }
+
+  const resumeWorkflowAfterResource = () => {
+    if (!workflowReturnMode || !workflowDraft) return
+    setWorkflowDialog(workflowReturnMode)
+    setWorkflowReturnMode('')
+  }
+
+  const applyWorkflowPendingResource = (kind, payload) => {
+    if (!workflowPendingResource || workflowPendingResource.kind !== kind || !workflowPendingResource.nodeId) return
+    setWorkflowDraft((current) => {
+      if (!current) return current
+      return {
+        ...current,
+        nodes: current.nodes.map((node) => {
+          if (node.id !== workflowPendingResource.nodeId) return node
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              config: {
+                ...(node.data.config || {}),
+                ...payload
+              }
+            }
+          }
+        })
+      }
+    })
+    setWorkflowPendingResource(null)
+  }
+
+  const runWorkflowRollbackNodes = async ({ steps = [], runtime, targetServer, serverScopes = ['app'], runConfig = defaultWorkflowRunConfig(), runControl, updateNode, transferred = 0 }) => {
+    const rollbackAfterCancel = Boolean(runControl?.cancelled && runControl?.rollbackRequested && runConfig.rollbackOnCancel !== false)
+    if (!runConfig.autoRollback || (runControl?.cancelled && !rollbackAfterCancel)) return true
+    const rollbackNodes = steps.filter((node) => isWorkflowRollbackNode(node) && shouldRunWorkflowNodeOnServer(node, serverScopes))
+    if (!rollbackNodes.length) {
+      if (runtime?.releaseBackup) runtime.releaseRollbackStatus = 'not_configured'
+      return true
+    }
+    runtime.rollbackMode = true
+    let ok = true
+    for (const rollbackNode of rollbackNodes) {
+      if (runControl?.cancelled && !rollbackAfterCancel) break
+      updateNode(rollbackNode, 'running', 'Rollback started', transferred)
+      const result = await executeWorkflowNode(rollbackNode, runtime, targetServer, {
+        runControl,
+        allowAfterCancel: rollbackAfterCancel,
+        onProgress: (message) => updateNode(rollbackNode, 'running', message, transferred)
+      })
+      if (result.cancelled || (runControl?.cancelled && !rollbackAfterCancel)) break
+      if (!result.ok) {
+        ok = false
+        updateNode(rollbackNode, 'failed', result.message || 'Rollback failed', transferred)
+        if (rollbackNode.data?.config?.continueOnFailure === false) break
+      } else {
+        updateNode(rollbackNode, 'done', result.message || 'Rollback completed', transferred)
+      }
+    }
+    runtime.rollbackMode = false
+    if (runtime?.releaseBackup && !runtime.releaseRollbackStatus) {
+      const hasReleaseRestore = rollbackNodes.some((node) => node.data?.kind === 'release-restore')
+      runtime.releaseRollbackStatus = hasReleaseRestore ? (ok ? 'rolled_back' : 'rollback_failed') : 'not_configured'
+    }
+    return ok
+  }
+
+  const runWorkflowByStep = async ({ targetServers = [], runTargets = [], runConfig = defaultWorkflowRunConfig(), workflow = selectedWorkflow, runControl } = {}) => {
+    if (!workflow?.nodes?.length) return []
+    const issues = validateWorkflowDefinition(workflow)
+    if (issues.some((issue) => issue.level === 'error')) {
+      showToast('error', issues.find((issue) => issue.level === 'error').message)
+      return runTargets.map((target) => ({ server: target, ok: false }))
+    }
+
+    const steps = workflow.nodes
+    const totalSteps = steps.length + 1
+    const taskIds = Object.fromEntries(runTargets.map((target) => [
+      target.runId,
+      `workflow-${Date.now()}-${target.serverId}-${Math.random().toString(16).slice(2)}`
+    ]))
+    const serverById = new Map(targetServers.map((server) => [server.id, server]))
+    const runtimeByRunId = new Map(runTargets.map((target) => [
+      target.runId,
+      createWorkflowRuntime(target.runId, runConfig, serverById.get(target.serverId), runControl?.releaseId, workflow)
+    ]))
+    const statusByRunId = new Map(runTargets.map((target) => [target.runId, 'pending']))
+    const stepLogByRunId = new Map(runTargets.map((target) => [target.runId, createWorkflowStepLogs(steps)]))
+
+    const publishTarget = (runTarget, patch = {}) => {
+      setWorkflowRunTargets((current) => current.map((item) => (
+        item.runId === runTarget.runId ? { ...item, ...patch } : item
+      )))
+    }
+
+    const updateStep = (runTarget, nodeId, label, status, message, transferred = 0) => {
+      const taskId = taskIds[runTarget.runId]
+      const runtime = runtimeByRunId.get(runTarget.runId) || {}
+      const recovery = buildWorkflowRecoveryRecord(runtime, serverById.get(runTarget.serverId) || {})
+      const currentLogs = stepLogByRunId.get(runTarget.runId) || createWorkflowStepLogs(steps)
+      const line = `[${time()}] ${message}`
+      const nextLogs = {
+        ...currentLogs,
+        [nodeId]: {
+          ...(currentLogs[nodeId] || { nodeId, label, logs: [] }),
+          nodeId,
+          label,
+          status,
+          logs: [...(currentLogs[nodeId]?.logs || []), line].slice(-600)
+        }
+      }
+      stepLogByRunId.set(runTarget.runId, nextLogs)
+      const targetStatus = status === 'failed' || status === 'cancelled'
+        ? status
+        : runControl?.cancelled
+          ? 'cancelling'
+        : statusByRunId.get(runTarget.runId) === 'done'
+          ? 'done'
+          : 'running'
+      publishTarget(runTarget, {
+        status: targetStatus,
+        currentStepId: nodeId,
+        currentStepName: label,
+        message,
+        progress: Math.min(100, Math.round((transferred / totalSteps) * 100)),
+        stepLogs: nextLogs,
+        recovery,
+        rollbackStatus: runtime.releaseRollbackStatus || ''
+      })
+      updateTransferTask({
+        id: taskId,
+        type: 'workflow',
+        action: 'run',
+        name: workflow.name,
+        remotePath: runTarget.serverName,
+        transferred,
+        total: totalSteps,
+        status: status === 'failed' ? 'failed' : targetStatus,
+        message,
+        stepLogs: nextLogs,
+        recovery,
+        rollbackStatus: runtime.releaseRollbackStatus || ''
+      })
+      return nextLogs
+    }
+
+    const finishTarget = (runTarget, ok, message) => {
+      const logs = stepLogByRunId.get(runTarget.runId) || createWorkflowStepLogs(steps)
+      const runtime = runtimeByRunId.get(runTarget.runId) || {}
+      const recovery = buildWorkflowRecoveryRecord(runtime, serverById.get(runTarget.serverId) || {})
+      statusByRunId.set(runTarget.runId, ok ? 'done' : 'failed')
+      publishTarget(runTarget, {
+        status: ok ? 'done' : 'failed',
+        currentStepId: '',
+        currentStepName: ok ? 'Completed' : 'Failed',
+        message,
+        progress: ok ? 100 : runTarget.progress,
+        stepLogs: logs,
+        artifacts: runtime.artifacts || [],
+        recovery,
+        rollbackStatus: runtime.releaseRollbackStatus || ''
+      })
+      updateTransferTask({
+        id: taskIds[runTarget.runId],
+        type: 'workflow',
+        action: 'run',
+        name: workflow.name,
+        remotePath: runTarget.serverName,
+        transferred: ok ? totalSteps : Math.max(0, Math.round(((runTarget.progress || 0) / 100) * totalSteps)),
+        total: totalSteps,
+        status: ok ? 'done' : 'failed',
+        message,
+        stepLogs: logs,
+        recovery,
+        rollbackStatus: runtime.releaseRollbackStatus || ''
+      })
+    }
+
+    const cancelTarget = (runTarget, message = 'Workflow cancelled') => {
+      const logs = stepLogByRunId.get(runTarget.runId) || createWorkflowStepLogs(steps)
+      const runtime = runtimeByRunId.get(runTarget.runId) || {}
+      const recovery = buildWorkflowRecoveryRecord(runtime, serverById.get(runTarget.serverId) || {})
+      statusByRunId.set(runTarget.runId, 'cancelled')
+      publishTarget(runTarget, {
+        status: 'cancelled',
+        currentStepName: 'Cancelled',
+        message,
+        stepLogs: logs,
+        artifacts: runtime.artifacts || [],
+        recovery,
+        rollbackStatus: runtime.releaseRollbackStatus || ''
+      })
+      updateTransferTask({
+        id: taskIds[runTarget.runId],
+        type: 'workflow',
+        action: 'run',
+        name: workflow.name,
+        remotePath: runTarget.serverName,
+        transferred: 0,
+        total: totalSteps,
+        status: 'cancelled',
+        message,
+        stepLogs: logs,
+        recovery,
+        rollbackStatus: runtime.releaseRollbackStatus || ''
+      })
+    }
+
+    setLogs([`[${time()}] Cluster workflow started: ${workflow.name}`])
+    setWorkflowRunLogs(stepLogByRunId.get(runTargets[0]?.runId) || createWorkflowStepLogs(steps))
+    setSelectedWorkflowLogNodeId('__connect__')
+
+    runTargets.forEach((runTarget) => {
+      const initialLogs = stepLogByRunId.get(runTarget.runId)
+      publishTarget(runTarget, {
+        status: 'running',
+        currentStepId: '__connect__',
+        currentStepName: 'Connect server',
+        message: 'Queued',
+        progress: 0,
+        stepLogs: initialLogs
+      })
+      updateTransferTask({
+        id: taskIds[runTarget.runId],
+        type: 'workflow',
+        action: 'run',
+        name: workflow.name,
+        remotePath: runTarget.serverName,
+        transferred: 0,
+        total: totalSteps,
+        status: 'running',
+        message: 'Queued',
+        stepLogs: initialLogs
+      })
+    })
+
+    const connectResults = await Promise.all(runTargets.map(async (runTarget) => {
+      const server = serverById.get(runTarget.serverId)
+      if (runControl?.cancelled) {
+        cancelTarget(runTarget, 'Cancelled before connection')
+        return { runTarget, ok: false, cancelled: true }
+      }
+      updateStep(runTarget, '__connect__', 'Connect server', 'running', server?.status === 'connected' ? 'Server already connected' : 'Connecting server', 0)
+      if (!server) {
+        updateStep(runTarget, '__connect__', 'Connect server', 'failed', 'Server not found', 0)
+        statusByRunId.set(runTarget.runId, 'failed')
+        return { runTarget, ok: false }
+      }
+      if (server.status !== 'connected') {
+        const connectionResult = await window.opsFlow.testSsh(server)
+        if (!connectionResult.ok) {
+          updateStep(runTarget, '__connect__', 'Connect server', 'failed', connectionResult.message || 'SSH connection failed', 0)
+          statusByRunId.set(runTarget.runId, 'failed')
+          return { runTarget, ok: false }
+        }
+      }
+      updateStep(runTarget, '__connect__', 'Connect server', 'done', 'Server ready', 1)
+      statusByRunId.set(runTarget.runId, 'running')
+      return { runTarget, ok: true }
+    }))
+
+    if (runControl?.cancelled) {
+      runTargets.forEach((runTarget) => {
+        if (statusByRunId.get(runTarget.runId) !== 'failed') cancelTarget(runTarget)
+      })
+      return runTargets.map((runTarget) => ({ server: serverById.get(runTarget.serverId) || runTarget, ok: false, cancelled: true }))
+    }
+
+    if (connectResults.some((item) => !item.ok) && runConfig.failureStrategy === 'stop') {
+      runTargets.forEach((runTarget) => {
+        if (statusByRunId.get(runTarget.runId) !== 'failed') finishTarget(runTarget, false, 'Stopped because another server failed to connect')
+      })
+      return runTargets.map((runTarget) => ({ server: serverById.get(runTarget.serverId) || runTarget, ok: false }))
+    }
+
+    let stopRequested = false
+    for (let index = 0; index < steps.length; index += 1) {
+      if (runControl?.cancelled) break
+      const step = steps[index]
+      setSelectedWorkflowLogNodeId(step.id)
+      const liveTargets = runTargets.filter((target) => !['failed', 'cancelled'].includes(statusByRunId.get(target.runId)))
+      if (isWorkflowRollbackNode(step)) {
+        liveTargets.forEach((target) => {
+          updateStep(target, step.id, step.data.label, 'skipped', 'Rollback node waits for a failed step.', index + 2)
+        })
+        continue
+      }
+      const skippedTargets = liveTargets.filter((target) => !shouldRunWorkflowNodeOnServer(step, target.scopes || ['app']))
+      skippedTargets.forEach((target) => {
+        updateStep(
+          target,
+          step.id,
+          step.data.label,
+          'skipped',
+          `Skipped on ${target.serverName}; scope ${formatWorkflowScopes(step.data?.config?.targetScopes)} does not match server scopes ${formatWorkflowScopes(target.scopes || ['app'])}.`,
+          index + 2
+        )
+      })
+      const matchedTargets = liveTargets.filter((target) => shouldRunWorkflowNodeOnServer(step, target.scopes || ['app']))
+      const runTargetStep = async (runTarget) => {
+        if (runControl?.cancelled) {
+          updateStep(runTarget, step.id, step.data.label, 'cancelled', 'Workflow cancelled', index + 1)
+          statusByRunId.set(runTarget.runId, 'cancelled')
+          return false
+        }
+        if (stopRequested || ['failed', 'cancelled'].includes(statusByRunId.get(runTarget.runId))) return true
+        const server = serverById.get(runTarget.serverId)
+        updateStep(runTarget, step.id, step.data.label, 'running', 'Step started', index + 1)
+        const runtime = runtimeByRunId.get(runTarget.runId)
+        const result = await executeWorkflowNode(step, runtime, server, {
+          runControl,
+          onProgress: (message) => updateStep(runTarget, step.id, step.data.label, 'running', message, index + 1)
+        })
+        if (runtime?.artifacts?.length) publishTarget(runTarget, { artifacts: runtime.artifacts })
+        if (result.cancelled || runControl?.cancelled) {
+          updateStep(runTarget, step.id, step.data.label, 'cancelled', result.message || 'Workflow cancelled', index + 1)
+          statusByRunId.set(runTarget.runId, 'cancelled')
+          return false
+        }
+        if (!result.ok) {
+          updateStep(runTarget, step.id, step.data.label, 'failed', result.message || 'Step failed', index + 1)
+          await runWorkflowRollbackNodes({
+            steps,
+            runtime: runtimeByRunId.get(runTarget.runId),
+            targetServer: server,
+            serverScopes: runTarget.scopes || ['app'],
+            runConfig,
+            runControl,
+            transferred: index + 1,
+            updateNode: (node, status, message, transferred) => updateStep(runTarget, node.id, node.data.label, status, message, transferred)
+          })
+          statusByRunId.set(runTarget.runId, 'failed')
+          if (runConfig.failureStrategy === 'stop') stopRequested = true
+          return false
+        }
+        updateStep(runTarget, step.id, step.data.label, result.skipped ? 'skipped' : 'done', result.message || 'Step completed', index + 2)
+        return true
+      }
+
+      const policy = getWorkflowExecutionPolicy(step)
+      const stepResults = await runWorkflowTargetsWithPolicy(matchedTargets, policy, runTargetStep)
+      if (!runControl?.cancelled && (stopRequested || stepResults.some((ok) => !ok)) && runConfig.failureStrategy === 'stop') {
+        runTargets.forEach((target) => {
+          if (statusByRunId.get(target.runId) !== 'failed') finishTarget(target, false, `Stopped at ${step.data.label}`)
+        })
+        break
+      }
+    }
+
+    if (runControl?.cancelled && runControl?.rollbackRequested) {
+      for (const runTarget of runTargets) {
+        if (statusByRunId.get(runTarget.runId) === 'failed') continue
+        const server = serverById.get(runTarget.serverId)
+        if (!server) continue
+        await runWorkflowRollbackNodes({
+          steps,
+          runtime: runtimeByRunId.get(runTarget.runId),
+          targetServer: server,
+          serverScopes: runTarget.scopes || ['app'],
+          runConfig,
+          runControl,
+          transferred: 0,
+          updateNode: (node, status, message, transferred) => updateStep(runTarget, node.id, node.data.label, status, message, transferred)
+        })
+      }
+    }
+
+    const results = runTargets.map((runTarget) => {
+      if (runControl?.cancelled || statusByRunId.get(runTarget.runId) === 'cancelled') {
+        cancelTarget(runTarget)
+        return { server: serverById.get(runTarget.serverId) || runTarget, ok: false, cancelled: true }
+      }
+      const ok = statusByRunId.get(runTarget.runId) !== 'failed'
+      finishTarget(runTarget, ok, ok ? 'Workflow completed' : runTarget.message || 'Workflow failed')
+      return { server: serverById.get(runTarget.serverId) || runTarget, ok }
+    })
+    setLogs((current) => [...current, `[${time()}] Cluster workflow completed`])
+    return results
+  }
+
+  const runWorkflow = async ({ server = selectedServer, runConfig = defaultWorkflowRunConfig(), runId = '', serverScopes = ['app'], workflow = selectedWorkflow, runControl } = {}) => {
+    if (!server.id) {
+      appendLog('Workflow skipped: add a server first')
+      return false
+    }
+    if (!workflow?.nodes?.length) {
+      showToast('error', 'Add at least one workflow node.')
+      return false
+    }
+    const issues = validateWorkflowDefinition(workflow)
+    if (issues.some((issue) => issue.level === 'error')) {
+      showToast('error', issues.find((issue) => issue.level === 'error').message)
+      return false
+    }
+    const steps = workflow.nodes
+    const totalSteps = steps.length + 1
+    const taskId = `workflow-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    const targetRunId = runId || `workflow-run-${Date.now()}-${server.id}-${Math.random().toString(16).slice(2)}`
+    const normalizedServerScopes = normalizeWorkflowScopes(serverScopes, ['app'])
+    const runtime = createWorkflowRuntime(targetRunId, runConfig, server, runControl?.releaseId, workflow)
+    const initialStepLogs = {
+      __connect__: {
+        nodeId: '__connect__',
+        label: 'Connect server',
+        status: 'pending',
+        logs: []
+      },
+      ...Object.fromEntries(steps.map((node) => [
+        node.id,
+        {
+        nodeId: node.id,
+        label: node.data.label,
+        status: 'pending',
+        logs: []
+        }
+      ]))
+    }
+    let stepLogState = initialStepLogs
+    const publishRunTarget = (patch) => {
+      setWorkflowRunTargets((current) => {
+        const existingIndex = current.findIndex((item) => item.runId === targetRunId)
+        const base = existingIndex >= 0
+          ? current[existingIndex]
+          : {
+              runId: targetRunId,
+              serverId: server.id,
+              serverName: server.name,
+              status: 'pending',
+              currentStepId: '__connect__',
+              currentStepName: 'Connect server',
+              message: '',
+              progress: 0,
+              scopes: normalizedServerScopes,
+              stepLogs: {}
+            }
+        const nextItem = { ...base, ...patch }
+        if (existingIndex >= 0) {
+          const next = [...current]
+          next[existingIndex] = nextItem
+          return next
+        }
+        return [...current, nextItem]
+      })
+    }
+    setLogs([`[${time()}] Workflow started: ${workflow.name} on ${server.name} (${dryRun ? 'dry run' : 'live'})`])
+    setWorkflowRunLogs(initialStepLogs)
+    setSelectedWorkflowLogNodeId('__connect__')
+    publishRunTarget({
+      status: 'running',
+      currentStepId: '__connect__',
+      currentStepName: 'Connect server',
+      message: server.status === 'connected' ? 'Server already connected' : 'Connecting server',
+      progress: 0,
+      scopes: normalizedServerScopes,
+      stepLogs: initialStepLogs
+    })
+    updateTransferTask({
+      id: taskId,
+      type: 'workflow',
+      action: 'run',
+      name: workflow.name,
+      remotePath: server.name,
+      transferred: 0,
+      total: totalSteps,
+      status: 'running',
+      message: server.status === 'connected' ? 'Server already connected' : 'Connecting server',
+      stepLogs: initialStepLogs
+    })
+
+    const push = (node, status, message, transferred = 0) => {
+      const recovery = buildWorkflowRecoveryRecord(runtime, server)
+      const line = `[${time()}] ${message}`
+      stepLogState = {
+        ...stepLogState,
+        [node.id]: {
+          ...(stepLogState[node.id] || { nodeId: node.id, label: node.data.label, logs: [] }),
+          status,
+          logs: [...(stepLogState[node.id]?.logs || []), line].slice(-600)
+        }
+      }
+      setLogs((current) => [...current, `${node.data.label}: ${message}`].slice(-600))
+      setWorkflowRunLogs(stepLogState)
+      publishRunTarget({
+        status: status === 'failed' || status === 'cancelled' ? status : runControl?.cancelled ? 'cancelling' : 'running',
+        currentStepId: node.id,
+        currentStepName: node.data.label,
+        message,
+        progress: Math.round((transferred / totalSteps) * 100),
+        stepLogs: stepLogState,
+        artifacts: runtime.artifacts || [],
+        recovery,
+        rollbackStatus: runtime.releaseRollbackStatus || ''
+      })
+      updateTransferTask({
+        id: taskId,
+        type: 'workflow',
+        action: 'run',
+        name: workflow.name,
+        remotePath: server.name,
+        transferred,
+        total: totalSteps,
+        status: status === 'failed' || status === 'cancelled' ? status : runControl?.cancelled ? 'cancelling' : 'running',
+        message: node.data.label,
+        stepLogs: stepLogState,
+        recovery,
+        rollbackStatus: runtime.releaseRollbackStatus || ''
+      })
+    }
+
+    const pushConnect = (status, message, transferred = 0) => {
+      const line = `[${time()}] ${message}`
+      stepLogState = {
+        ...stepLogState,
+        __connect__: {
+          ...(stepLogState.__connect__ || { nodeId: '__connect__', label: 'Connect server', logs: [] }),
+          status,
+          logs: [...(stepLogState.__connect__?.logs || []), line]
+        }
+      }
+      publishRunTarget({
+        status: status === 'failed' ? 'failed' : 'running',
+        currentStepId: '__connect__',
+        currentStepName: 'Connect server',
+        message,
+        progress: Math.round((transferred / totalSteps) * 100),
+        stepLogs: stepLogState
+      })
+      updateTransferTask({
+        id: taskId,
+        type: 'workflow',
+        action: 'run',
+        name: workflow.name,
+        remotePath: server.name,
+        transferred,
+        total: totalSteps,
+        status: status === 'failed' ? 'failed' : 'running',
+        message,
+        stepLogs: stepLogState
+      })
+    }
+
+    const finishCancelled = (message = 'Workflow cancelled') => {
+      const recovery = buildWorkflowRecoveryRecord(runtime, server)
+      publishRunTarget({
+        status: 'cancelled',
+        currentStepName: 'Cancelled',
+        message,
+        stepLogs: stepLogState,
+        artifacts: runtime.artifacts || [],
+        recovery,
+        rollbackStatus: runtime.releaseRollbackStatus || ''
+      })
+      updateTransferTask({
+        id: taskId,
+        type: 'workflow',
+        action: 'run',
+        name: workflow.name,
+        remotePath: server.name,
+        transferred: 0,
+        total: totalSteps,
+        status: 'cancelled',
+        message,
+        stepLogs: stepLogState,
+        recovery,
+        rollbackStatus: runtime.releaseRollbackStatus || ''
+      })
+    }
+
+    try {
+      if (runControl?.cancelled) {
+        finishCancelled('Cancelled before connection')
+        return false
+      }
+      pushConnect('running', server.status === 'connected' ? 'Server already connected' : 'Connecting server', 0)
+      if (server.status !== 'connected') {
+        const connectionResult = await window.opsFlow.testSsh(server)
+        if (!connectionResult.ok) {
+          const message = connectionResult.message || 'SSH connection failed'
+          pushConnect('failed', message, 0)
+          showToast('error', `Workflow connection failed: ${server.name}`)
+          return false
+        }
+      }
+      if (runControl?.cancelled) {
+        finishCancelled()
+        return false
+      }
+      pushConnect('done', 'Server ready', 1)
+      for (let index = 0; index < steps.length; index += 1) {
+        const step = steps[index]
+        setSelectedWorkflowLogNodeId(step.id)
+        if (runControl?.cancelled) {
+          push(step, 'cancelled', 'Workflow cancelled', index + 1)
+          await runWorkflowRollbackNodes({
+            steps,
+            runtime,
+            targetServer: server,
+            serverScopes: normalizedServerScopes,
+            runConfig,
+            runControl,
+            transferred: index + 1,
+            updateNode: push
+          })
+          finishCancelled()
+          return false
+        }
+        if (isWorkflowRollbackNode(step)) {
+          push(step, 'skipped', 'Rollback node waits for a failed step.', index + 2)
+          continue
+        }
+        if (!shouldRunWorkflowNodeOnServer(step, normalizedServerScopes)) {
+          push(step, 'skipped', `Skipped on ${server.name}; scope ${formatWorkflowScopes(step.data?.config?.targetScopes)} does not match server scopes ${formatWorkflowScopes(normalizedServerScopes)}.`, index + 2)
+          continue
+        }
+        push(step, 'running', 'Step started', index + 1)
+        const result = await executeWorkflowNode(step, runtime, server, {
+          runControl,
+          onProgress: (message) => push(step, 'running', message, index + 1)
+        })
+        if (result.cancelled || runControl?.cancelled) {
+          push(step, 'cancelled', result.message || 'Workflow cancelled', index + 1)
+          await runWorkflowRollbackNodes({
+            steps,
+            runtime,
+            targetServer: server,
+            serverScopes: normalizedServerScopes,
+            runConfig,
+            runControl,
+            transferred: index + 1,
+            updateNode: push
+          })
+          finishCancelled(result.message || 'Workflow cancelled')
+          return false
+        }
+        if (!result.ok) {
+          push(step, 'failed', result.message || 'Step failed', index + 1)
+          const rollbackOk = await runWorkflowRollbackNodes({
+            steps,
+            runtime,
+            targetServer: server,
+            serverScopes: normalizedServerScopes,
+            runConfig,
+            runControl,
+            transferred: index + 1,
+            updateNode: push
+          })
+          const recovery = buildWorkflowRecoveryRecord(runtime, server)
+          updateTransferTask({
+            id: taskId,
+            type: 'workflow',
+            action: 'run',
+            name: workflow.name,
+            remotePath: server.name,
+            transferred: index + 1,
+            total: totalSteps,
+            status: 'failed',
+            message: `${result.message || `${step.data.label} failed`}${runtime.releaseBackup ? (rollbackOk ? ' · rollback completed' : ' · rollback failed') : ''}`,
+            stepLogs: stepLogState,
+            recovery,
+            rollbackStatus: runtime.releaseRollbackStatus || ''
+          })
+          showToast('error', `Workflow failed: ${step.data.label}`)
+          return false
+        }
+        push(step, result.skipped ? 'skipped' : 'done', result.message || 'Step completed', index + 2)
+        updateTransferTask({
+          id: taskId,
+          type: 'workflow',
+          action: 'run',
+          name: workflow.name,
+          remotePath: server.name,
+          transferred: index + 2,
+          total: totalSteps,
+          status: 'running',
+          message: step.data.label,
+          stepLogs: stepLogState
+        })
+      }
+      setLogs((current) => [...current, `[${time()}] Workflow completed`])
+      publishRunTarget({
+        status: 'done',
+        currentStepId: '',
+        currentStepName: 'Completed',
+        message: 'Workflow completed',
+        progress: 100,
+        stepLogs: stepLogState,
+        artifacts: runtime.artifacts || [],
+        recovery: buildWorkflowRecoveryRecord(runtime, server),
+        rollbackStatus: runtime.releaseRollbackStatus || ''
+      })
+      updateTransferTask({
+        id: taskId,
+        type: 'workflow',
+        action: 'run',
+        name: workflow.name,
+        remotePath: server.name,
+        transferred: totalSteps,
+        total: totalSteps,
+        status: 'done',
+        message: 'Workflow completed',
+        stepLogs: stepLogState,
+        recovery: buildWorkflowRecoveryRecord(runtime, server),
+        rollbackStatus: runtime.releaseRollbackStatus || ''
+      })
+      showToast('success', `Workflow completed: ${server.name}`)
+      return true
+    } catch (error) {
+      if (runControl?.cancelled) {
+        await runWorkflowRollbackNodes({
+          steps,
+          runtime,
+          targetServer: server,
+          serverScopes: normalizedServerScopes,
+          runConfig,
+          runControl,
+          transferred: 0,
+          updateNode: push
+        })
+        finishCancelled(error.message || 'Workflow cancelled')
+        return false
+      }
+      await runWorkflowRollbackNodes({
+        steps,
+        runtime,
+        targetServer: server,
+        serverScopes: normalizedServerScopes,
+        runConfig,
+        runControl,
+        transferred: 0,
+        updateNode: push
+      })
+      const recovery = buildWorkflowRecoveryRecord(runtime, server)
+      publishRunTarget({
+        status: 'failed',
+        message: error.message,
+        stepLogs: stepLogState,
+        recovery,
+        rollbackStatus: runtime.releaseRollbackStatus || ''
+      })
+      updateTransferTask({
+        id: taskId,
+        type: 'workflow',
+        action: 'run',
+        name: workflow.name,
+        remotePath: server.name,
+        transferred: 0,
+        total: totalSteps,
+        status: 'failed',
+        message: error.message,
+        stepLogs: stepLogState,
+        recovery,
+        rollbackStatus: runtime.releaseRollbackStatus || ''
+      })
+      showToast('error', `Workflow failed: ${error.message}`)
+      return false
+    }
+  }
+
+  const executeWorkflowCommand = async ({ targetServer, command, runControl, onProgress, privilege = { mode: 'normal' }, ignoreCancellation = false, trace = true }) => {
+    if (runControl?.cancelled && !ignoreCancellation) return { ok: false, cancelled: true, message: 'Command cancelled' }
+    if (!window.opsFlow.execSshStream || !window.opsFlow.onSshExecData) {
+      const result = window.opsFlow.execSshPrivileged
+        ? await window.opsFlow.execSshPrivileged(targetServer, command, privilege)
+        : await window.opsFlow.execSsh(targetServer, command)
+      const output = (trace ? formatCommandOutput(command, result) : `${result.stdout || ''}\n${result.stderr || ''}`).trim()
+      if (output) onProgress?.(output)
+      return { ok: result.ok, cancelled: false, output: `${result.stdout || ''}\n${result.stderr || ''}`.trim(), message: result.ok ? 'Command completed' : (result.message || 'Command failed') }
+    }
+
+    const executionId = `workflow-command-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    const buffers = { stdout: '', stderr: '' }
+    const capturedLines = []
+    const pendingProgressLines = []
+    const maxCapturedLines = 2000
+    let omittedLineCount = 0
+    let progressTimer = null
+    let outputLineCount = 0
+    const flushProgress = () => {
+      if (progressTimer) window.clearTimeout(progressTimer)
+      progressTimer = null
+      if (!pendingProgressLines.length) return
+      onProgress?.(pendingProgressLines.splice(0).join('\n'))
+    }
+    const queueProgress = (line) => {
+      pendingProgressLines.push(line)
+      if (pendingProgressLines.length >= 25) {
+        flushProgress()
+        return
+      }
+      if (!progressTimer) progressTimer = window.setTimeout(flushProgress, 120)
+    }
+    const emitLine = (line, streamName = 'stdout') => {
+      const safeLine = sanitizeWorkflowCommandLog(line)
+      if (!safeLine.trim()) return
+      capturedLines.push(safeLine)
+      if (capturedLines.length > maxCapturedLines) {
+        const overflow = capturedLines.length - maxCapturedLines
+        capturedLines.splice(0, overflow)
+        omittedLineCount += overflow
+      }
+      outputLineCount += 1
+      queueProgress(`${streamName === 'stderr' ? '! ' : ''}${safeLine}`)
+    }
+    const consumeChunk = (streamName, chunk) => {
+      const key = streamName === 'stderr' ? 'stderr' : 'stdout'
+      const lines = `${buffers[key]}${String(chunk || '')}`.split(/\r?\n/)
+      buffers[key] = lines.pop() || ''
+      lines.forEach((line) => emitLine(line, key))
+    }
+    const stopListening = window.opsFlow.onSshExecData((payload) => {
+      if (payload?.executionId !== executionId) return
+      consumeChunk(payload.stream, payload.data)
+    })
+
+    runControl?.commandIds.add(executionId)
+    onProgress?.('Starting command script…')
+    const tracedCommand = trace
+      ? `export PS4='+ '; set -x\n${String(command || '')}`
+      : String(command || '')
+    try {
+      const result = await window.opsFlow.execSshStream(targetServer, tracedCommand, executionId, privilege)
+      Object.entries(buffers).forEach(([streamName, remaining]) => {
+        if (remaining) emitLine(remaining, streamName)
+      })
+      flushProgress()
+      if (result?.cancelled || result?.canceled || (runControl?.cancelled && !ignoreCancellation)) {
+        return { ok: false, cancelled: true, message: 'Command cancelled' }
+      }
+      return {
+        ok: Boolean(result?.ok),
+        cancelled: false,
+        output: `${omittedLineCount ? `[${omittedLineCount} earlier log lines omitted]\n` : ''}${capturedLines.join('\n')}`,
+        message: result?.ok
+          ? `Command completed · ${outputLineCount} log line${outputLineCount === 1 ? '' : 's'}`
+          : (result?.message || `Command failed${result?.code == null ? '' : ` with exit code ${result.code}`}`)
+      }
+    } finally {
+      flushProgress()
+      stopListening?.()
+      runControl?.commandIds.delete(executionId)
+    }
+  }
+
+  const executeWorkflowNode = async (node, runtime, targetServer = selectedServer, options = {}) => {
+    const config = resolveWorkflowConfigVariables(node.data?.config || {}, runtime)
+    const { runControl, onProgress } = options
+    const allowAfterCancel = Boolean(options.allowAfterCancel)
+    const privilege = options.privilege || runControl?.privilegesByServerId?.[targetServer.id] || { mode: 'normal' }
+    if (runControl?.cancelled && !allowAfterCancel) return { ok: false, cancelled: true, message: 'Workflow cancelled' }
+    const unresolvedVariables = findUnresolvedWorkflowVariables(config)
+    if (unresolvedVariables.length) return { ok: false, message: `Undefined workflow variable: ${unresolvedVariables.join(', ')}` }
+    if (node.data?.kind === 'start') return { ok: true, message: 'Workflow started' }
+    if (node.data?.kind === 'end') {
+      if (runtime.releaseBackup?.manifestPath && runtime.releaseRollbackStatus !== 'rolled_back') {
+        const finalized = await executeWorkflowCommand({
+          targetServer,
+          command: buildReleaseManifestStatusCommand(runtime.releaseBackup.manifestPath, runtime.releaseMutationStarted ? 'succeeded' : 'backup_ready'),
+          runControl,
+          onProgress,
+          privilege,
+          ignoreCancellation: allowAfterCancel,
+          trace: false
+        })
+        if (!finalized.ok) return { ...finalized, message: finalized.message || 'Unable to finalize the release manifest' }
+      }
+      return { ok: true, message: 'Workflow ended' }
+    }
+    if (node.data?.kind === 'rollback' && !runtime.rollbackMode) return { ok: true, skipped: true, message: 'Rollback node waits for a failed step.' }
+    if (node.data?.kind === 'release-restore' && !runtime.rollbackMode) return { ok: true, skipped: true, message: 'Release restore waits for a failed or cancelled step.' }
+
+    if (node.data?.kind === 'file-upload') {
+      const remotePath = String(config.remotePath || '').trim()
+      const remoteName = remotePath.split('/').filter(Boolean).pop() || remotePath
+      runtime.variables['upload.path'] = remotePath
+      runtime.variables['upload.name'] = remoteName
+      runtime.variables['package.path'] = remotePath
+      runtime.variables['package.name'] = remoteName
+
+      if (runtime.reuseRemoteFiles) {
+        const existing = await executeWorkflowCommand({
+          targetServer,
+          command: `test -e ${shellQuote(remotePath)}`,
+          runControl,
+          onProgress,
+          privilege,
+          ignoreCancellation: allowAfterCancel,
+          trace: false
+        })
+        return existing.ok
+          ? { ok: true, skipped: true, message: `Using existing remote package: ${remotePath}` }
+          : { ...existing, message: `Existing remote package was not found or is not accessible: ${remotePath}` }
+      }
+    }
+
+    const startsReleaseMutation = runtime.releaseBackup?.manifestPath
+      && !runtime.releaseMutationStarted
+      && ['executor-command', 'file-upload'].includes(node.data?.kind)
+    if (startsReleaseMutation) {
+      const marked = await executeWorkflowCommand({
+        targetServer,
+        command: buildReleaseManifestStatusCommand(runtime.releaseBackup.manifestPath, 'deploying'),
+        runControl,
+        onProgress,
+        privilege,
+        ignoreCancellation: allowAfterCancel,
+        trace: false
+      })
+      if (!marked.ok) return { ...marked, message: marked.message || 'Unable to mark the release as deploying' }
+      runtime.releaseMutationStarted = true
+    }
+
+    if (node.data?.kind === 'file-upload') {
+      const localPathCheck = await window.opsFlow.statLocalPath?.(config.localPath)
+      if (localPathCheck && !localPathCheck.ok) {
+        return { ok: false, message: localPathCheck.message || `Local path not found: ${config.localPath}` }
+      }
+      const result = await window.opsFlow.uploadRemotePath(targetServer, config.localPath, config.remotePath)
+      return { ...result, message: result.ok ? `Uploaded ${config.localPath} to ${config.remotePath}` : result.message }
+    }
+
+    if (node.data?.kind === 'file-download') {
+      if (!runtime.outputPath) return { ok: false, message: 'No output path from Output format node.' }
+      const localPath = joinLocalDownloadPath(config.localDir, runtime.outputPath)
+      const result = await window.opsFlow.downloadRemotePath(targetServer, runtime.outputPath, localPath)
+      if (result.ok) {
+        const artifact = {
+          name: String(runtime.outputPath || '').split(/[\\/]/).filter(Boolean).pop() || 'workflow-output',
+          format: runtime.outputFormat || '',
+          remotePath: runtime.outputPath,
+          localPath,
+          downloadedAt: new Date().toISOString()
+        }
+        runtime.artifacts = [...(runtime.artifacts || []), artifact]
+        return { ...result, artifact, message: `Downloaded ${runtime.outputPath} to ${localPath}` }
+      }
+      return { ...result, message: result.message }
+    }
+
+    if (node.data?.kind === 'output-format') {
+      runtime.outputFormat = config.format || 'excel'
+      runtime.outputPath = normalizeExcelOutputPath(runtime.outputFormat, config.outputPath || '')
+      const outputDir = remoteDirname(runtime.outputPath)
+      if (outputDir && outputDir !== '.') {
+        const mkdirResult = window.opsFlow.execSshPrivileged
+          ? await window.opsFlow.execSshPrivileged(targetServer, `mkdir -p ${shellQuote(outputDir)}`, privilege)
+          : await window.opsFlow.execSsh(targetServer, `mkdir -p ${shellQuote(outputDir)}`)
+        if (!mkdirResult.ok) return { ok: false, message: mkdirResult.message || `Cannot create ${outputDir}` }
+      }
+      const hasStructuredResults = Array.isArray(runtime.databaseResults) && runtime.databaseResults.length > 0
+      if (!hasStructuredResults) {
+        return {
+          ok: true,
+          message: `Output target registered: ${String(runtime.outputFormat).toUpperCase()} at ${runtime.outputPath}`
+        }
+      }
+      const isExcel = String(runtime.outputFormat).toLowerCase() === 'excel'
+      const result = isExcel
+        ? await window.opsFlow.writeRemoteBinaryFile(targetServer, runtime.outputPath, await buildWorkflowXlsxBase64(runtime))
+        : await window.opsFlow.writeRemoteFile(targetServer, runtime.outputPath, buildWorkflowOutputContent(runtime))
+      const formatNote = isExcel ? ' workbook' : ''
+      return { ...result, message: result.ok ? `Generated ${String(runtime.outputFormat).toUpperCase()}${formatNote} at ${runtime.outputPath}` : result.message }
+    }
+
+    if (node.data?.kind === 'executor-command') {
+      return executeWorkflowCommand({ targetServer, command: config.command, runControl, onProgress, privilege, ignoreCancellation: allowAfterCancel })
+    }
+
+    if (node.data?.kind === 'dependency-check') {
+      const command = buildWorkflowDependencyCheckCommand(config)
+      const result = await executeWorkflowCommand({ targetServer, command, runControl, onProgress, privilege, ignoreCancellation: allowAfterCancel })
+      return { ...result, message: result.ok ? 'Dependency check passed' : result.message }
+    }
+
+    if (node.data?.kind === 'release-backup') {
+      const backup = createReleaseBackupExecution(config, runtime)
+      const result = await executeWorkflowCommand({ targetServer, command: backup.command, runControl, onProgress, privilege, trace: false })
+      if (!result.ok) return result
+      const previousServiceStatus = readWorkflowMarker(result.output, '__OPS_RELEASE_SERVICE_STATUS__') || 'unknown'
+      const checksum = readWorkflowMarker(result.output, '__OPS_RELEASE_BACKUP_CHECKSUM__') || ''
+      const manifestPath = readWorkflowMarker(result.output, '__OPS_RELEASE_MANIFEST_PATH__') || backup.metadata.manifestPath
+      runtime.releaseBackup = { ...backup.metadata, manifestPath, previousServiceStatus, checksum }
+      runtime.variables = {
+        ...(runtime.variables || {}),
+        'release.app': backup.metadata.appName,
+        'release.source': backup.metadata.sourcePath,
+        'release.service': backup.metadata.serviceName,
+        'release.backupDir': backup.metadata.backupBase,
+        'release.manifest': manifestPath,
+        'backup.path': backup.metadata.path,
+        'backup.checksum': checksum,
+        'backup.source': backup.metadata.sourcePath,
+        'backup.service': backup.metadata.serviceName,
+        'service.previousStatus': previousServiceStatus
+      }
+      runtime.artifacts = [...(runtime.artifacts || []), {
+        name: backup.metadata.fileName,
+        format: 'tar.gz',
+        remotePath: backup.metadata.path,
+        manifestPath,
+        type: 'release-backup',
+        releaseId: runtime.releaseId,
+        checksum,
+        createdAt: new Date().toISOString()
+      }]
+      return { ...result, backup: runtime.releaseBackup, message: `Release backup verified: ${backup.metadata.path}` }
+    }
+
+    if (node.data?.kind === 'release-restore') {
+      if (!runtime.releaseBackup?.path) return { ok: true, skipped: true, message: 'No release backup was created by this run; restore skipped.' }
+      if (!runtime.releaseMutationStarted) {
+        const marked = await executeWorkflowCommand({
+          targetServer,
+          command: buildReleaseManifestStatusCommand(runtime.releaseBackup.manifestPath, 'failed_before_change'),
+          runControl,
+          onProgress,
+          privilege,
+          ignoreCancellation: true,
+          trace: false
+        })
+        runtime.releaseRollbackStatus = marked.ok ? 'not_required' : 'rollback_failed'
+        return marked.ok
+          ? { ok: true, skipped: true, message: 'No deployment change was started; restore not required.' }
+          : { ...marked, message: marked.message || 'Unable to update the release manifest' }
+      }
+      const command = buildReleaseRestoreCommand(runtime.releaseBackup, config)
+      const result = await executeWorkflowCommand({ targetServer, command, runControl, onProgress, privilege, ignoreCancellation: true, trace: false })
+      runtime.releaseRollbackStatus = result.ok ? 'rolled_back' : 'rollback_failed'
+      return { ...result, message: result.ok ? `Release restored from ${runtime.releaseBackup.path}` : result.message }
+    }
+
+    if (node.data?.kind === 'connector-database') {
+      const database = databases.find((item) => item.id === config.connectionId)
+      if (!database) return { ok: false, message: 'Database connection not found.' }
+      const tables = normalizeWorkflowSelectedTables(config)
+      const results = []
+      for (const table of tables) {
+        const sql = buildWorkflowDatabaseExportSql(database, config, table, tables.length === 1)
+        const result = await window.opsFlow.execDatabase(withDatabaseRuntime(database, servers), sql)
+        if (!result.ok) return result
+        results.push({
+          table: formatWorkflowTableName(table),
+          rows: Array.isArray(result.rows) ? result.rows : [],
+          sql
+        })
+      }
+      runtime.databaseResults = results
+      const totalRows = results.reduce((sum, item) => sum + item.rows.length, 0)
+      return { ok: true, message: `Database connected. Export rows: ${totalRows} from ${results.length} table${results.length === 1 ? '' : 's'}` }
+    }
+
+    if (node.data?.kind === 'connector-redis') {
+      const redis = redisStores.find((item) => item.id === config.connectionId)
+      if (!redis) return { ok: false, message: 'Redis connection not found.' }
+      const result = await window.opsFlow.listRedisKeys(withRedisRuntime(redis, servers), Number(redis.database || 0), config.keyPattern || '*')
+      if (!result.ok) return result
+      return { ok: true, message: `Redis connected. Matched keys: ${result.keys?.length || 0}${result.truncated ? ' (truncated)' : ''}` }
+    }
+
+    if (node.data?.kind === 'executor-http') {
+      return { ok: false, message: 'HTTP request executor is not implemented yet.' }
+    }
+
+    if (node.data?.kind === 'executor-cron') {
+      return { ok: true, message: config.cronLine ? `Selected cron: ${config.cronLine}` : `Cron configured: ${config.cron} ${config.command}` }
+    }
+
+    if (node.data?.kind === 'rollback') {
+      const result = await executeWorkflowCommand({ targetServer, command: config.command, runControl, onProgress, privilege, ignoreCancellation: allowAfterCancel })
+      if (result.cancelled) return result
+      return { ...result, ok: result.ok || config.continueOnFailure !== false, message: result.ok ? 'Rollback completed' : result.message }
+    }
+
+    return { ok: true, message: 'Skipped node' }
+  }
+
+  const loadSystemInspector = async (options = {}) => {
+    const silent = Boolean(options.silent)
+    if (selectedServer.status !== 'connected') {
+      if (!silent) showToast('error', 'Connect server first.')
+      return
+    }
+    let resolvedPrivilege = { mode: 'normal' }
+    if (!['auto', 'normal'].includes(servicePrivilege.mode)) {
+      if (silent) {
+        const detected = await resolveSessionPrivilege(selectedServer, servicePrivilege)
+        resolvedPrivilege = detected?.ok ? { mode: detected.mode || 'normal' } : { mode: 'normal' }
+      } else {
+        resolvedPrivilege = await prepareServicePrivilege(selectedServer)
+        if (!resolvedPrivilege) return
+      }
+    }
+    const requestServerId = selectedServer.id
+    const executionId = `system-inspector-${requestServerId}-${Date.now()}`
+    let timeoutId = null
+    systemInspectorExecutionRef.current = executionId
+    setIsSystemInspectorLoading(true)
+    setSystemInspectorStage('正在读取系统、运行环境、服务和防火墙信息…')
+    if (!silent) appendLog(`System inspector started: ${selectedServer.name}`)
+    const command = [
+      'export SYSTEMD_PAGER=cat PAGER=cat SYSTEMD_COLORS=0',
+      'ops_eval() { seconds="$1"; shift; command_text="$1"; if command -v timeout >/dev/null 2>&1; then timeout -k 1s "${seconds}s" sh -lc "$command_text"; else sh -lc "$command_text"; fi; }',
+      'echo "__OPS_SECTION__SYSTEM"',
+      'ops_eval 5 "hostnamectl --no-pager 2>/dev/null" || hostname 2>/dev/null || true',
+      'echo "__OPS_SECTION__OS"',
+      'cat /etc/os-release 2>/dev/null | head -20 || true',
+      'uname -a 2>/dev/null || true',
+      'echo "__OPS_SECTION__RUNTIME"',
+      'detect_runtime() { label="$1"; shift; timed_out=no; for cmd in "$@"; do raw=$(ops_eval 4 "$cmd" 2>&1); status=$?; value=$(printf "%s\\n" "$raw" | sed -n \'/^\\/etc\\/profile:/d; /^\\/etc\\/bashrc:/d; /^\\/etc\\/profile[.]d\\//d; /[^[:space:]]/{p;q;}\'); if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then timed_out=yes; break; fi; if [ "$status" -eq 0 ] && [ -n "$value" ] && ! printf "%s" "$value" | grep -Eqi "not found|not-found|unknown|failed|failed to get|unrecognized service|no such file|could not be found"; then printf "%s\\t%s\\n" "$label" "$value"; return; fi; done; if [ "$timed_out" = yes ]; then printf "%s\\tdetection timed out\\n" "$label"; else printf "%s\\tnot installed\\n" "$label"; fi; }',
+      'detect_service_runtime() { label="$1"; services="$2"; shift 2; timed_out=no; for cmd in "$@"; do raw=$(ops_eval 4 "$cmd" 2>&1); status=$?; value=$(printf "%s\\n" "$raw" | sed -n \'/^\\/etc\\/profile:/d; /^\\/etc\\/bashrc:/d; /^\\/etc\\/profile[.]d\\//d; /[^[:space:]]/{p;q;}\'); if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then timed_out=yes; break; fi; if [ "$status" -eq 0 ] && [ -n "$value" ] && ! printf "%s" "$value" | grep -Eqi "not found|not-found|unknown|failed|failed to get|unrecognized service|no such file|could not be found"; then printf "%s\\t%s\\n" "$label" "$value"; return; fi; done; for svc in $services; do unit=$(printf "%s\\n%s\\n" "$OPS_SYSTEMD_UNITS" "$OPS_SYSTEMD_UNIT_FILES" | while IFS= read -r unit_line; do candidate=${unit_line%% *}; [ -z "$candidate" ] && continue; case "$candidate" in $svc) printf "%s" "$candidate"; break ;; esac; done); if [ -n "$unit" ]; then state=$(printf "%s\\n" "$OPS_SYSTEMD_UNITS" | awk -v target="$unit" \'$1 == target {print $3; exit}\'); [ -z "$state" ] && state=$(printf "%s\\n" "$OPS_SYSTEMD_UNIT_FILES" | awk -v target="$unit" \'$1 == target {print $2; exit}\'); [ -z "$state" ] && state="installed"; printf "%s\\tservice: %s (%s)\\n" "$label" "$unit" "$state"; return; fi; done; if [ "$timed_out" = yes ]; then printf "%s\\tdetection timed out\\n" "$label"; else printf "%s\\tnot installed\\n" "$label"; fi; }',
+      'OPS_SYSTEMD_UNITS=""; OPS_SYSTEMD_UNIT_FILES=""; if command -v systemctl >/dev/null 2>&1; then OPS_SYSTEMD_UNITS=$(ops_eval 12 "systemctl list-units --type=service --all --no-pager --plain --no-legend 2>/dev/null"); OPS_SYSTEMD_STATUS=$?; OPS_SYSTEMD_UNIT_FILES=$(ops_eval 8 "systemctl list-unit-files --type=service --no-pager --plain --no-legend 2>/dev/null"); if [ "$OPS_SYSTEMD_STATUS" -eq 124 ] || [ "$OPS_SYSTEMD_STATUS" -eq 137 ]; then printf "Systemd\\tdetection timed out\\n"; fi; fi',
+      'detect_runtime "Java" "java -version" "/usr/bin/java -version" "/usr/local/java/bin/java -version" \'for exe in /usr/lib/jvm/*/bin/java /opt/java/*/bin/java; do [ -x "$exe" ] && exec "$exe" -version; done; exit 1\' \'pid=$(pgrep -x java 2>/dev/null | head -1); [ -n "$pid" ] || exit 1; exe=$(readlink -f "/proc/$pid/exe" 2>/dev/null); printf "application-bundled runtime: %s\\n" "${exe:-java pid $pid}"\'',
+      'detect_runtime "Node.js" "node -v" "/usr/bin/node -v" "/usr/local/bin/node -v" "/usr/local/node/bin/node -v" "/opt/node/bin/node -v" "nodejs -v" \'pid=$(pgrep -x node 2>/dev/null | head -1); [ -n "$pid" ] || exit 1; exe=$(readlink -f "/proc/$pid/exe" 2>/dev/null); printf "application-bundled runtime: %s\\n" "${exe:-node pid $pid}"\'',
+      'detect_runtime "Python" "python3 --version" "python --version" "/usr/bin/python3 --version"',
+      'detect_runtime "Go" "go version" "/usr/local/go/bin/go version"',
+      'detect_runtime ".NET" "dotnet --list-runtimes | head -1" "/usr/share/dotnet/dotnet --list-runtimes | head -1" "/usr/lib64/dotnet/dotnet --list-runtimes | head -1" "/usr/lib/dotnet/dotnet --list-runtimes | head -1" "/usr/local/share/dotnet/dotnet --list-runtimes | head -1" "/opt/dotnet/dotnet --list-runtimes | head -1" "/home/dotnet/dotnet --list-runtimes | head -1" \'pid=$(pgrep -x dotnet 2>/dev/null | head -1); [ -n "$pid" ] || exit 1; exe=$(readlink -f "/proc/$pid/exe" 2>/dev/null); printf "application-bundled runtime: %s\\n" "${exe:-dotnet pid $pid}"\' \'for maps in /proc/[0-9]*/maps; do grep -qm1 libcoreclr.so "$maps" 2>/dev/null && { pid=${maps#/proc/}; pid=${pid%/maps}; exe=$(readlink -f "/proc/$pid/exe" 2>/dev/null); printf "application-bundled runtime: %s\\n" "${exe:-pid $pid}"; exit 0; }; done; exit 1\'',
+      'detect_runtime "Maven" "mvn -v | head -1" "/usr/local/maven/bin/mvn -v | head -1" "/opt/maven/bin/mvn -v | head -1" \'for exe in /opt/apache-maven-*/bin/mvn /usr/local/apache-maven-*/bin/mvn; do [ -x "$exe" ] && exec "$exe" -v; done; exit 1\'',
+      'detect_runtime "Git" "git --version" "/usr/bin/git --version"',
+      'detect_service_runtime "Docker" "docker.service docker-*.service" "docker --version" "/usr/bin/docker --version" \'pid=$(pgrep -x dockerd 2>/dev/null | head -1); [ -n "$pid" ] && printf "running process: dockerd\\n"\'',
+      'detect_service_runtime "Nginx" "nginx.service nginx-*.service" "nginx -v" "/usr/sbin/nginx -v" "/usr/local/nginx/sbin/nginx -v" \'pid=$(pgrep -x nginx 2>/dev/null | head -1); [ -n "$pid" ] || exit 1; exe=$(readlink -f "/proc/$pid/exe" 2>/dev/null); [ -x "$exe" ] && exec "$exe" -v; exit 1\'',
+      'detect_service_runtime "Tomcat" "tomcat.service tomcat*.service" "catalina.sh version | grep \\"Server version\\" | head -1" "/usr/share/tomcat/bin/catalina.sh version | grep \\"Server version\\" | head -1" "/opt/tomcat/bin/catalina.sh version | grep \\"Server version\\" | head -1" \'ps -eo comm=,args= 2>/dev/null | grep -i "org.apache.catalina.startup.Bootstrap" | grep -v grep | head -1\'',
+      'detect_service_runtime "MySQL" "mysqld.service mysql.service mariadb.service mysqld*.service mysql*.service mariadb*.service" "mysql --version" "mysqld --version" "mariadb --version" \'pid=$(pgrep -x mysqld 2>/dev/null | head -1); [ -n "$pid" ] || pid=$(pgrep -x mariadbd 2>/dev/null | head -1); [ -n "$pid" ] && printf "running database process: %s\\n" "$(readlink -f /proc/$pid/exe 2>/dev/null)"\'',
+      'detect_service_runtime "PostgreSQL" "postgresql.service postgresql-*.service postgresql@*.service" "psql --version" "postgres --version" \'pid=$(pgrep -x postgres 2>/dev/null | head -1); [ -n "$pid" ] && printf "running database process: %s\\n" "$(readlink -f /proc/$pid/exe 2>/dev/null)"\'',
+      'detect_service_runtime "Redis" "redis.service redis-server.service redis*.service" "redis-server --version" "redis-cli --version" \'pid=$(pgrep -x redis-server 2>/dev/null | head -1); [ -n "$pid" ] && printf "running database process: %s\\n" "$(readlink -f /proc/$pid/exe 2>/dev/null)"\'',
+      'detect_service_runtime "MinIO" "minio.service minio*.service" "minio --version" "/usr/local/bin/minio --version" "/opt/minio/minio --version" \'pid=$(pgrep -x minio 2>/dev/null | head -1); [ -n "$pid" ] && printf "running process: %s\\n" "$(readlink -f /proc/$pid/exe 2>/dev/null)"\'',
+      'detect_runtime "Fail2ban" "fail2ban-client version"',
+      'detect_runtime "AIDE" "aide --version"',
+      'detect_runtime "Lynis" "lynis show version"',
+      'detect_runtime "Auditd" "auditctl -v" "auditd -v"',
+      'detect_runtime "ClamAV" "clamscan --version"',
+      'echo "__OPS_SECTION__SERVICES"',
+      `if [ -n "$OPS_SYSTEMD_UNITS" ] || [ -n "$OPS_SYSTEMD_UNIT_FILES" ]; then printf "%s\\n__OPS_UNIT_FILES__\\n%s\\n" "$OPS_SYSTEMD_UNITS" "$OPS_SYSTEMD_UNIT_FILES" | awk '$0 == "__OPS_UNIT_FILES__" { files=1; next } !files { if ($1 == "●") { name=$2; seen[name]=1; printf "%s %s %s %s", $2, $3, $4, $5; for (i=6; i<=NF; i++) printf " %s", $i; printf "\\n" } else if ($1 ~ /[.]service$/) { seen[$1]=1; print } next } $1 ~ /[.]service$/ && !seen[$1] { printf "%s loaded inactive dead unit-file: %s\\n", $1, $2 }'; elif ! command -v systemctl >/dev/null 2>&1; then ops_eval 8 "service --status-all 2>/dev/null" || true; fi`,
+      'echo "__OPS_SECTION__FIREWALL"',
+      `ops_eval 15 ${shellQuote(buildFirewallInspectCommand({ mode: 'normal', password: '' }))} 2>&1 || printf "META\\tstate\\tunknown\\nMETA\\twarning\\tinspection-timeout\\n"`,
+      'echo "__OPS_SECTION__CRON"',
+      'ops_eval 5 "crontab -l 2>/dev/null" || true',
+      'echo "__OPS_SECTION__PACKAGES"',
+      'if command -v rpm >/dev/null 2>&1; then printf "rpm packages: RPM\\n"; elif command -v dpkg-query >/dev/null 2>&1; then printf "deb packages: DEB\\n"; else printf "packages: unknown\\n"; fi',
+      'echo "__OPS_SECTION__DONE"'
+    ].join('\n')
+
+    const inspectorStageLabels = {
+      SYSTEM: '正在读取主机与内核信息…',
+      OS: '正在识别操作系统…',
+      RUNTIME: '正在检测运行环境与数据库组件…',
+      SERVICES: '正在读取 systemd 服务清单…',
+      FIREWALL: '正在检查防火墙与监听端口…',
+      CRON: '正在读取用户定时任务…',
+      PACKAGES: '正在统计软件包…',
+      DONE: '巡检完成，正在整理结果…'
+    }
+    let stageBuffer = ''
+    const stopListening = window.opsFlow.onSshExecData?.((payload) => {
+      if (payload?.executionId !== executionId || systemInspectorExecutionRef.current !== executionId) return
+      const lines = `${stageBuffer}${String(payload.data || '')}`.split(/\r?\n/)
+      stageBuffer = lines.pop() || ''
+      lines.forEach((line) => {
+        const marker = line.trim().match(/^__OPS_SECTION__(.+)$/)
+        const label = marker ? inspectorStageLabels[marker[1].trim()] : ''
+        if (label) setSystemInspectorStage(label)
+      })
+    })
+
+    try {
+      const executionPromise = window.opsFlow.execSshStream
+        ? window.opsFlow.execSshStream(selectedServer, command, executionId, resolvedPrivilege)
+        : window.opsFlow.execSshPrivileged(selectedServer, command, resolvedPrivilege)
+      const timeoutPromise = new Promise((resolve) => {
+        timeoutId = window.setTimeout(async () => {
+          if (systemInspectorExecutionRef.current === executionId) {
+            setSystemInspectorStage('巡检等待超时，正在中止远程命令…')
+            await window.opsFlow.cancelSshExec?.(executionId).catch(() => null)
+          }
+          resolve({
+            ok: false,
+            timedOut: true,
+            message: '巡检超过 60 秒，已自动中止。请重试；若仍失败，请检查 SSH 会话和 systemctl 命令是否正常返回。'
+          })
+        }, 60000)
+      })
+      const result = await Promise.race([executionPromise, timeoutPromise])
+      if (selectedServerIdLiveRef.current !== requestServerId) return
+      if (systemInspectorExecutionRef.current !== executionId) return
+      if (result?.cancelled || result?.canceled) {
+        const partialOutput = result.stdout || result.stderr || ''
+        if (partialOutput.includes('__OPS_SECTION__')) {
+          setSystemInspectorResult(parseSystemInspectorOutput(partialOutput))
+          if (!silent) showToast('info', '巡检已取消，当前显示取消前已收集的部分结果。')
+        } else {
+          setSystemInspectorResult({ ok: false, message: '巡检已取消，尚未收集到可显示的数据。' })
+        }
+        return
+      }
+      if (!result.ok && !result.stdout) {
+        if (!silent) showToast('error', result.message)
+        setSystemInspectorResult({ ok: false, message: result.message })
+        return
+      }
+      setSystemInspectorResult(parseSystemInspectorOutput(result.stdout || result.stderr || ''))
+      if (!silent) showToast('success', 'System inspector loaded')
+    } catch (error) {
+      if (selectedServerIdLiveRef.current === requestServerId) {
+        const message = error?.message || '主机巡检失败。'
+        setSystemInspectorResult({ ok: false, message })
+        if (!silent) showToast('error', message)
+      }
+    } finally {
+      stopListening?.()
+      if (timeoutId) window.clearTimeout(timeoutId)
+      if (systemInspectorExecutionRef.current === executionId) {
+        systemInspectorExecutionRef.current = ''
+        setIsSystemInspectorLoading(false)
+        setSystemInspectorStage('')
+      }
+    }
+  }
+
+  const cancelSystemInspector = async () => {
+    const executionId = systemInspectorExecutionRef.current
+    if (!executionId) return
+    setSystemInspectorStage('正在取消巡检…')
+    await window.opsFlow.cancelSshExec?.(executionId).catch(() => null)
+  }
+
+  function resetSystemInspectorExecution() {
+    const executionId = systemInspectorExecutionRef.current
+    systemInspectorExecutionRef.current = ''
+    if (executionId) window.opsFlow.cancelSshExec?.(executionId).catch(() => null)
+    setIsSystemInspectorLoading(false)
+    setSystemInspectorStage('')
+  }
+
+  const loadBackupRecovery = async () => {
+    if (selectedServer.status !== 'connected') {
+      showToast('error', 'Connect server first.')
+      return
+    }
+    const resolvedPrivilege = await prepareServicePrivilege(selectedServer)
+    if (!resolvedPrivilege) return
+    const requestServerId = selectedServer.id
+    setIsBackupRecoveryLoading(true)
+    setBackupRecoveryStage('正在读取系统备份任务…')
+    try {
+      const result = await window.opsFlow.execSshPrivileged(
+        selectedServer,
+        buildBackupTaskInventoryCommand(),
+        resolvedPrivilege
+      )
+      if (selectedServerIdLiveRef.current !== requestServerId) return
+      if (!result.ok && !result.stdout) {
+        setBackupRecoveryResult({ ok: false, message: result.message || '备份任务扫描失败。', tasks: [] })
+        showToast('error', result.message || '备份任务扫描失败。')
+        return
+      }
+      setBackupRecoveryStage('正在识别任务类型和恢复目标…')
+      const inventory = parseBackupTaskInventory(result.stdout || result.stderr || '')
+      const tasks = inventory.tasks.map((task) => enrichBackupTask(task, selectedDatabases, backupRecoveryProfiles, selectedServer.id))
+      const next = { ...inventory, ok: true, serverId: requestServerId, tasks, scannedAt: Date.now() }
+      setBackupRecoveryResult(next)
+      setSelectedBackupTaskId((current) => tasks.some((task) => task.id === current) ? current : (tasks[0]?.id || ''))
+      showToast('success', `已识别 ${tasks.length} 个备份任务。`)
+    } catch (error) {
+      const message = error?.message || '备份任务扫描失败。'
+      setBackupRecoveryResult({ ok: false, message, tasks: [] })
+      showToast('error', message)
+    } finally {
+      setIsBackupRecoveryLoading(false)
+      setBackupRecoveryStage('')
+    }
+  }
+
+  const scanBackupArtifacts = async (task) => {
+    if (!task || selectedServer.status !== 'connected') return
+    const resolvedPrivilege = await prepareServicePrivilege(selectedServer)
+    if (!resolvedPrivilege) return
+    setIsBackupRecoveryLoading(true)
+    setBackupRecoveryStage(`正在扫描 ${task.name} 的备份产物…`)
+    try {
+      const result = await window.opsFlow.execSshPrivileged(
+        selectedServer,
+        buildBackupArtifactScanCommand(task),
+        resolvedPrivilege
+      )
+      if (!result.ok && !result.stdout) {
+        showToast('error', result.message || '备份产物扫描失败。')
+        return
+      }
+      const artifacts = parseBackupArtifactOutput(result.stdout || result.stderr || '', task)
+      setBackupRecoveryResult((current) => current ? {
+        ...current,
+        tasks: current.tasks.map((item) => item.id === task.id ? { ...item, artifacts, artifactsScanned: true } : item)
+      } : current)
+      showToast(artifacts.length ? 'success' : 'info', artifacts.length ? `找到 ${artifacts.length} 个备份产物。` : '没有找到可恢复的备份产物。')
+    } finally {
+      setIsBackupRecoveryLoading(false)
+      setBackupRecoveryStage('')
+    }
+  }
+
+  const verifyBackupArtifact = async (task, artifact) => {
+    if (!task || !artifact || selectedServer.status !== 'connected') return
+    const resolvedPrivilege = await prepareServicePrivilege(selectedServer)
+    if (!resolvedPrivilege) return
+    const transferId = `backup-verify-${Date.now()}`
+    updateTransferTask({ id: transferId, type: 'backup-verify', name: artifact.name, remotePath: artifact.path, status: 'running', transferred: 0, total: 1, message: '正在校验备份' })
+    const result = await window.opsFlow.execSshPrivileged(selectedServer, buildBackupArtifactVerifyCommand(artifact.path), resolvedPrivilege)
+    const verification = parseBackupArtifactVerification(result.stdout || result.stderr || '')
+    if (!result.ok || !verification.ok) {
+      const message = result.message || verification.message || '备份校验失败。'
+      updateTransferTask({ id: transferId, type: 'backup-verify', status: 'failed', message })
+      showToast('error', message)
+      return
+    }
+    setBackupRecoveryResult((current) => current ? {
+      ...current,
+      tasks: current.tasks.map((item) => item.id === task.id ? {
+        ...item,
+        artifacts: (item.artifacts || []).map((entry) => entry.path === artifact.path ? {
+          ...entry,
+          verified: true,
+          checksum: verification.checksum,
+          entries: verification.entries,
+          entryCount: verification.entryCount,
+          entriesTruncated: verification.entriesTruncated,
+          verifiedAt: Date.now()
+        } : entry)
+      } : item)
+    } : current)
+    updateTransferTask({ id: transferId, type: 'backup-verify', status: 'done', transferred: 1, total: 1, message: '校验通过' })
+    showToast('success', '备份校验通过。')
+  }
+
+  const openBackupRestore = (task, artifact) => {
+    const profile = backupRecoveryProfiles[backupRecoveryProfileKey(selectedServer.id, task.id)] || {}
+    const matchedDatabase = selectedDatabases.find((database) => database.id === profile.databaseId)
+      || selectedDatabases.find((database) => backupDatabaseEngineMatches(task.engine, database.engine) && task.databaseNameHint && database.database === task.databaseNameHint)
+      || selectedDatabases.find((database) => backupDatabaseEngineMatches(task.engine, database.engine))
+      || null
+    setBackupRestoreDialog({
+      task,
+      artifact,
+      restoreMode: profile.restoreMode || task.restoreMode || 'single',
+      restoreRoot: profile.restoreRoot || task.restoreRoot || '/',
+      targetPath: profile.targetPath || task.targetPath || '',
+      serviceName: profile.serviceName || task.serviceName || '',
+      databaseId: matchedDatabase?.id || '',
+      confirmation: '',
+      running: false,
+      notice: null
+    })
+  }
+
+  const openBackupTargetConfig = (task) => {
+    const profile = backupRecoveryProfiles[backupRecoveryProfileKey(selectedServer.id, task.id)] || {}
+    const matchedDatabase = selectedDatabases.find((database) => database.id === profile.databaseId)
+      || selectedDatabases.find((database) => backupDatabaseEngineMatches(task.engine, database.engine) && task.databaseNameHint && database.database === task.databaseNameHint)
+      || selectedDatabases.find((database) => backupDatabaseEngineMatches(task.engine, database.engine))
+      || null
+    setBackupTargetDialog({
+      task,
+      restoreMode: profile.restoreMode || task.restoreMode || 'single',
+      restoreRoot: profile.restoreRoot || task.restoreRoot || '/',
+      targetPath: profile.targetPath || task.targetPath || '',
+      serviceName: profile.serviceName || task.serviceName || '',
+      databaseId: matchedDatabase?.id || '',
+      notice: null,
+      saving: false
+    })
+  }
+
+  const saveBackupRecoveryProfile = async (task, patch) => {
+    const key = backupRecoveryProfileKey(selectedServer.id, task.id)
+    const next = { ...backupRecoveryProfiles, [key]: { ...(backupRecoveryProfiles[key] || {}), ...patch } }
+    setBackupRecoveryProfiles(next)
+    await window.opsFlow.setStore('backupRecoveryProfiles', next)
+    setBackupRecoveryResult((current) => current ? {
+      ...current,
+      tasks: current.tasks.map((item) => item.id === task.id ? enrichBackupTask(item, selectedDatabases, next, selectedServer.id) : item)
+    } : current)
+  }
+
+  const saveBackupTargetConfig = async () => {
+    const dialog = backupTargetDialog
+    if (!dialog || dialog.saving) return
+    if (dialog.task.type === 'database' && !dialog.databaseId) {
+      setBackupTargetDialog((current) => current ? { ...current, notice: '请选择数据库连接。' } : current)
+      return
+    }
+    if (dialog.task.type !== 'database') {
+      if (dialog.restoreMode === 'archive-paths') {
+        const restoreRoot = dialog.restoreRoot.trim()
+        if (!restoreRoot.startsWith('/')) {
+          setBackupTargetDialog((current) => current ? { ...current, notice: '恢复根目录必须是绝对路径。' } : current)
+          return
+        }
+      } else {
+        const targetPath = dialog.targetPath.trim()
+        if (!targetPath.startsWith('/') || targetPath === '/') {
+          setBackupTargetDialog((current) => current ? { ...current, notice: '请输入明确的绝对路径，不能直接使用服务器根目录。' } : current)
+          return
+        }
+      }
+      if (dialog.serviceName.trim() && !isSafeServiceName(dialog.serviceName.trim())) {
+        setBackupTargetDialog((current) => current ? { ...current, notice: '关联服务名称格式不正确。' } : current)
+        return
+      }
+    }
+    setBackupTargetDialog((current) => current ? { ...current, saving: true, notice: null } : current)
+    await saveBackupRecoveryProfile(dialog.task, {
+      restoreMode: dialog.restoreMode,
+      restoreRoot: dialog.restoreRoot.trim() || '/',
+      targetPath: dialog.targetPath.trim(),
+      serviceName: dialog.serviceName.trim(),
+      databaseId: dialog.databaseId
+    })
+    setBackupTargetDialog(null)
+    showToast('success', '恢复目标已保存。')
+  }
+
+  const restoreSystemBackup = async () => {
+    const dialog = backupRestoreDialog
+    if (!dialog || dialog.running) return
+    if (dialog.confirmation !== 'RESTORE') {
+      setBackupRestoreDialog((current) => current ? { ...current, notice: '请输入 RESTORE 确认恢复。' } : current)
+      return
+    }
+    const database = selectedDatabases.find((item) => item.id === dialog.databaseId) || null
+    if (dialog.task.type === 'database' && !database) {
+      setBackupRestoreDialog((current) => current ? { ...current, notice: '请选择数据库连接；没有连接时请先到数据库模块添加。' } : current)
+      return
+    }
+    if (dialog.task.type !== 'database') {
+      if (dialog.restoreMode === 'archive-paths') {
+        if (!dialog.restoreRoot.trim().startsWith('/')) {
+          setBackupRestoreDialog((current) => current ? { ...current, notice: '请确认恢复根目录。' } : current)
+          return
+        }
+      } else if (!dialog.targetPath.trim()) {
+        setBackupRestoreDialog((current) => current ? { ...current, notice: '请确认原始恢复目标。' } : current)
+        return
+      }
+    }
+    const resolvedPrivilege = await prepareServicePrivilege(selectedServer)
+    if (!resolvedPrivilege) return
+    await saveBackupRecoveryProfile(dialog.task, {
+      restoreMode: dialog.restoreMode,
+      restoreRoot: dialog.restoreRoot.trim() || '/',
+      targetPath: dialog.targetPath.trim(),
+      serviceName: dialog.serviceName.trim(),
+      databaseId: dialog.databaseId
+    })
+    const transferId = `backup-restore-${Date.now()}`
+    const executionId = `backup-restore-exec-${Date.now()}`
+    const command = buildSystemBackupRestoreCommand({
+      task: dialog.task,
+      artifact: dialog.artifact,
+      restoreMode: dialog.restoreMode,
+      restoreRoot: dialog.restoreRoot.trim() || '/',
+      targetPath: dialog.targetPath.trim(),
+      serviceName: dialog.serviceName.trim(),
+      database
+    })
+    if (!command) {
+      setBackupRestoreDialog((current) => current ? { ...current, notice: '当前备份格式尚不能安全自动恢复。' } : current)
+      return
+    }
+    setBackupRestoreDialog((current) => current ? { ...current, running: true, notice: null } : current)
+    updateTransferTask({
+      id: transferId,
+      type: 'backup-restore',
+      name: dialog.task.name,
+      remotePath: dialog.artifact.path,
+      status: 'running',
+      transferred: 0,
+      total: 100,
+      indeterminate: true,
+      executionId,
+      message: '正在校验备份…'
+    })
+    let progress = 5
+    const stopListening = window.opsFlow.onSshExecData?.((payload) => {
+      if (payload?.executionId !== executionId) return
+      const line = String(payload.data || '').trim().split(/\r?\n/).filter(Boolean).pop()
+      if (!line) return
+      progress = Math.min(92, progress + 8)
+      updateTransferTask({ id: transferId, status: 'running', transferred: progress, total: 100, indeterminate: false, message: line })
+    })
+    try {
+      const result = window.opsFlow.execSshStream
+        ? await window.opsFlow.execSshStream(selectedServer, command, executionId, resolvedPrivilege)
+        : await window.opsFlow.execSshPrivileged(selectedServer, command, resolvedPrivilege)
+      const message = [result.stdout, result.stderr, result.message].filter(Boolean).join('\n').trim()
+      if (!result.ok) {
+        updateTransferTask({ id: transferId, status: 'failed', transferred: progress, total: 100, message: message || '恢复失败。' })
+        setBackupRestoreDialog((current) => current ? { ...current, running: false, notice: message || '恢复失败。' } : current)
+        return
+      }
+      updateTransferTask({ id: transferId, status: 'done', transferred: 100, total: 100, indeterminate: false, message: '恢复完成' })
+      setBackupRestoreDialog(null)
+      showToast('success', '恢复完成。')
+    } finally {
+      stopListening?.()
+      setBackupRestoreDialog((current) => current ? { ...current, running: false } : current)
+    }
+  }
+
+  const runServiceAction = async (serviceName, action) => {
+    if (selectedServer.status !== 'connected') {
+      showToast('error', 'Connect server first.')
+      return
+    }
+    if (!isSafeServiceName(serviceName)) {
+      showToast('error', 'Unsupported service name.')
+      return
+    }
+    const resolvedPrivilege = await prepareServicePrivilege(selectedServer)
+    if (!resolvedPrivilege) return
+    const requestServerId = selectedServer.id
+    const busyKey = `service:${action}:${serviceName}`
+    setInspectorBusyKey(busyKey)
+    try {
+      const command = buildServiceActionCommand(serviceName, action, { mode: 'normal', password: '' })
+      const result = await window.opsFlow.execSshPrivileged(selectedServer, command, resolvedPrivilege)
+      const output = [result.stdout, result.stderr, result.message].filter(Boolean).join('\n').trim()
+      if (!result.ok || /^failed\b/i.test(output)) {
+        const message = normalizeServiceActionMessage(output, action, serviceName)
+        appendLog(`Service ${action} failed: ${serviceName} - ${message}`)
+        showToast('error', message)
+        return
+      }
+      if (selectedServerIdLiveRef.current !== requestServerId) return
+      showToast('success', `${toTitle(action)} requested: ${serviceName}`)
+      const active = action !== 'stop'
+      setSystemInspectorResult((current) => {
+        if (!current?.services) return current
+        const services = current.services.map((service) => (
+          service.name === serviceName
+            ? {
+                ...service,
+                active: active ? 'active' : 'inactive',
+                sub: active ? 'running' : 'dead'
+              }
+            : service
+        ))
+        return {
+          ...current,
+          services,
+          serviceCount: services.filter((service) => (
+            !isFirewallServiceName(service.name)
+            && (service.active === 'active' || service.sub === 'running')
+          )).length
+        }
+      })
+      appendLog(`Service ${action} completed: ${serviceName}`)
+    } finally {
+      setInspectorBusyKey('')
+    }
+  }
+
+  const openCronDialog = (mode, cron = null) => {
+    setCronDialog({ mode, cron })
+    setCronForm(mode === 'edit' ? parseCronLineToForm(cron?.line || '') : emptyCronForm)
+  }
+
+  const closeCronDialog = () => {
+    setCronDialog(null)
+    setCronForm(emptyCronForm)
+  }
+
+  const saveCronEntry = async () => {
+    const line = buildCronLineFromForm(cronForm)
+    if (!line) {
+      showToast('error', 'Schedule and command are required.')
+      return
+    }
+    const cronLines = systemInspectorResult?.cronEntries?.map((item) => item.line) || []
+    const nextLines =
+      cronDialog?.mode === 'edit'
+        ? cronLines.map((item, index) => (index === cronDialog.cron.index ? line : item))
+        : [...cronLines, line]
+    await saveCronLines(nextLines)
+    applyWorkflowPendingResource('cron', {
+      cronLine: line,
+      cron: buildCronExpression(cronForm),
+      command: cronForm.command
+    })
+    closeCronDialog()
+    resumeWorkflowAfterResource()
+  }
+
+  const deleteCronEntry = async (cron) => {
+    if (!window.confirm(t('confirm.deleteCron', 'Delete cron entry?\n{line}', { line: cron.line }))) return
+    const nextLines = (systemInspectorResult?.cronEntries || [])
+      .filter((item) => item.index !== cron.index)
+      .map((item) => item.line)
+    await saveCronLines(nextLines)
+  }
+
+  const saveCronLines = async (lines) => {
+    if (selectedServer.status !== 'connected') {
+      showToast('error', 'Connect server first.')
+      return
+    }
+    setInspectorBusyKey('cron:save')
+    try {
+      const result = await window.opsFlow.execSsh(selectedServer, buildCronInstallCommand(lines))
+      if (!result.ok) {
+        showToast('error', result.message || 'Cron update failed')
+        return
+      }
+      showToast('success', 'Cron updated.')
+      await loadSystemInspector()
+    } finally {
+      setInspectorBusyKey('')
+    }
+  }
+
+  const openFirewallPortDialog = () => {
+    const firewall = systemInspectorResult?.firewall || {}
+    setFirewallPortForm({
+      ...emptyFirewallPortForm,
+      zone: firewall.zone || firewall.defaultZone || ''
+    })
+    setFirewallPortDialogOpen(true)
+  }
+
+  const saveFirewallPort = async () => {
+    const firewall = systemInspectorResult?.firewall || {}
+    const port = Number(firewallPortForm.port)
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      showToast('error', t('firewall.invalidPort', 'Enter a port from 1 to 65535.'))
+      return
+    }
+    if (!canManageFirewall(firewall)) {
+      showToast('error', t('firewall.notManageable', 'The active firewall backend cannot be managed safely.'))
+      return
+    }
+    const resolvedPrivilege = await prepareServicePrivilege(selectedServer)
+    if (!resolvedPrivilege) return
+    setInspectorBusyKey('firewall:add')
+    try {
+      const command = buildFirewallAddCommand(firewall, {
+        ...firewallPortForm,
+        port
+      }, { mode: 'normal', password: '' })
+      const result = await window.opsFlow.execSshPrivileged(selectedServer, command, resolvedPrivilege)
+      if (!result.ok) {
+        showToast('error', result.message || t('firewall.addFailed', 'Failed to add firewall rule.'))
+        return
+      }
+      setFirewallPortDialogOpen(false)
+      showToast('success', t('firewall.added', 'Firewall rule added.'))
+      await loadSystemInspector({ silent: true })
+    } finally {
+      setInspectorBusyKey('')
+    }
+  }
+
+  const deleteFirewallRule = async (rule) => {
+    const firewall = systemInspectorResult?.firewall || {}
+    if (!rule?.deletable) {
+      showToast('error', t('firewall.readOnlyRule', 'This rule is read-only because it cannot be identified safely.'))
+      return
+    }
+    if (firewallRuleCoversPort(rule, selectedServer.port)) {
+      showToast('error', t('firewall.protectSsh', 'The rule for the current SSH port cannot be deleted.'))
+      return
+    }
+    const confirmed = window.confirm(t(
+      'firewall.confirmDelete',
+      'Delete firewall rule {port}/{protocol}?',
+      { port: rule.port, protocol: rule.protocol }
+    ))
+    if (!confirmed) return
+    const resolvedPrivilege = await prepareServicePrivilege(selectedServer)
+    if (!resolvedPrivilege) return
+    setInspectorBusyKey(`firewall:delete:${rule.id}`)
+    try {
+      const command = buildFirewallDeleteCommand(firewall, rule, { mode: 'normal', password: '' })
+      const result = await window.opsFlow.execSshPrivileged(selectedServer, command, resolvedPrivilege)
+      if (!result.ok) {
+        showToast('error', result.message || t('firewall.deleteFailed', 'Failed to delete firewall rule.'))
+        return
+      }
+      showToast('success', t('firewall.deleted', 'Firewall rule deleted.'))
+      await loadSystemInspector({ silent: true })
+    } finally {
+      setInspectorBusyKey('')
+    }
+  }
+
+  const toggleFirewall = async (enable) => {
+    const firewall = systemInspectorResult?.firewall || {}
+    if (!['firewalld', 'ufw'].includes(firewall.backend) || firewall.conflict) {
+      showToast('error', t('firewall.toggleUnsupported', 'Enable and disable are supported only for an unambiguous firewalld or UFW backend.'))
+      return
+    }
+    const resolvedPrivilege = await prepareServicePrivilege(selectedServer)
+    if (!resolvedPrivilege) return
+    if (enable) {
+      const confirmed = window.confirm(t(
+        'firewall.confirmEnable',
+        'Enable {backend}? The current SSH port {port}/tcp will be allowed first.',
+        { backend: firewall.backend, port: selectedServer.port }
+      ))
+      if (!confirmed) return
+    } else {
+      const confirmation = window.prompt(t(
+        'firewall.confirmDisable',
+        'Disabling the firewall exposes this host. Type DISABLE to continue.'
+      ))
+      if (confirmation !== 'DISABLE') return
+    }
+    setInspectorBusyKey(`firewall:${enable ? 'enable' : 'disable'}`)
+    try {
+      const result = await window.opsFlow.execSshPrivileged(
+        selectedServer,
+        buildFirewallToggleCommand(firewall, enable, selectedServer.port, { mode: 'normal', password: '' }),
+        resolvedPrivilege
+      )
+      if (!result.ok) {
+        showToast('error', result.message || t('firewall.toggleFailed', 'Firewall state change failed.'))
+        return
+      }
+      showToast('success', enable ? t('firewall.enabled', 'Firewall enabled.') : t('firewall.disabled', 'Firewall disabled.'))
+      await loadSystemInspector({ silent: true })
+    } finally {
+      setInspectorBusyKey('')
+    }
+  }
+
+  const getRemotePrivilege = (server = selectedServer) => (
+    remotePrivilege.enabled && remotePrivilege.serverId === server.id
+      ? { mode: remotePrivilege.mode || 'normal' }
+      : null
+  )
+
+  const isRemotePermissionFailure = (message) => /permission denied|operation not permitted|access denied|eacces/i.test(String(message || ''))
+
+  const rememberRemotePermissionFailure = (path, message) => {
+    setRemotePermissionError({ path, message: message || 'Permission denied' })
+  }
+
+  const openRemotePrivilegeAccess = (targetPath = remotePermissionError?.path || displayedRemotePath || '/') => {
+    if (!selectedServer.id || selectedServer.status !== 'connected') {
+      showToast('error', t('common.connectFirst', 'Connect server first.'))
+      return
+    }
+    setRemotePrivilegeDialog({
+      targetPath,
+      mode: remotePrivilege.serverId === selectedServer.id ? remotePrivilege.mode || 'auto' : 'auto',
+      password: '',
+      loading: false,
+      notice: null
+    })
+  }
+
+  const enableRemotePrivilegeAccess = async () => {
+    if (!remotePrivilegeDialog || remotePrivilegeDialog.loading) return
+    const request = { mode: remotePrivilegeDialog.mode || 'auto', password: remotePrivilegeDialog.password || '' }
+    setRemotePrivilegeDialog((current) => current ? { ...current, loading: true, notice: null } : current)
+    const resolved = await resolveSessionPrivilege(selectedServer, request).catch((error) => ({ ok: false, message: error.message }))
+    if (!resolved?.ok) {
+      const nextMode = resolved?.suggestedMode || resolved?.mode || (request.mode === 'auto' ? 'sudo' : request.mode)
+      setRemotePrivilegeDialog((current) => current ? {
+        ...current,
+        mode: nextMode,
+        password: '',
+        loading: false,
+        notice: { type: 'error', text: resolved?.message || '提权验证失败，请检查密码和服务器权限。' }
+      } : current)
+      return
+    }
+
+    const privilege = {
+      enabled: true,
+      serverId: selectedServer.id,
+      mode: resolved.mode || 'normal',
+      cached: Boolean(resolved.cached || resolved.passwordRequired === false)
+    }
+    const targetPath = remotePrivilegeDialog.targetPath || displayedRemotePath || '/'
+    setRemotePrivilege(privilege)
+    setRemotePrivilegeDialog(null)
+    setRemotePermissionError(null)
+    showToast('success', t('remote.privilegeEnabled', 'Privileged file access enabled.'))
+    await loadRemoteDirectory(targetPath, selectedServer, { privilege: { mode: privilege.mode } })
+  }
+
+  const disableRemotePrivilegeAccess = async () => {
+    setRemotePrivilege({ enabled: false, serverId: '', mode: 'auto', cached: false })
+    setRemotePrivilegeDialog(null)
+    setRemotePermissionError(null)
+    setSelectedRemoteItem(null)
+    showToast('info', t('remote.privilegeDisabled', 'Privileged file access disabled.'))
+    if (selectedServer.status === 'connected') {
+      await loadRemoteDirectory('/', selectedServer, { privileged: false })
+    }
+  }
+
+  const openRemoteCreateDialog = (type) => {
+    if (!selectedServer.id || selectedServer.status !== 'connected') {
+      showToast('error', t('common.connectFirst', 'Connect server first.'))
+      return
+    }
+    setRemoteCreateDialog({
+      type,
+      parentPath: displayedRemotePath || '/',
+      name: '',
+      loading: false,
+      notice: null
+    })
+  }
+
+  const createRemoteItem = async () => {
+    if (!remoteCreateDialog || remoteCreateDialog.loading) return
+    const name = String(remoteCreateDialog.name || '').trim()
+    if (!name || name === '.' || name === '..' || /[\/\\]/.test(name)) {
+      setRemoteCreateDialog((current) => current ? {
+        ...current,
+        notice: { type: 'error', text: t('remote.invalidCreateName', 'Enter a valid name without /, \\, . or .. .') }
+      } : current)
+      return
+    }
+    const targetServer = selectedServer
+    const parentPath = remoteCreateDialog.parentPath || '/'
+    const type = remoteCreateDialog.type === 'dir' ? 'dir' : 'file'
+    const targetPath = joinRemotePath(parentPath, name)
+    const privilege = getRemotePrivilege(targetServer)
+    setRemoteCreateDialog((current) => current ? { ...current, loading: true, notice: null } : current)
+    setIsFileTransferRunning(true)
+    appendLog(`Creating remote ${type === 'dir' ? 'directory' : 'file'}: ${targetPath}`)
+    try {
+      const result = type === 'dir'
+        ? privilege && window.opsFlow.createPrivilegedRemoteDirectory
+          ? await window.opsFlow.createPrivilegedRemoteDirectory(targetServer, parentPath, name, privilege)
+          : await window.opsFlow.createRemoteDirectory(targetServer, parentPath, name)
+        : privilege && window.opsFlow.createPrivilegedRemoteFile
+          ? await window.opsFlow.createPrivilegedRemoteFile(targetServer, parentPath, name, privilege)
+          : await window.opsFlow.createRemoteFile(targetServer, parentPath, name)
+      if (!result.ok) {
+        appendLog(`Create failed: ${result.message}`)
+        if (isRemotePermissionFailure(result.message)) rememberRemotePermissionFailure(parentPath, result.message)
+        setRemoteCreateDialog((current) => current ? {
+          ...current,
+          loading: false,
+          notice: { type: 'error', text: result.message || 'Create failed' }
+        } : current)
+        return
+      }
+      setRemoteCreateDialog(null)
+      setPendingRemoteFocusName(name)
+      await loadRemoteDirectory(parentPath, targetServer)
+      setSelectedRemoteItem({ name, type, path: result.path || targetPath })
+      showToast('success', type === 'dir'
+        ? t('remote.folderCreated', 'Folder created: {name}', { name })
+        : t('remote.fileCreated', 'File created: {name}', { name }))
+      if (type === 'file') {
+        setPreviewFile({
+          name,
+          type: 'file',
+          path: result.path || targetPath,
+          size: 0,
+          loading: false,
+          privileged: Boolean(privilege),
+          privilegeMode: privilege?.mode || ''
+        })
+        setPreviewContent('')
+      }
+    } catch (error) {
+      const message = error?.message || 'Create failed'
+      appendLog(`Create failed: ${message}`)
+      setRemoteCreateDialog((current) => current ? { ...current, loading: false, notice: { type: 'error', text: message } } : current)
+    } finally {
+      setIsFileTransferRunning(false)
+    }
+  }
+
+  const openRemoteRenameDialog = (item) => {
+    if (!selectedServer.id || selectedServer.status !== 'connected') {
+      showToast('error', t('common.connectFirst', 'Connect server first.'))
+      return
+    }
+    if (!item?.name) {
+      showToast('error', t('remote.selectRenameItem', 'Select one remote item to rename.'))
+      return
+    }
+    const sourcePath = item.path || joinRemotePath(displayedRemotePath || '/', item.name)
+    setRemoteRenameDialog({
+      item: { ...item, path: sourcePath },
+      sourcePath,
+      parentPath: sourcePath.split('/').slice(0, -1).join('/') || '/',
+      originalName: item.name,
+      name: item.name,
+      loading: false,
+      notice: null
+    })
+  }
+
+  const renameRemoteItem = async () => {
+    if (!remoteRenameDialog || remoteRenameDialog.loading) return { ok: false }
+    const name = String(remoteRenameDialog.name || '').trim()
+    if (!name || name === '.' || name === '..' || /[\/\\]/.test(name)) {
+      setRemoteRenameDialog((current) => current ? {
+        ...current,
+        notice: { type: 'error', text: t('remote.invalidRenameName', 'Enter a valid new name without /, \\, . or .. .') }
+      } : current)
+      return { ok: false }
+    }
+    if (name === remoteRenameDialog.originalName) {
+      setRemoteRenameDialog((current) => current ? {
+        ...current,
+        notice: { type: 'error', text: t('remote.renameSameName', 'The new name must differ from the current name.') }
+      } : current)
+      return { ok: false }
+    }
+
+    const targetServer = selectedServer
+    const { sourcePath, parentPath, originalName, item } = remoteRenameDialog
+    const targetPath = joinRemotePath(parentPath, name)
+    const privilege = getRemotePrivilege(targetServer)
+    setRemoteRenameDialog((current) => current ? { ...current, loading: true, notice: null } : current)
+    setIsFileTransferRunning(true)
+    appendLog(`Renaming remote item: ${sourcePath} -> ${targetPath}`)
+    try {
+      const result = privilege && window.opsFlow.renamePrivilegedRemoteItem
+        ? await window.opsFlow.renamePrivilegedRemoteItem(targetServer, sourcePath, name, privilege)
+        : await window.opsFlow.renameRemoteItem(targetServer, sourcePath, name)
+      if (!result.ok) {
+        appendLog(`Rename failed: ${result.message}`)
+        if (isRemotePermissionFailure(result.message)) rememberRemotePermissionFailure(sourcePath, result.message)
+        setRemoteRenameDialog((current) => current ? {
+          ...current,
+          loading: false,
+          notice: { type: 'error', text: result.message || 'Rename failed' }
+        } : current)
+        return { ok: false }
+      }
+      setRemoteRenameDialog(null)
+      setPendingRemoteFocusName(name)
+      await loadRemoteDirectory(parentPath, targetServer)
+      setSelectedRemoteItem({ ...item, name, path: result.path || targetPath })
+      appendLog(`Renamed: ${sourcePath} -> ${result.path || targetPath}`)
+      showToast('success', t('remote.renamed', 'Renamed: {oldName} → {newName}', { oldName: originalName, newName: name }))
+      return { ok: true }
+    } catch (error) {
+      const message = error?.message || 'Rename failed'
+      appendLog(`Rename failed: ${message}`)
+      setRemoteRenameDialog((current) => current ? { ...current, loading: false, notice: { type: 'error', text: message } } : current)
+      return { ok: false }
+    } finally {
+      setIsFileTransferRunning(false)
+    }
+  }
+
+  const openRemoteItem = (item) => {
+    setSelectedRemoteItem(item)
+  }
+
+  const openRemoteDirectory = (item) => {
+    if (item.type !== 'dir') return
+    setSelectedRemoteItem(null)
+    remoteFilesScrollTopRef.current = 0
+    setRemoteFilesScrollTop(0)
+    const nextPath = item.path || joinRemotePath(remotePath, item.name)
+    loadRemoteDirectory(nextPath)
+  }
+
+  const goRemoteParent = () => {
+    if (remotePath === '/') return
+    remoteFilesScrollTopRef.current = 0
+    setRemoteFilesScrollTop(0)
+    const nextPath = remotePath.split('/').slice(0, -1).join('/') || '/'
+    loadRemoteDirectory(nextPath)
+  }
+
+  const loadRemoteDirectory = async (path = remotePath, server = selectedServer, options = {}) => {
+    if (!server.id || server.status !== 'connected') {
+      appendLog('Remote directory skipped: connect a server first')
+      return
+    }
+
+    const requestServerId = server.id
+    const requestId = remoteDirectoryRequestRef.current + 1
+    remoteDirectoryRequestRef.current = requestId
+    const privilege = options.privileged === false ? null : (options.privilege || getRemotePrivilege(server))
+    setIsRemoteLoading(true)
+
+    try {
+      const result = privilege && window.opsFlow.listPrivilegedRemoteDirectory
+        ? await window.opsFlow.listPrivilegedRemoteDirectory(server, path, privilege)
+        : await window.opsFlow.listRemoteDirectory(server, path)
+      if (selectedServerIdLiveRef.current !== requestServerId || remoteDirectoryRequestRef.current !== requestId) return
+      if (!result.ok) {
+        appendLog(`Remote directory failed: ${result.message}`)
+        if (isRemotePermissionFailure(result.message)) {
+          rememberRemotePermissionFailure(path, result.message)
+        } else {
+          showToast('error', result.message || 'Failed to load remote directory')
+        }
+        return
+      }
+      setRemotePermissionError(null)
+      const resolvedPath = result.path || path
+      setRemotePath(resolvedPath)
+      setRemoteServerId(requestServerId)
+      setRemoteItems(result.items || [])
+      setSelectedRemoteItem(null)
+      rememberRemotePath(requestServerId, resolvedPath)
+    } catch (error) {
+      if (selectedServerIdLiveRef.current !== requestServerId || remoteDirectoryRequestRef.current !== requestId) return
+      const message = error?.message || 'Failed to load remote directory'
+      appendLog(`Remote directory failed: ${message}`)
+      showToast('error', message)
+    } finally {
+      if (selectedServerIdLiveRef.current === requestServerId && remoteDirectoryRequestRef.current === requestId) {
+        setIsRemoteLoading(false)
+      }
+    }
+  }
+
+  const searchAllRemoteFiles = async (query, executionId) => {
+    if (!selectedServer.id || selectedServer.status !== 'connected') {
+      return { ok: false, items: [], message: 'Connect to a server before searching' }
+    }
+    const privilege = getRemotePrivilege(selectedServer) || { mode: 'normal' }
+    appendLog(`Global remote file search started: ${query}`)
+    const result = await window.opsFlow.searchRemoteFiles(selectedServer, query, privilege, executionId)
+    if (result.canceled) {
+      appendLog('Global remote file search canceled')
+    } else if (result.ok) {
+      appendLog(`Global remote file search completed: ${result.items?.length || 0} result(s)${result.permissionDeniedCount ? `, ${result.permissionDeniedCount} permission-denied path(s)` : ''}`)
+    } else {
+      appendLog(`Global remote file search failed: ${result.message}`)
+    }
+    return result
+  }
+
+  const uploadFile = async () => {
+    if (!selectedServer.id || selectedServer.status !== 'connected') {
+      appendLog('Upload skipped: connect a server first')
+      return
+    }
+
+    appendLog(`Upload to ${remotePath}: selecting local files`)
+
+    try {
+      const selection = await window.opsFlow.selectLocalPath?.({
+        title: 'Select files to upload',
+        multiple: true
+      })
+      if (!selection?.ok || !selection.paths?.length) {
+        if (selection?.canceled) appendLog('Upload canceled')
+        else if (selection?.message) showToast('error', selection.message)
+        return
+      }
+
+      setIsFileTransferRunning(true)
+      const privilege = getRemotePrivilege(selectedServer)
+      const targetDirectory = remotePath === '/' ? '/' : `${remotePath.replace(/\/+$/, '')}/`
+      const results = []
+
+      for (const localPath of selection.paths) {
+        const result = privilege && window.opsFlow.uploadPrivilegedRemotePath
+          ? await window.opsFlow.uploadPrivilegedRemotePath(selectedServer, localPath, remotePath, privilege)
+          : await window.opsFlow.uploadRemotePath(selectedServer, localPath, targetDirectory)
+        results.push(result)
+        if (result?.ok) appendLog(`Upload completed: ${result.remotePath}`)
+        else if (result?.canceled) appendLog(`Upload canceled: ${localPath}`)
+        else appendLog(`Upload failed: ${result?.message || localPath}`)
+      }
+
+      const completed = results.filter((result) => result?.ok)
+      const failed = results.filter((result) => !result?.ok && !result?.canceled)
+      if (failed.length) {
+        const permissionFailure = failed.find((result) => isRemotePermissionFailure(result?.message))
+        if (permissionFailure) rememberRemotePermissionFailure(remotePath, permissionFailure.message)
+        showToast('error', `${failed.length} file(s) failed to upload`)
+      }
+      if (completed.length) {
+        const lastResult = completed[completed.length - 1]
+        const uploadedName = lastResult.remotePath ? remoteBasename(lastResult.remotePath) : ''
+        if (uploadedName) setPendingRemoteFocusName(uploadedName)
+        await loadRemoteDirectory(remotePath)
+        if (uploadedName) setSelectedRemoteItem({ name: uploadedName, type: 'file' })
+        if (completed.length > 1) showToast('success', `${completed.length} files uploaded`)
+      }
+    } finally {
+      setIsFileTransferRunning(false)
+    }
+  }
+
+  const downloadFile = async (selectedItems = []) => {
+    if (!selectedServer.id || selectedServer.status !== 'connected') {
+      appendLog('Download skipped: connect a server first')
+      return { ok: false }
+    }
+    const batchItems = (Array.isArray(selectedItems) ? selectedItems : []).filter((item) => item?.type === 'file')
+    if (!batchItems.length && (!selectedRemoteItem || selectedRemoteItem.type !== 'file')) {
+      appendLog('Download skipped: select a remote file first')
+      return { ok: false }
+    }
+
+    const targetPath = batchItems.length
+      ? ''
+      : selectedRemoteItem.path || joinRemotePath(remotePath, selectedRemoteItem.name)
+    setIsFileTransferRunning(true)
+    appendLog(batchItems.length ? `Batch download started: ${batchItems.length} files` : `Download started: ${targetPath}`)
+
+    try {
+      const privilege = getRemotePrivilege(selectedServer)
+      const result = batchItems.length
+        ? await window.opsFlow.downloadRemoteFiles(
+            selectedServer,
+            batchItems.map((item) => item.path || joinRemotePath(remotePath, item.name)),
+            privilege || null
+          )
+        : privilege && window.opsFlow.downloadPrivilegedRemoteFile
+          ? await window.opsFlow.downloadPrivilegedRemoteFile(selectedServer, targetPath, privilege)
+          : await window.opsFlow.downloadRemoteFile(selectedServer, targetPath)
+      if (result.canceled) {
+        appendLog('Download canceled')
+        return result
+      }
+      if (batchItems.length) {
+        appendLog(`${result.completed || 0}/${batchItems.length} downloads completed: ${result.targetDirectory || ''}`)
+        const permissionFailure = result.results?.find((item) => !item.ok && isRemotePermissionFailure(item.message))
+        if (permissionFailure) rememberRemotePermissionFailure(permissionFailure.remotePath || remotePath, permissionFailure.message)
+        if (result.ok) showToast('success', `${result.completed} files downloaded`)
+        else showToast('error', result.message || 'Some downloads failed')
+      } else {
+        appendLog(result.ok ? `Download completed: ${result.localPath}` : `Download failed: ${result.message}`)
+        if (!result.ok && isRemotePermissionFailure(result.message)) rememberRemotePermissionFailure(targetPath, result.message)
+        else if (!result.ok) showToast('error', result.message || 'Download failed')
+      }
+      return result
+    } finally {
+      setIsFileTransferRunning(false)
+    }
+  }
+
+  const previewRemoteFile = async (item = selectedRemoteItem) => {
+    if (!selectedServer.id || selectedServer.status !== 'connected') {
+      appendLog('Preview skipped: connect a server first')
+      return
+    }
+    if (!item || item.type !== 'file') {
+      appendLog('Preview skipped: select a remote file first')
+      return
+    }
+
+    const targetPath = item.path || joinRemotePath(remotePath, item.name)
+    setIsFileTransferRunning(true)
+    setPreviewFile({ ...item, path: targetPath, loading: true })
+    setPreviewContent('')
+
+    try {
+      const privilege = getRemotePrivilege(selectedServer)
+      const result = privilege && window.opsFlow.readPrivilegedRemoteFile
+        ? await window.opsFlow.readPrivilegedRemoteFile(selectedServer, targetPath, privilege)
+        : await window.opsFlow.readRemoteFile(selectedServer, targetPath)
+      if (!result.ok) {
+        appendLog(`Preview failed: ${result.message}`)
+        setPreviewFile(null)
+        if (isRemotePermissionFailure(result.message)) rememberRemotePermissionFailure(targetPath, result.message)
+        else showToast('error', result.message)
+        return
+      }
+      setPreviewFile({ ...item, path: targetPath, loading: false, privileged: Boolean(privilege), privilegeMode: privilege?.mode || '' })
+      setPreviewContent(result.content || '')
+    } finally {
+      setIsFileTransferRunning(false)
+    }
+  }
+
+  const savePreviewFile = async () => {
+    if (!previewFile) return
+    const targetServer = selectedServer
+    const targetFile = previewFile
+    const contentBytes = new TextEncoder().encode(previewContent).length
+    const transferId = `file-save-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    setIsPreviewSaving(true)
+    appendLog(`Saving remote file: ${targetFile.path}`)
+    updateTransferTask({
+      id: transferId,
+      type: 'save',
+      action: 'save',
+      name: targetFile.name,
+      remotePath: targetFile.path,
+      transferred: 0,
+      total: Math.max(1, contentBytes),
+      status: 'running',
+      message: 'Saving remote file'
+    })
+
+    try {
+      const privilege = targetFile.privileged ? { mode: targetFile.privilegeMode || getRemotePrivilege(targetServer)?.mode || 'normal' } : null
+      const result = privilege && window.opsFlow.writePrivilegedRemoteFile
+        ? await window.opsFlow.writePrivilegedRemoteFile(targetServer, targetFile.path, previewContent, privilege)
+        : await window.opsFlow.writeRemoteFile(targetServer, targetFile.path, previewContent)
+      const message = result.ok ? `File saved: ${targetFile.path}` : `Save failed: ${result.message}`
+      appendLog(message)
+      updateTransferTask({
+        id: transferId,
+        transferred: result.ok ? Math.max(1, contentBytes) : 0,
+        status: result.ok ? 'done' : 'failed',
+        message: result.ok ? 'Remote file saved' : result.message
+      })
+      if (result.ok) {
+        showToast('success', result.backupPath ? `File saved; backup: ${result.backupPath}` : `File saved: ${targetFile.name}`)
+        await loadRemoteDirectory(remotePath)
+      } else {
+        showToast('error', result.message || 'Failed to save remote file')
+      }
+    } catch (error) {
+      const message = error?.message || 'Failed to save remote file'
+      appendLog(`Save failed: ${message}`)
+      updateTransferTask({ id: transferId, transferred: 0, status: 'failed', message })
+      showToast('error', message)
+    } finally {
+      setIsPreviewSaving(false)
+    }
+  }
+
+  const deleteRemoteItem = async (selectedItems = []) => {
+    if (!selectedServer.id || selectedServer.status !== 'connected') {
+      appendLog('Delete skipped: connect a server first')
+      return { ok: false }
+    }
+    const batchItems = Array.isArray(selectedItems) ? selectedItems.filter(Boolean) : []
+    const targets = batchItems.length ? batchItems : selectedRemoteItem ? [selectedRemoteItem] : []
+    if (!targets.length) {
+      appendLog('Delete skipped: select a remote item first')
+      return { ok: false }
+    }
+
+    const targetPaths = targets.map((item) => item.path || joinRemotePath(remotePath, item.name))
+    const targetPath = targetPaths[0]
+    const confirmed = targets.length === 1
+      ? window.confirm(t('confirm.deletePath', 'Delete {path}?', { path: targetPath }))
+      : window.confirm(t(
+          'confirm.deleteSelectedPaths',
+          'Delete {count} selected items?\n\n{paths}\n\nThis cannot be undone.',
+          {
+            count: targets.length,
+            paths: `${targetPaths.slice(0, 10).join('\n')}${targetPaths.length > 10 ? `\n... +${targetPaths.length - 10}` : ''}`
+          }
+        ))
+    if (!confirmed) {
+      appendLog('Delete canceled')
+      return { ok: false, canceled: true }
+    }
+
+    setIsFileTransferRunning(true)
+    appendLog(targets.length === 1 ? `Delete started: ${targetPath}` : `Batch delete started: ${targets.length} items`)
+
+    try {
+      const privilege = getRemotePrivilege(selectedServer)
+      const results = []
+      for (const item of targets) {
+        const itemPath = item.path || joinRemotePath(remotePath, item.name)
+        const result = privilege && window.opsFlow.deletePrivilegedRemoteItem
+          ? await window.opsFlow.deletePrivilegedRemoteItem(selectedServer, itemPath, item.type, privilege)
+          : await window.opsFlow.deleteRemoteItem(selectedServer, itemPath, item.type)
+        results.push({ ...result, item, path: itemPath })
+        if (result.ok) {
+          appendLog(`Deleted: ${itemPath}${result.deletedCount ? ` (${result.deletedCount} items)` : ''}`)
+        } else {
+          appendLog(`Delete failed: ${itemPath}: ${result.message}`)
+          if (isRemotePermissionFailure(result.message)) rememberRemotePermissionFailure(itemPath, result.message)
+        }
+      }
+
+      const completed = results.filter((result) => result.ok)
+      const failed = results.filter((result) => !result.ok)
+      if (failed.length) showToast('error', `${failed.length} item(s) could not be deleted`)
+      else showToast('success', targets.length === 1 ? `Deleted: ${targets[0].name}` : `${completed.length} items deleted`)
+      setSelectedRemoteItem(null)
+      if (completed.length) await loadRemoteDirectory(remotePath)
+      return {
+        ok: failed.length === 0,
+        partial: completed.length > 0 && failed.length > 0,
+        completed: completed.length,
+        failed: failed.length,
+        failedItems: failed.map((result) => result.item)
+      }
+    } finally {
+      setIsFileTransferRunning(false)
+    }
+  }
+
+  const addDatabase = () => {
+    const useSsh = Boolean(selectedServer.id)
+    setDatabaseForm({
+      ...emptyDatabaseForm,
+      connectionMode: useSsh ? 'ssh' : 'direct',
+      sshServerId: '',
+      host: '127.0.0.1',
+      name: ''
+    })
+    setEditingDatabaseId('')
+    setDatabaseNotice(null)
+    setIsDatabaseDialogOpen(true)
+  }
+
+  const resolveDatabaseCreateSource = (dialog = databaseCreateDialog) => {
+    if (!dialog) return null
+    if (dialog.sourceMode === 'existing') {
+      const database = databases.find((item) => item.id === dialog.sourceDatabaseId)
+      return database ? withDatabaseRuntime(database, servers) : null
+    }
+
+    const manual = {
+      id: 'database-create-source',
+      name: 'Database administrator',
+      engine: dialog.engine,
+      connectionMode: dialog.connectionMode,
+      serverId: dialog.connectionMode === 'ssh' ? dialog.sshServerId || '' : '',
+      sshTransport: dialog.sshTransport || 'tcp',
+      host: dialog.host?.trim(),
+      port: Number(dialog.port || defaultDatabasePort(dialog.engine)),
+      socketPath: dialog.socketPath?.trim() || '',
+      database: dialog.maintenanceDatabase?.trim() || '',
+      username: dialog.username?.trim(),
+      password: dialog.password || '',
+      tables: [],
+      status: 'temporary'
+    }
+    return withDatabaseRuntime(manual, servers)
+  }
+
+  const validateDatabaseCreateSource = (dialog = databaseCreateDialog) => {
+    if (!dialog) return '创建配置不存在。'
+    if (dialog.sourceMode === 'existing') {
+      const source = databases.find((item) => item.id === dialog.sourceDatabaseId)
+      if (!source) return '请选择一个现有数据库连接。'
+      if (!supportsDatabaseCreateEngine(source.engine)) return '该数据库类型暂不支持创建数据库。'
+      if (!resourceConnectionAvailable(source, servers)) return resourceConnectionError(source)
+      return ''
+    }
+
+    if (!supportsDatabaseCreateEngine(dialog.engine)) return '请选择 MySQL、PostgreSQL 或 SQL Server。'
+    if (dialog.connectionMode === 'ssh' && !servers.some((server) => server.id === dialog.sshServerId)) {
+      return '请选择一个已保存的 SSH 跳板服务器。'
+    }
+    const socketMode = dialog.engine === 'mysql'
+      && dialog.connectionMode === 'ssh'
+      && dialog.sshTransport === 'socket'
+    if (socketMode && !dialog.socketPath?.trim()) return '请输入 MySQL Unix Socket 路径。'
+    if (!socketMode && !dialog.host?.trim()) return '请输入数据库实例主机。'
+    if (!socketMode && (!Number.isInteger(Number(dialog.port)) || Number(dialog.port) < 1 || Number(dialog.port) > 65535)) {
+      return '请输入 1 到 65535 之间的数据库端口。'
+    }
+    if (!dialog.username?.trim()) return '请输入数据库管理员用户名。'
+    return ''
+  }
+
+  const loadDatabaseCreateOptions = async (value = databaseCreateDialog) => {
+    if (!value || value.engine !== 'mysql') return true
+    const sourceError = validateDatabaseCreateSource(value)
+    if (sourceError) {
+      setDatabaseCreateDialog((current) => current ? { ...current, notice: { type: 'error', text: sourceError } } : current)
+      return false
+    }
+
+    setDatabaseCreateDialog((current) => current ? {
+      ...current,
+      loadingOptions: true,
+      optionsSourceKey: databaseCreateOptionsSourceKey(value),
+      notice: { type: 'info', text: '正在读取数据库实例的字符集和排序规则…' }
+    } : current)
+    try {
+      const result = await window.opsFlow.getDatabaseCreateOptions(resolveDatabaseCreateSource(value))
+      if (!result.ok) {
+        setDatabaseCreateDialog((current) => current ? {
+          ...current,
+          loadingOptions: false,
+          notice: { type: 'error', text: result.message || '读取字符集失败。' }
+        } : current)
+        return false
+      }
+      setDatabaseCreateDialog((current) => {
+        if (!current) return current
+        const nextCharset = current.charset || result.defaultCharset || ''
+        const selectedCharset = result.charsets?.find((item) => item.name === nextCharset)
+        const serverDefaultCollation = result.defaultCollation
+          && result.collations?.some((item) => item.name === result.defaultCollation && item.charset === nextCharset)
+          ? result.defaultCollation
+          : ''
+        return {
+          ...current,
+          charsets: result.charsets || [],
+          collations: result.collations || [],
+          charset: nextCharset,
+          collation: current.collation || serverDefaultCollation || selectedCharset?.defaultCollation || '',
+          optionsLoaded: true,
+          loadingOptions: false,
+          notice: { type: 'success', text: `已读取 ${result.charsets?.length || 0} 个字符集。留空将使用服务器默认值。` }
+        }
+      })
+      return true
+    } catch (error) {
+      setDatabaseCreateDialog((current) => current ? {
+        ...current,
+        loadingOptions: false,
+        notice: { type: 'error', text: error?.message || '读取字符集失败。' }
+      } : current)
+      return false
+    }
+  }
+
+  useEffect(() => {
+    const dialog = databaseCreateDialog
+    if (!dialog || dialog.step !== 'form' || dialog.engine !== 'mysql' || dialog.optionsLoaded || dialog.loadingOptions) return undefined
+    if (validateDatabaseCreateSource(dialog)) return undefined
+    if (dialog.sourceMode === 'manual' && !dialog.password) return undefined
+    const sourceKey = databaseCreateOptionsSourceKey(dialog)
+    if (!sourceKey || dialog.optionsSourceKey === sourceKey) return undefined
+    const timer = window.setTimeout(() => {
+      void loadDatabaseCreateOptions(dialog)
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [
+    databaseCreateDialog?.sourceMode,
+    databaseCreateDialog?.sourceDatabaseId,
+    databaseCreateDialog?.engine,
+    databaseCreateDialog?.connectionMode,
+    databaseCreateDialog?.sshServerId,
+    databaseCreateDialog?.sshTransport,
+    databaseCreateDialog?.host,
+    databaseCreateDialog?.port,
+    databaseCreateDialog?.socketPath,
+    databaseCreateDialog?.maintenanceDatabase,
+    databaseCreateDialog?.username,
+    databaseCreateDialog?.password,
+    databaseCreateDialog?.optionsLoaded,
+    databaseCreateDialog?.optionsSourceKey,
+    databaseCreateDialog?.loadingOptions
+  ])
+
+  const openCreateDatabase = () => {
+    const reusable = [selectedDatabase, ...databases]
+      .find((item, index, items) => (
+        item
+        && items.findIndex((candidate) => candidate?.id === item.id) === index
+        && supportsDatabaseCreateEngine(item.engine)
+        && resourceConnectionAvailable(item, servers)
+      ))
+    const next = reusable
+      ? {
+          ...emptyDatabaseCreateDialog,
+          sourceMode: 'existing',
+          sourceDatabaseId: reusable.id,
+          engine: reusable.engine
+        }
+      : {
+          ...emptyDatabaseCreateDialog,
+          connectionMode: selectedServer?.id ? 'ssh' : 'direct',
+          sshServerId: selectedServer?.id || ''
+        }
+    setDatabaseCreateDialog(next)
+    if (next.engine === 'mysql' && next.sourceMode === 'existing') {
+      void loadDatabaseCreateOptions(next)
+    }
+  }
+
+  const changeDatabaseCreateSource = (sourceMode, sourceDatabaseId = '') => {
+    if (sourceMode === 'existing') {
+      const source = databases.find((item) => item.id === sourceDatabaseId)
+        || databases.find((item) => supportsDatabaseCreateEngine(item.engine))
+      const next = {
+        ...emptyDatabaseCreateDialog,
+        sourceMode: 'existing',
+        sourceDatabaseId: source?.id || '',
+        engine: source?.engine || 'mysql',
+        databaseName: databaseCreateDialog?.databaseName || '',
+        saveConnection: databaseCreateDialog?.saveConnection ?? true
+      }
+      setDatabaseCreateDialog(next)
+      if (source?.engine === 'mysql' && resourceConnectionAvailable(source, servers)) {
+        void loadDatabaseCreateOptions(next)
+      }
+      return
+    }
+    setDatabaseCreateDialog({
+      ...emptyDatabaseCreateDialog,
+      sourceMode: 'manual',
+      connectionMode: selectedServer?.id ? 'ssh' : 'direct',
+      sshServerId: selectedServer?.id || '',
+      databaseName: databaseCreateDialog?.databaseName || '',
+      saveConnection: databaseCreateDialog?.saveConnection ?? true
+    })
+  }
+
+  const prepareDatabaseCreation = () => {
+    if (!databaseCreateDialog?.databaseName?.trim()) {
+      setDatabaseCreateDialog((current) => current ? { ...current, notice: { type: 'error', text: '请输入要创建的数据库名称。' } } : current)
+      return
+    }
+    const sourceError = validateDatabaseCreateSource(databaseCreateDialog)
+    if (sourceError) {
+      setDatabaseCreateDialog((current) => current ? { ...current, notice: { type: 'error', text: sourceError } } : current)
+      return
+    }
+    setDatabaseCreateDialog((current) => current ? { ...current, step: 'confirm', notice: null } : current)
+  }
+
+  const createDatabase = async () => {
+    const dialog = databaseCreateDialog
+    if (!dialog || dialog.running) return
+    const sourceError = validateDatabaseCreateSource(dialog)
+    if (sourceError || !dialog.databaseName?.trim()) {
+      setDatabaseCreateDialog((current) => current ? {
+        ...current,
+        step: 'form',
+        notice: { type: 'error', text: sourceError || '请输入要创建的数据库名称。' }
+      } : current)
+      return
+    }
+
+    setDatabaseCreateDialog((current) => current ? {
+      ...current,
+      running: true,
+      notice: { type: 'info', text: '正在创建数据库…' }
+    } : current)
+    try {
+      const result = await window.opsFlow.createDatabase(resolveDatabaseCreateSource(dialog), {
+        name: dialog.databaseName.trim(),
+        charset: dialog.engine === 'mysql' ? dialog.charset : '',
+        collation: dialog.engine === 'mysql' ? dialog.collation : ''
+      })
+      if (!result.ok) {
+        setDatabaseCreateDialog((current) => current ? {
+          ...current,
+          running: false,
+          notice: { type: 'error', text: formatDatabaseError(result.message, resolveDatabaseCreateSource(dialog)) }
+        } : current)
+        return
+      }
+
+      let nextDatabases = databases
+      let savedDatabase = null
+      if (dialog.saveConnection) {
+        const source = dialog.sourceMode === 'existing'
+          ? databases.find((item) => item.id === dialog.sourceDatabaseId)
+          : null
+        savedDatabase = source
+          ? {
+              ...source,
+              id: `db-${Date.now()}`,
+              name: dialog.databaseName.trim(),
+              database: dialog.databaseName.trim(),
+              tables: [],
+              status: 'saved'
+            }
+          : {
+              id: `db-${Date.now()}`,
+              serverId: dialog.connectionMode === 'ssh' ? dialog.sshServerId || '' : '',
+              name: dialog.databaseName.trim(),
+              engine: dialog.engine,
+              connectionMode: dialog.connectionMode,
+              sshTransport: dialog.sshTransport || 'tcp',
+              host: dialog.host?.trim(),
+              port: Number(dialog.port || defaultDatabasePort(dialog.engine)),
+              socketPath: dialog.socketPath?.trim() || '',
+              database: dialog.databaseName.trim(),
+              username: dialog.username?.trim(),
+              password: dialog.password || '',
+              tables: [],
+              status: 'saved'
+            }
+        nextDatabases = [...databases, savedDatabase]
+        setDatabases(nextDatabases)
+        setSelectedDatabaseId(savedDatabase.id)
+        setSelectedDbTable(null)
+        setSelectedDbColumn(null)
+        setTableColumns([])
+        await persist({ servers, databases: nextDatabases, redisStores })
+      }
+
+      appendLog(`Database created: ${dialog.databaseName.trim()}`)
+      showToast('success', savedDatabase
+        ? `数据库已创建并保存连接：${dialog.databaseName.trim()}`
+        : `数据库已创建：${dialog.databaseName.trim()}`)
+      setDatabaseCreateDialog(null)
+    } catch (error) {
+      setDatabaseCreateDialog((current) => current ? {
+        ...current,
+        running: false,
+        notice: { type: 'error', text: error?.message || '创建数据库失败。' }
+      } : current)
+    }
+  }
+
+  const saveDatabase = async () => {
+    const database = buildDatabaseFromForm(databaseForm)
+    const socketMode = isMySqlSshSocketConfig(database)
+    if ((!socketMode && !database.host) || (socketMode && !database.socketPath) || !database.database || !database.username) {
+      const required = socketMode ? 'Unix Socket, Database and Username' : 'Host, Database and Username'
+      appendLog(`Database save failed: ${required.toLowerCase()} are required`)
+      setDatabaseNotice({ type: 'error', text: `Please fill ${required}.` })
+      return
+    }
+    if (!resourceConnectionAvailable(database, servers)) {
+      setDatabaseNotice({ type: 'error', text: 'Please select an available SSH server for this connection.' })
+      return
+    }
+
+    const previousDatabase = editingDatabaseId
+      ? databases.find((item) => item.id === editingDatabaseId)
+      : null
+    const preserveCachedTables = previousDatabase
+      && databaseMetadataIdentity(previousDatabase) === databaseMetadataIdentity(database)
+    const nextDatabase = {
+      ...database,
+      id: editingDatabaseId || database.id,
+      tables: preserveCachedTables ? previousDatabase.tables || [] : [],
+      status: 'saved'
+    }
+    const next = editingDatabaseId
+      ? databases.map((item) => (item.id === editingDatabaseId ? nextDatabase : item))
+      : [...databases, nextDatabase]
+
+    setDatabases(next)
+    setSelectedDatabaseId(nextDatabase.id)
+    setSelectedDbTable(null)
+    setTableColumns([])
+    if (previousDatabase && !preserveCachedTables) {
+      setDatabasePrivileges((current) => {
+        const nextPrivileges = { ...current }
+        delete nextPrivileges[nextDatabase.id]
+        return nextPrivileges
+      })
+    }
+    await persist({ servers, databases: next, redisStores })
+    setIsDatabaseDialogOpen(false)
+    setEditingDatabaseId('')
+    setDatabaseNotice(null)
+    appendLog(`Database ${editingDatabaseId ? 'updated' : 'saved'}: ${nextDatabase.name}`)
+    applyWorkflowPendingResource('database', { connectionId: nextDatabase.id })
+    resumeWorkflowAfterResource()
+  }
+
+  const testDatabaseConnection = async () => {
+    const databaseConfig = buildDatabaseFromForm(databaseForm)
+    const database = withDatabaseRuntime(databaseConfig, servers)
+    const socketMode = isMySqlSshSocketConfig(database)
+    if ((!socketMode && !database.host) || (socketMode && !database.socketPath) || !database.database || !database.username) {
+      const required = socketMode ? 'Unix Socket, Database and Username' : 'Host, Database and Username'
+      appendLog(`Database test skipped: ${required.toLowerCase()} are required`)
+      setDatabaseNotice({ type: 'error', text: `Please fill ${required}.` })
+      return
+    }
+    if (!resourceConnectionAvailable(databaseConfig, servers)) {
+      setDatabaseNotice({ type: 'error', text: 'Please select an available SSH server for this connection.' })
+      return
+    }
+    setIsDatabaseTesting(true)
+    setDatabaseNotice({ type: 'info', text: 'Testing database connection...' })
+    try {
+      const result = await window.opsFlow.testDatabase(database)
+      appendLog(result.ok ? `Database connected: ${database.name}` : `Database failed: ${result.message}`)
+      setDatabaseNotice({
+        type: result.ok ? 'success' : 'error',
+        text: result.ok ? 'Database connection succeeded.' : formatDatabaseError(result.message, database)
+      })
+    } finally {
+      setIsDatabaseTesting(false)
+    }
+  }
+
+  const copyPreviewFile = async () => {
+    if (!previewFile || isPreviewCopying) return
+    const targetServer = selectedServer
+    const targetFile = previewFile
+    const transferId = `file-copy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const privilege = targetFile.privileged
+      ? { mode: targetFile.privilegeMode || getRemotePrivilege(targetServer)?.mode || 'normal' }
+      : { mode: 'normal' }
+
+    setIsPreviewCopying(true)
+    appendLog(`Creating remote backup copy: ${targetFile.path}`)
+    updateTransferTask({
+      id: transferId,
+      type: 'copy',
+      action: 'copy',
+      name: targetFile.name,
+      remotePath: targetFile.path,
+      transferred: 0,
+      total: 1,
+      status: 'running',
+      message: 'Creating backup copy'
+    })
+
+    try {
+      const result = await window.opsFlow.copyRemoteFileBackup(targetServer, targetFile.path, privilege)
+      updateTransferTask({
+        id: transferId,
+        transferred: result.ok ? 1 : 0,
+        status: result.ok ? 'done' : 'failed',
+        remotePath: result.backupPath || targetFile.path,
+        message: result.ok ? 'Backup copy created' : result.message
+      })
+      if (!result.ok) {
+        appendLog(`Backup copy failed: ${result.message}`)
+        showToast('error', result.message || 'Failed to create backup copy')
+        if (isRemotePermissionFailure(result.message)) rememberRemotePermissionFailure(targetFile.path, result.message)
+        return
+      }
+      appendLog(`Backup copy created: ${result.backupPath}`)
+      showToast('success', t('remote.backupCreated', 'Backup created: {path}', { path: result.backupPath }))
+      if (result.name) setPendingRemoteFocusName(result.name)
+      await loadRemoteDirectory(remotePath)
+    } catch (error) {
+      const message = error?.message || 'Failed to create backup copy'
+      updateTransferTask({ id: transferId, transferred: 0, status: 'failed', message })
+      appendLog(`Backup copy failed: ${message}`)
+      showToast('error', message)
+    } finally {
+      setIsPreviewCopying(false)
+    }
+  }
+
+  const loadTableColumns = async (table, database = selectedDatabase) => {
+    if (!resourceConnectionAvailable(database, servers)) {
+      showToast('error', resourceConnectionError(database))
+      return
+    }
+    if (!database || !table) return
+    const runtimeDatabase = withDatabaseRuntime(database, servers)
+    const requestId = `${database.id}:${table.schema}.${table.name}:${Date.now()}:${Math.random()}`
+    databaseMetadataRequestRef.current.columns = requestId
+    setSelectedDbTable(table)
+    setSelectedDbColumn(null)
+    setTableColumns([])
+    setIsTableLoading(true)
+    appendLog(`Loading table columns: ${table.schema}.${table.name}`)
+
+    try {
+      const result = await window.opsFlow.inspectDatabaseColumns(runtimeDatabase, table)
+      if (databaseMetadataRequestRef.current.columns !== requestId) return
+      if (!result.ok) {
+        appendLog(`Columns failed: ${result.message}`)
+        showToast('error', result.message || 'Failed to load table columns')
+        return
+      }
+      setTableColumns(normalizeDbColumns(result.columns))
+      appendLog(`Columns loaded: ${table.name}`)
+    } finally {
+      if (databaseMetadataRequestRef.current.columns === requestId) setIsTableLoading(false)
+    }
+  }
+
+  const editDatabase = (database = selectedDatabase) => {
+    if (!database) {
+      appendLog('Database edit skipped: no database selected')
+      return
+    }
+    setDatabaseForm(buildDatabaseFormFromConfig(database))
+    setEditingDatabaseId(database.id)
+    setDatabaseNotice(null)
+    setIsDatabaseDialogOpen(true)
+  }
+
+  const duplicateDatabase = (database = selectedDatabase) => {
+    if (!database) {
+      appendLog('Database copy skipped: no database selected')
+      return
+    }
+
+    const form = buildDatabaseFormFromConfig(database)
+    const baseName = `${form.name || database.engine} - ${t('database.copyNameSuffix', 'copy')}`
+    const existingNames = new Set(
+      databases
+        .filter((item) => item.serverId === database.serverId)
+        .map((item) => String(item.name || '').trim().toLocaleLowerCase())
+    )
+    let copyName = baseName
+    let copyIndex = 2
+    while (existingNames.has(copyName.toLocaleLowerCase())) {
+      copyName = `${baseName} ${copyIndex}`
+      copyIndex += 1
+    }
+
+    setDatabaseForm({ ...form, name: copyName })
+    setEditingDatabaseId('')
+    setDatabaseNotice(null)
+    setIsDatabaseDialogOpen(true)
+    appendLog(`Database connection copied as template: ${database.name}`)
+  }
+
+  const performDeleteDatabase = (database) => {
+    const next = databases.filter((item) => item.id !== database.id)
+    setDatabases(next)
+    setSelectedDatabaseId(next[0]?.id || '')
+    setSelectedDbTable(null)
+    setSelectedDbColumn(null)
+    setTableColumns([])
+    persist({ servers, databases: next, redisStores })
+    appendLog(`Database connection deleted: ${database.name}`)
+    showToast('success', t('database.connectionDeleted', 'Database connection deleted: {name}', { name: database.name }))
+  }
+
+  const deleteDatabase = (database = selectedDatabase) => {
+    if (!database) {
+      appendLog('Database delete skipped: no database selected')
+      return
+    }
+    setDangerConfirm({
+      title: t('confirm.databaseTitle', 'Delete database connection'),
+      target: [database.name, database.engine, database.database].filter(Boolean).join(' / '),
+      warning: t('confirm.databaseWarningShort', 'Only the local connection configuration is deleted. The server database and data are not deleted.'),
+      confirmLabel: t('confirm.databaseAction', 'Delete connection'),
+      onConfirm: () => performDeleteDatabase(database)
+    })
+  }
+
+  const refreshDatabaseTables = async (database = selectedDatabase) => {
+    if (!database) {
+      appendLog('Refresh tables skipped: no database selected')
+      return
+    }
+    if (!resourceConnectionAvailable(database, servers)) {
+      showToast('error', resourceConnectionError(database))
+      return
+    }
+    const runtimeDatabase = withDatabaseRuntime(database, servers)
+    const requestId = `${database.id}:${Date.now()}:${Math.random()}`
+    databaseMetadataRequestRef.current.tables = requestId
+    databaseMetadataRequestRef.current.columns = ''
+    const clearedDatabases = databases.map((item) => (
+      item.id === database.id ? { ...item, tables: [] } : item
+    ))
+    setDatabases(clearedDatabases)
+    setSelectedDbTable(null)
+    setSelectedDbColumn(null)
+    setTableColumns([])
+    setIsTableLoading(true)
+    appendLog(`Refreshing tables: ${database.name}`)
+    persist({ servers, databases: clearedDatabases, redisStores })
+
+    try {
+      const result = await window.opsFlow.inspectDatabase(runtimeDatabase)
+      if (databaseMetadataRequestRef.current.tables !== requestId) return
+      if (!result.ok) {
+        appendLog(`Refresh tables failed: ${result.message}`)
+        showToast('error', result.message || 'Failed to refresh tables')
+        return
+      }
+      const updatedDatabase = {
+        ...database,
+        tables: normalizeDbTables(result.tables),
+        status: 'connected'
+      }
+      const next = clearedDatabases.map((item) => (item.id === database.id ? updatedDatabase : item))
+      setDatabases(next)
+      persist({ servers, databases: next, redisStores })
+      checkDatabasePrivileges(database, { silent: true })
+      appendLog(`Tables refreshed: ${database.name} (${updatedDatabase.tables.length})`)
+    } finally {
+      if (databaseMetadataRequestRef.current.tables === requestId) setIsTableLoading(false)
+    }
+  }
+
+  const exportDatabaseTables = async (tables, format) => {
+    if (!selectedDatabase || !tables.length) {
+      showToast('error', 'Select tables to export.')
+      return
+    }
+    if (!resourceConnectionAvailable(selectedDatabase, servers)) {
+      showToast('error', resourceConnectionError(selectedDatabase))
+      return
+    }
+    const transferId = `db-export-${Date.now()}`
+    updateTransferTask({
+      id: transferId,
+      type: 'export',
+      name: `${selectedDatabase.name}.${format}`,
+      remotePath: `${tables.length} table${tables.length === 1 ? '' : 's'}`,
+      transferred: 0,
+      total: 1,
+      status: 'running'
+    })
+    setIsTableLoading(true)
+    try {
+      const result = await window.opsFlow.exportDatabaseTables(withDatabaseRuntime(selectedDatabase, servers), tables, format)
+      if (result.canceled) {
+        updateTransferTask({ id: transferId, status: 'failed', message: 'Export canceled' })
+        return
+      }
+      if (!result.ok) {
+        updateTransferTask({ id: transferId, status: 'failed', message: result.message })
+        showToast('error', result.message)
+        return
+      }
+      updateTransferTask({ id: transferId, transferred: 1, status: 'done' })
+      showToast('success', `Exported ${result.tables} table${result.tables === 1 ? '' : 's'}.`)
+    } finally {
+      setIsTableLoading(false)
+    }
+  }
+
+  const openDatabaseBackup = (tables = []) => {
+    if (!selectedDatabase) {
+      showToast('error', 'Select a database connection first.')
+      return
+    }
+    if (!resourceConnectionAvailable(selectedDatabase, servers)) {
+      showToast('error', resourceConnectionError(selectedDatabase))
+      return
+    }
+    const schemas = [...new Set((selectedDatabase.tables || []).map((table) => table.schema).filter(Boolean))]
+    const defaultSchema = tables[0]?.schema
+      || schemas.find((schema) => schema.toLocaleLowerCase() === String(selectedDatabase.username || '').toLocaleLowerCase())
+      || schemas[0]
+      || defaultDatabaseBackupSchema(selectedDatabase)
+    setDatabaseBackupDialog({
+      databaseId: selectedDatabase.id,
+      databaseName: selectedDatabase.name,
+      engine: selectedDatabase.engine,
+      selectedTables: tables,
+      schemas: schemas.length ? schemas : [defaultSchema].filter(Boolean),
+      scope: tables.length ? 'selected' : 'schema',
+      schema: defaultSchema,
+      content: 'structure-data',
+      format: 'sql',
+      operationId: '',
+      running: false,
+      progress: null
+    })
+  }
+
+  const startDatabaseBackup = async () => {
+    const dialogState = databaseBackupDialog
+    const database = databases.find((item) => item.id === dialogState?.databaseId)
+    if (!dialogState || !database) {
+      showToast('error', 'Select a database connection first.')
+      return
+    }
+    if (!resourceConnectionAvailable(database, servers)) {
+      showToast('error', resourceConnectionError(database))
+      return
+    }
+    if (dialogState.scope === 'selected' && !dialogState.selectedTables.length) {
+      showToast('error', 'Select tables to back up.')
+      return
+    }
+    if (dialogState.scope === 'schema' && !dialogState.schema) {
+      showToast('error', 'Select a schema.')
+      return
+    }
+
+    const operationId = `database-backup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    setDatabaseBackupDialog((current) => ({
+      ...current,
+      operationId,
+      running: true,
+      progress: {
+        operationId,
+        stage: 'selecting',
+        status: 'running',
+        message: '请选择本机备份文件的保存位置。',
+        tableIndex: 0,
+        tableCount: 0,
+        rows: 0,
+        bytes: 0
+      }
+    }))
+    updateTransferTask({
+      id: operationId,
+      type: 'database-backup',
+      name: `${database.name} database backup`,
+      remotePath: database.database || database.username || database.name,
+      transferred: 0,
+      total: 100,
+      status: 'running',
+      message: 'Selecting local backup path'
+    })
+
+    try {
+      const result = await window.opsFlow.backupDatabase(withDatabaseRuntime(database, servers), {
+        operationId,
+        scope: dialogState.scope,
+        schema: dialogState.schema,
+        content: dialogState.content,
+        format: dialogState.format,
+        tables: dialogState.selectedTables
+      })
+      if (result.canceled) {
+        updateTransferTask({
+          id: operationId,
+          status: 'failed',
+          message: appendDurationLabel('Backup canceled', result.durationSeconds),
+          elapsedSeconds: result.durationSeconds
+        })
+        setDatabaseBackupDialog((current) => current?.operationId === operationId
+          ? { ...current, running: false, progress: { ...current.progress, stage: 'canceled', status: 'canceled', message: '已取消备份。' } }
+          : current)
+        return
+      }
+      if (!result.ok) {
+        updateTransferTask({
+          id: operationId,
+          status: 'failed',
+          message: appendDurationLabel(result.message, result.durationSeconds),
+          elapsedSeconds: result.durationSeconds
+        })
+        showToast('error', formatDatabaseOperationError(result.message))
+        setDatabaseBackupDialog((current) => current?.operationId === operationId
+          ? { ...current, running: false }
+          : current)
+        return
+      }
+      updateTransferTask({
+        id: operationId,
+        transferred: 100,
+        total: 100,
+        status: 'done',
+        message: appendDurationLabel(`Backup ready: ${result.tables} tables, ${result.rows} rows`, result.durationSeconds),
+        localPath: result.path,
+        elapsedSeconds: result.durationSeconds
+      })
+      showToast('success', appendDurationLabel(`数据库备份完成：${result.tables} 张表，${result.rows} 行。`, result.durationSeconds))
+      setDatabaseBackupDialog((current) => current?.operationId === operationId
+        ? { ...current, running: false }
+        : current)
+    } catch (error) {
+      updateTransferTask({ id: operationId, status: 'failed', message: error.message })
+      showToast('error', error.message)
+      setDatabaseBackupDialog((current) => current?.operationId === operationId
+        ? {
+            ...current,
+            running: false,
+            progress: {
+              ...current.progress,
+              stage: 'error',
+              status: 'failed',
+              message: error.message
+            }
+          }
+        : current)
+    }
+  }
+
+  const cancelDatabaseBackup = async () => {
+    const operationId = databaseBackupDialog?.operationId
+    if (!operationId || !databaseBackupDialog?.running) return
+    const result = await window.opsFlow.cancelDatabaseBackup(operationId)
+    if (!result.ok) showToast('error', result.message)
+  }
+
+  const checkDatabasePrivileges = async (database = selectedDatabase, options = {}) => {
+    if (!database) {
+      if (!options.silent) showToast('error', 'Select a database connection first.')
+      return null
+    }
+    if (!resourceConnectionAvailable(database, servers)) {
+      if (!options.silent) showToast('error', resourceConnectionError(database))
+      return null
+    }
+    const runtimeDatabase = withDatabaseRuntime(database, servers)
+    if (!options.silent) appendLog(`Checking privileges: ${database.name}`)
+    if (!options.silent) setIsPrivilegeLoading(true)
+    try {
+      const result = await window.opsFlow.inspectDatabasePrivileges(runtimeDatabase)
+      if (!result.ok) {
+        const message = formatDatabaseOperationError(result.message)
+        if (!options.silent) showToast('error', message)
+        appendLog(`Privileges failed: ${result.message}`)
+        setDatabasePrivileges((current) => ({ ...current, [database.id]: { ok: false, message } }))
+        return null
+      }
+      setDatabasePrivileges((current) => ({ ...current, [database.id]: result }))
+      if (!options.silent) showToast('success', `Privileges loaded: ${result.user}`)
+      return result
+    } finally {
+      if (!options.silent) setIsPrivilegeLoading(false)
+    }
+  }
+
+  const addRedis = () => {
+    setRedisForm({
+      ...emptyRedisForm,
+      connectionMode: selectedServer.id ? 'ssh' : 'direct',
+      sshServerId: '',
+      host: '127.0.0.1'
+    })
+    setEditingRedisId('')
+    setRedisNotice(null)
+    setIsRedisDialogOpen(true)
+  }
+
+  const editRedis = (redis = selectedRedis) => {
+    if (!redis) {
+      showToast('error', 'Select a Redis connection first.')
+      return
+    }
+    setRedisForm(buildRedisFormFromConfig(redis))
+    setEditingRedisId(redis.id)
+    setRedisNotice(null)
+    setIsRedisDialogOpen(true)
+  }
+
+  const deleteRedis = (redis = selectedRedis) => {
+    if (!redis) {
+      showToast('error', 'Select a Redis connection first.')
+      return
+    }
+    if (!window.confirm(t('confirm.deleteRedis', 'Delete Redis connection {name}?', { name: redis.name }))) return
+    const next = redisStores.filter((item) => item.id !== redis.id)
+    setRedisStores(next)
+    setSelectedRedisId(next[0]?.id || '')
+    setRedisDatabases([])
+    setRedisKeys([])
+    setSelectedRedisKey('')
+    setRedisKeyDetail(null)
+    persist({ servers, databases, redisStores: next })
+  }
+
+  const saveRedis = () => {
+    const redis = buildRedisFromForm(redisForm, editingRedisId || makeId('redis'))
+    if (!redis.name || !redis.host) {
+      setRedisNotice({ type: 'error', text: 'Name and host are required.' })
+      return
+    }
+    if (!resourceConnectionAvailable(redis, servers)) {
+      setRedisNotice({ type: 'error', text: 'Please select an available SSH server for this connection.' })
+      return
+    }
+    const next = editingRedisId
+      ? redisStores.map((item) => (item.id === editingRedisId ? { ...item, ...redis, id: editingRedisId } : item))
+      : [...redisStores, redis]
+    setRedisStores(next)
+    setSelectedRedisId(redis.id)
+    persist({ servers, databases, redisStores: next })
+    setIsRedisDialogOpen(false)
+    setEditingRedisId('')
+    setRedisNotice(null)
+    applyWorkflowPendingResource('redis', { connectionId: redis.id })
+    resumeWorkflowAfterResource()
+  }
+
+  const testRedisConnection = async () => {
+    const redisConfig = buildRedisFromForm(redisForm, editingRedisId || 'redis-test')
+    const redis = withRedisRuntime(redisConfig, servers)
+    if (!redis.host) {
+      setRedisNotice({ type: 'error', text: 'Host is required.' })
+      return
+    }
+    if (!resourceConnectionAvailable(redisConfig, servers)) {
+      setRedisNotice({ type: 'error', text: 'Please select an available SSH server for this connection.' })
+      return
+    }
+    setIsRedisTesting(true)
+    setRedisNotice({ type: 'info', text: `Testing ${redis.host}:${redis.port} ...` })
+    showToast('success', 'Testing Redis connection...')
+    try {
+      const result = await window.opsFlow.testRedis(redis)
+      setRedisNotice(result.ok
+        ? { type: 'success', text: `Redis connected: ${redis.host}:${redis.port}` }
+        : { type: 'error', text: `Connection failed: ${result.message}` })
+      showToast(result.ok ? 'success' : 'error', result.ok ? 'Redis connected' : 'Redis connection failed')
+    } catch (error) {
+      setRedisNotice({ type: 'error', text: `Connection failed: ${error.message}` })
+      showToast('error', 'Redis connection failed')
+    } finally {
+      setIsRedisTesting(false)
+    }
+  }
+
+  const runSql = async () => {
+    const target = selectedDatabase
+    if (!target) {
+      appendLog('SQL skipped: no database configured')
+      showToast('error', 'Select a database connection first.')
+      return
+    }
+    if (!resourceConnectionAvailable(target, servers)) {
+      showToast('error', resourceConnectionError(target))
+      return
+    }
+    if (!sqlScript.trim() && !sqlFileInfo?.directExecution) {
+      showToast('error', 'SQL is required.')
+      return
+    }
+    if (dryRun) {
+      appendLog(`Dry run SQL: ${target.name}`)
+      return
+    }
+    const rollbackOnError = Boolean(sqlFileInfo && sqlFileInfo.rollbackOnError !== false)
+    if (rollbackOnError && (sqlFileInfo?.directExecution || scriptHasRollbackRisk(sqlScript, target.engine))) {
+      const confirmed = window.confirm(t(
+        'database.rollbackRiskConfirm',
+        'This script contains DDL or administration statements that may implicitly commit, so a full rollback cannot be guaranteed. Continue in transaction mode?'
+      ))
+      if (!confirmed) return
+    }
+    const taskId = sqlFileInfo ? `sql-file-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : ''
+    setSqlExecutionTaskId(taskId)
+    setIsSqlRunning(true)
+    setSqlResult('Running SQL...')
+    try {
+      const result = sqlFileInfo?.directExecution
+        ? await window.opsFlow.execDatabaseScriptFile(withDatabaseRuntime(target, servers), {
+            taskId,
+            fileName: sqlFileInfo.name,
+            filePath: sqlFileInfo.path,
+            rollbackOnError
+          })
+        : sqlFileInfo
+          ? await window.opsFlow.execDatabaseScript(withDatabaseRuntime(target, servers), sqlScript, {
+            taskId,
+            fileName: sqlFileInfo.name,
+            filePath: sqlFileInfo.path,
+            rollbackOnError
+          })
+          : await window.opsFlow.execDatabase(withDatabaseRuntime(target, servers), sqlScript)
+      appendLog(result.ok
+        ? sqlFileInfo ? `SQL file executed: ${sqlFileInfo.name} (${result.statementCount || 0} batches)` : 'SQL executed'
+        : `SQL failed: ${result.message}`)
+      setSqlResult(formatSqlResult(result))
+      if (result.canceled && !result.rollbackFailed) showToast('info', result.message || 'SQL execution stopped')
+      else if (!result.ok) showToast('error', result.message || 'SQL execution failed')
+      else showToast(
+        'success',
+        sqlFileInfo
+          ? appendDurationLabel(`${result.statementCount || 0} SQL batch(es) completed`, result.durationSeconds)
+          : 'SQL executed'
+      )
+    } catch (error) {
+      appendLog(`SQL failed: ${error.message}`)
+      setSqlResult(formatSqlResult({ ok: false, message: error.message }))
+      showToast('error', error.message || 'SQL execution failed')
+    } finally {
+      setIsSqlRunning(false)
+      setSqlExecutionTaskId('')
+    }
+  }
+
+  const cancelSqlFileExecution = async (taskId = sqlExecutionTaskId) => {
+    if (!taskId) return
+    try {
+      const result = await window.opsFlow.cancelDatabaseScript(taskId)
+      if (!result.ok) {
+        showToast('error', result.message || 'Failed to stop SQL execution')
+        return
+      }
+      const message = t('database.stopRequested', 'Stop requested. The current SQL batch will finish before rollback.')
+      updateTransferTask({ id: taskId, status: 'running', message })
+      showToast('info', message)
+    } catch (error) {
+      showToast('error', error.message || 'Failed to stop SQL execution')
+    }
+  }
+
+  const cancelTransferTask = async (task) => {
+    if (!task?.id) return
+    if (task.type === 'database-table-delete') {
+      databaseTableDeleteCancelRef.current.add(task.id)
+      updateTransferTask({ id: task.id, status: 'running', message: '正在停止批量删除，当前数据表完成后停止…' })
+      showToast('info', '已请求停止批量删除。')
+      return
+    }
+    if (task.type === 'database-backup') {
+      const result = await window.opsFlow.cancelDatabaseBackup(task.id)
+      if (!result.ok) showToast('error', result.message)
+      return
+    }
+    if (task.type === 'redis-backup') {
+      const result = await window.opsFlow.cancelRedisBackup(task.id)
+      if (!result.ok) showToast('error', result.message)
+      return
+    }
+    if (task.type === 'redis-restore') {
+      const result = await window.opsFlow.cancelRedisRestore(task.id)
+      if (!result.ok) showToast('error', result.message)
+      return
+    }
+    if (task.type === 'sql-file') {
+      await cancelSqlFileExecution(task.id)
+      return
+    }
+    if (['deploy', 'backup-restore'].includes(task.type) && task.executionId) {
+      try {
+        const result = await window.opsFlow.cancelSshExec(task.executionId)
+        if (!result.ok) {
+          showToast('error', result.message || 'Failed to stop remote command')
+          return
+        }
+        updateTransferTask({ ...task, status: 'running', message: '正在请求停止远程命令…' })
+        showToast('info', task.type === 'backup-restore' ? '已请求停止恢复命令' : '已请求停止安装部署命令')
+      } catch (error) {
+        showToast('error', error.message || 'Failed to stop remote command')
+      }
+      return
+    }
+    if (!['upload', 'download'].includes(task.type)) return
+    try {
+      const result = await window.opsFlow.cancelFileTransfer(task.id)
+      if (!result.ok) {
+        showToast('error', result.message || 'Failed to cancel transfer')
+        return
+      }
+      showToast('info', t('transfer.cancelled', 'Transfer canceled'))
+    } catch (error) {
+      showToast('error', error.message || 'Failed to cancel transfer')
+    }
+  }
+
+  const retryWorkflowRollback = async (task) => {
+    const recovery = task?.recovery
+    if (!recovery?.manifestPath) return
+    const server = servers.find((item) => item.id === recovery.serverId)
+    if (!server) {
+      showToast('error', 'The server for this release is no longer configured.')
+      return
+    }
+    if (!window.confirm(`Retry rollback on ${server.name}?\n\nRelease: ${recovery.releaseId}\nManifest: ${recovery.manifestPath}`)) return
+
+    let resolved = await resolveSessionPrivilege(server, { mode: 'auto', password: '' })
+    if (!resolved?.ok && resolved?.passwordRequired) {
+      const password = window.prompt(resolved.mode === 'su' ? '请输入 root 密码' : '请输入 sudo 密码')
+      if (!password) return
+      resolved = await resolveSessionPrivilege(server, { mode: resolved.mode || 'auto', password })
+    }
+    if (!resolved?.ok) {
+      showToast('error', resolved?.message || 'Unable to obtain rollback privileges.')
+      return
+    }
+
+    const retryTaskId = `workflow-rollback-${Date.now()}-${server.id}`
+    const retryControl = { cancelled: false, commandIds: new Set(), privilegesByServerId: { [server.id]: { mode: resolved.mode || 'normal' } } }
+    updateTransferTask({
+      id: retryTaskId,
+      type: 'workflow',
+      action: 'rollback',
+      name: `Rollback ${task.name || recovery.releaseId}`,
+      remotePath: server.name,
+      transferred: 0,
+      total: 6,
+      status: 'running',
+      message: 'Reading the server release manifest'
+    })
+    const result = await executeWorkflowCommand({
+      targetServer: server,
+      command: buildReleaseRestoreFromManifestCommand(recovery.manifestPath),
+      runControl: retryControl,
+      privilege: { mode: resolved.mode || 'normal' },
+      ignoreCancellation: true,
+      trace: false,
+      onProgress: (message) => updateTransferTask({
+        id: retryTaskId,
+        type: 'workflow',
+        action: 'rollback',
+        name: `Rollback ${task.name || recovery.releaseId}`,
+        remotePath: server.name,
+        transferred: Math.min(5, Math.max(1, Number(String(message).match(/\[rollback (\d)\//)?.[1]) || 1)),
+        total: 6,
+        status: 'running',
+        message
+      })
+    })
+    updateTransferTask({
+      id: retryTaskId,
+      type: 'workflow',
+      action: 'rollback',
+      name: `Rollback ${task.name || recovery.releaseId}`,
+      remotePath: server.name,
+      transferred: result.ok ? 6 : 0,
+      total: 6,
+      status: result.ok ? 'done' : 'failed',
+      message: result.ok ? 'Rollback completed' : (result.message || 'Rollback failed'),
+      recovery,
+      rollbackStatus: result.ok ? 'rolled_back' : 'rollback_failed'
+    })
+    updateTransferTask({
+      id: task.id,
+      message: result.ok ? `${task.message || 'Workflow failed'} · rollback completed` : `${task.message || 'Workflow failed'} · rollback retry failed`,
+      rollbackStatus: result.ok ? 'rolled_back' : 'rollback_failed'
+    })
+    showToast(result.ok ? 'success' : 'error', result.ok ? 'Rollback completed.' : (result.message || 'Rollback failed.'))
+  }
+
+  const selectLocalSqlFile = async () => {
+    const result = await window.opsFlow.selectSqlFile()
+    if (result.canceled) return
+    if (!result.ok) {
+      showToast('error', result.message || 'Failed to read SQL file')
+      return
+    }
+    if (sqlScript.trim() && sqlScript !== sqlTemplate) {
+      const confirmed = window.confirm(t('database.replaceSqlConfirm', 'Replace the current SQL editor content with {name}?', { name: result.name }))
+      if (!confirmed) return
+    }
+    setSqlScript(result.directExecution
+      ? '-- 大型 SQL/GZIP 脚本将由主进程流式读取和执行，不会加载到编辑器。'
+      : (result.content || ''))
+    setSqlFileInfo({
+      path: result.path,
+      name: result.name,
+      size: result.size,
+      sizeLabel: result.sizeLabel || `${result.size || 0} B`,
+      encoding: result.encoding || 'UTF-8',
+      directExecution: Boolean(result.directExecution),
+      checksum: result.checksum || '',
+      checksumStatus: result.checksumStatus || 'missing',
+      modified: false,
+      rollbackOnError: true
+    })
+    setSqlResult('')
+    appendLog(`${result.directExecution ? 'SQL file selected for streaming execution' : 'SQL file loaded'}: ${result.path}`)
+    showToast('success', result.directExecution
+      ? `已选择大型脚本，将流式执行：${result.name}`
+      : t('database.sqlFileLoaded', 'SQL file loaded: {name}', { name: result.name }))
+  }
+
+  const clearLocalSqlFile = () => {
+    if (!window.confirm(t('database.clearSqlConfirm', 'Clear the loaded SQL file and editor content?'))) return
+    setSqlFileInfo(null)
+    setSqlScript(sqlTemplate)
+    setSqlResult('')
+  }
+
+  const openAddTable = () => {
+    if (!selectedDatabase) {
+      showToast('error', 'Select a database connection first.')
+      return
+    }
+    setTableForm(emptyTableForm)
+    setTableDialog({ mode: 'add' })
+  }
+
+  const openEditTable = () => {
+    if (!selectedDbTable) {
+      showToast('error', 'Select a table first.')
+      return
+    }
+    setTableForm({
+      ...emptyTableForm,
+      name: selectedDbTable.name,
+      newName: selectedDbTable.name
+    })
+    setTableDialog({ mode: 'edit', table: selectedDbTable })
+  }
+
+  const saveTableChange = async () => {
+    if (!selectedDatabase || !tableDialog) return
+    const sql = buildTableAlterSql(selectedDatabase, tableDialog, tableForm)
+    if (!sql) {
+      showToast('error', 'Please fill required table information.')
+      return
+    }
+    setIsTableLoading(true)
+    appendLog(`Table change started: ${selectedDatabase.name}`)
+    try {
+      const result = await window.opsFlow.execDatabase(withDatabaseRuntime(selectedDatabase, servers), sql)
+      if (!result.ok) {
+        appendLog(`Table change failed: ${result.message}`)
+        const message = formatDatabaseOperationError(result.message)
+        showToast('error', message)
+        setSqlResult({ ok: false, message })
+        return
+      }
+      showToast('success', 'Table updated.')
+      setTableDialog(null)
+      setTableForm(emptyTableForm)
+      await refreshDatabaseTables(selectedDatabase)
+    } finally {
+      setIsTableLoading(false)
+    }
+  }
+
+  const performDeleteTables = async (database, tables) => {
+    const taskId = `database-table-delete-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    setIsTableLoading(true)
+    appendLog(`Deleting tables: ${tables.map((table) => table.name).join(', ')}`)
+    const failed = []
+    let processed = 0
+    let deleted = 0
+    let stopped = false
+    databaseTableDeleteCancelRef.current.delete(taskId)
+    updateTransferTask({
+      id: taskId,
+      type: 'database-table-delete',
+      name: `${database.name} table deletion`,
+      remotePath: database.database,
+      transferred: 0,
+      total: tables.length,
+      status: 'running',
+      message: `Preparing to delete ${tables.length} table(s)`
+    })
+    try {
+      for (const table of tables) {
+        if (databaseTableDeleteCancelRef.current.has(taskId)) {
+          stopped = true
+          break
+        }
+        const qualifiedName = [table.schema, table.name].filter(Boolean).join('.')
+        updateTransferTask({
+          id: taskId,
+          status: 'running',
+          transferred: processed,
+          total: tables.length,
+          message: `Deleting ${qualifiedName} · ${processed}/${tables.length}`
+        })
+        const sql = buildDropTableSql(database, table)
+        let result
+        try {
+          result = await window.opsFlow.execDatabase(withDatabaseRuntime(database, servers), sql)
+        } catch (error) {
+          result = { ok: false, message: error.message || String(error) }
+        }
+        if (!result.ok) failed.push({ table, message: formatDatabaseOperationError(result.message) })
+        else deleted += 1
+        processed += 1
+        updateTransferTask({
+          id: taskId,
+          status: 'running',
+          transferred: processed,
+          total: tables.length,
+          message: `Deleted ${deleted}; failed ${failed.length} · ${processed}/${tables.length}`
+        })
+      }
+
+      if (stopped) {
+        const message = `Stopped after ${processed}/${tables.length}; deleted ${deleted}, failed ${failed.length}`
+        appendLog(`Delete tables stopped: ${message}`)
+        updateTransferTask({
+          id: taskId,
+          status: 'cancelled',
+          transferred: processed,
+          total: tables.length,
+          message
+        })
+        showToast('info', message)
+      } else if (failed.length) {
+        const message = tables.length === 1
+          ? failed[0].message
+          : `${deleted}/${tables.length} tables deleted; ${failed.length} failed: ${failed.map((item) => item.table.name).join(', ')}`
+        appendLog(`Delete table failed: ${message}`)
+        updateTransferTask({
+          id: taskId,
+          status: 'failed',
+          transferred: processed,
+          total: tables.length,
+          message
+        })
+        showToast('error', message)
+        setSqlResult({ ok: false, message })
+      } else {
+        const message = tables.length === 1
+          ? `Deleted table: ${tables[0].name}`
+          : `Deleted ${tables.length} tables.`
+        updateTransferTask({
+          id: taskId,
+          status: 'done',
+          transferred: tables.length,
+          total: tables.length,
+          message
+        })
+        showToast('success', message)
+      }
+      setSelectedDbTable(null)
+      setSelectedDbColumn(null)
+      setTableColumns([])
+      await refreshDatabaseTables(database)
+    } finally {
+      databaseTableDeleteCancelRef.current.delete(taskId)
+      setIsTableLoading(false)
+    }
+  }
+
+  const deleteTable = (tables = []) => {
+    const targets = tables.length ? tables : (selectedDbTable ? [selectedDbTable] : [])
+    if (!selectedDatabase || !targets.length) {
+      showToast('error', 'Select a table first.')
+      return
+    }
+    const database = selectedDatabase
+    const tableNames = targets.map((table) => [table.schema, table.name].filter(Boolean).join('.'))
+    setDangerConfirm({
+      title: t('confirm.tableTitle', 'Delete table'),
+      target: tableNames.join(', '),
+      targetCount: targets.length,
+      warning: t('confirm.tableWarningShort', 'The selected tables and all their data will be permanently deleted and cannot be restored.'),
+      confirmLabel: targets.length > 1
+        ? t('confirm.tableBatchAction', 'Delete {count} tables', { count: targets.length })
+        : t('confirm.tableAction', 'Delete table'),
+      onConfirm: () => performDeleteTables(database, targets)
+    })
+  }
+
+  const openAddColumn = () => {
+    if (!selectedDbTable) {
+      showToast('error', 'Select a table first.')
+      return
+    }
+    setColumnForm(emptyColumnForm)
+    setColumnDialog({ mode: 'add' })
+  }
+
+  const openEditColumn = () => {
+    if (!selectedDbColumn) {
+      showToast('error', 'Select a field first.')
+      return
+    }
+    setColumnForm({
+      ...emptyColumnForm,
+      name: selectedDbColumn.name,
+      newName: selectedDbColumn.name,
+      type: selectedDbColumn.type || emptyColumnForm.type,
+      nullable: !/^no$/i.test(selectedDbColumn.nullable || ''),
+      defaultValue: selectedDbColumn.defaultValue === '-' ? '' : selectedDbColumn.defaultValue || ''
+    })
+    setColumnDialog({ mode: 'edit', column: selectedDbColumn })
+  }
+
+  const saveColumnChange = async () => {
+    if (!selectedDatabase || !selectedDbTable || !columnDialog) return
+    const sql = buildColumnAlterSql(selectedDatabase, selectedDbTable, columnDialog, columnForm)
+    if (!sql) {
+      showToast('error', 'Please fill required column information.')
+      return
+    }
+
+    setIsTableLoading(true)
+    appendLog(`Column change started: ${selectedDbTable.name}`)
+    try {
+      const result = await window.opsFlow.execDatabase(withDatabaseRuntime(selectedDatabase, servers), sql)
+      if (!result.ok) {
+        appendLog(`Column change failed: ${result.message}`)
+        const message = formatDatabaseOperationError(result.message)
+        showToast('error', message)
+        setSqlResult({ ok: false, message })
+        return
+      }
+      showToast('success', 'Column updated.')
+      setColumnDialog(null)
+      setColumnForm(emptyColumnForm)
+      await loadTableColumns(selectedDbTable, selectedDatabase)
+    } finally {
+      setIsTableLoading(false)
+    }
+  }
+
+  const performDeleteColumn = async (database, table, column) => {
+    const sql = buildDropColumnSql(database, table, column.name)
+    setIsTableLoading(true)
+    appendLog(`Deleting column: ${column.name}`)
+    try {
+      const result = await window.opsFlow.execDatabase(withDatabaseRuntime(database, servers), sql)
+      if (!result.ok) {
+        appendLog(`Delete column failed: ${result.message}`)
+        const message = formatDatabaseOperationError(result.message)
+        showToast('error', message)
+        setSqlResult({ ok: false, message })
+        return
+      }
+      showToast('success', `Deleted column: ${column.name}`)
+      setSelectedDbColumn(null)
+      await loadTableColumns(table, database)
+    } finally {
+      setIsTableLoading(false)
+    }
+  }
+
+  const deleteColumn = () => {
+    if (!selectedDatabase || !selectedDbTable || !selectedDbColumn) {
+      showToast('error', 'Select a field first.')
+      return
+    }
+    const database = selectedDatabase
+    const table = selectedDbTable
+    const column = selectedDbColumn
+    setDangerConfirm({
+      title: t('confirm.columnTitle', 'Delete field'),
+      target: [table.schema, table.name, column.name].filter(Boolean).join('.'),
+      warning: t('confirm.columnWarningShort', 'This field and all data stored in it will be permanently deleted and cannot be restored.'),
+      confirmLabel: t('confirm.columnAction', 'Delete field'),
+      onConfirm: () => performDeleteColumn(database, table, column)
+    })
+  }
+
+  const refreshRedisDatabases = async (redis = selectedRedis) => {
+    if (!redis) {
+      showToast('error', 'Select a Redis connection first.')
+      return
+    }
+    if (!resourceConnectionAvailable(redis, servers)) {
+      showToast('error', resourceConnectionError(redis))
+      return
+    }
+    setIsRedisLoading(true)
+    try {
+      const result = await window.opsFlow.inspectRedisDatabases(withRedisRuntime(redis, servers))
+      if (!result.ok) {
+        showToast('error', result.message)
+        return
+      }
+      setRedisDatabases(result.databases || [])
+      setSelectedRedisDb(Number(redis.database || 0))
+      await loadRedisKeys(redis, Number(redis.database || 0))
+    } finally {
+      setIsRedisLoading(false)
+    }
+  }
+
+  const loadRedisKeys = async (redis = selectedRedis, database = selectedRedisDb, pattern = redisKeyPattern) => {
+    if (!redis) return
+    if (!resourceConnectionAvailable(redis, servers)) {
+      showToast('error', resourceConnectionError(redis))
+      return
+    }
+    setIsRedisLoading(true)
+    setSelectedRedisKey('')
+    setRedisKeyDetail(null)
+    try {
+      const result = await window.opsFlow.listRedisKeys(withRedisRuntime(redis, servers), database, pattern || '*')
+      if (!result.ok) {
+        showToast('error', result.message)
+        return
+      }
+      setSelectedRedisDb(database)
+      setRedisKeys(result.keys || [])
+      setRedisDatabases((current) => updateRedisDatabaseCount(current, database, result.keys?.length || 0))
+      if (result.truncated) showToast('success', 'Loaded first 1000 keys.')
+    } finally {
+      setIsRedisLoading(false)
+    }
+  }
+
+  const openRedisKey = async (key, redis = selectedRedis, database = selectedRedisDb) => {
+    if (!redis || !key) return
+    if (!resourceConnectionAvailable(redis, servers)) {
+      showToast('error', resourceConnectionError(redis))
+      return
+    }
+    setSelectedRedisKey(key)
+    setIsRedisLoading(true)
+    try {
+      const result = await window.opsFlow.readRedisKey(withRedisRuntime(redis, servers), database, key)
+      if (!result.ok) {
+        showToast('error', result.message)
+        return
+      }
+      setRedisKeyDetail(result)
+    } finally {
+      setIsRedisLoading(false)
+    }
+  }
+
+  const deleteRedisKey = async () => {
+    if (!selectedRedis || !selectedRedisKey) {
+      showToast('error', 'Select a Redis key first.')
+      return
+    }
+    if (!resourceConnectionAvailable(selectedRedis, servers)) {
+      showToast('error', resourceConnectionError(selectedRedis))
+      return
+    }
+    if (!window.confirm(t('confirm.deleteKey', 'Delete key {name}?', { name: selectedRedisKey }))) return
+    const result = await window.opsFlow.deleteRedisKey(withRedisRuntime(selectedRedis, servers), selectedRedisDb, selectedRedisKey)
+    if (!result.ok) {
+      showToast('error', result.message)
+      return
+    }
+    showToast('success', 'Key deleted.')
+    await loadRedisKeys(selectedRedis, selectedRedisDb)
+  }
+
+  const flushRedisDb = async () => {
+    if (!selectedRedis) {
+      showToast('error', 'Select a Redis connection first.')
+      return
+    }
+    if (!resourceConnectionAvailable(selectedRedis, servers)) {
+      showToast('error', resourceConnectionError(selectedRedis))
+      return
+    }
+    if (!window.confirm(t('confirm.clearRedis', 'Clear Redis db{db}? This cannot be undone.', { db: selectedRedisDb }))) return
+    const result = await window.opsFlow.flushRedisDatabase(withRedisRuntime(selectedRedis, servers), selectedRedisDb)
+    if (!result.ok) {
+      showToast('error', result.message)
+      return
+    }
+    showToast('success', `db${selectedRedisDb} cleared.`)
+    await refreshRedisDatabases(selectedRedis)
+  }
+
+  const backupRedisDb = async () => {
+    if (!selectedRedis) {
+      showToast('error', 'Select a Redis connection first.')
+      return
+    }
+    if (!resourceConnectionAvailable(selectedRedis, servers)) {
+      showToast('error', resourceConnectionError(selectedRedis))
+      return
+    }
+    const operationId = `redis-backup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    setIsRedisBackupRunning(true)
+    updateTransferTask({
+      id: operationId,
+      type: 'redis-backup',
+      transferred: 0,
+      total: 100,
+      status: 'running',
+      message: `正在准备 Redis db${selectedRedisDb} 备份…`
+    })
+    try {
+      const result = await window.opsFlow.backupRedisDatabase(
+        withRedisRuntime(selectedRedis, servers),
+        selectedRedisDb,
+        { operationId }
+      )
+      if (result.canceled) {
+        updateTransferTask({ id: operationId, status: 'failed', message: 'Redis 备份已取消' })
+        return
+      }
+      if (!result.ok) {
+        updateTransferTask({ id: operationId, status: 'failed', message: result.message })
+        showToast('error', result.message)
+        return
+      }
+      showToast('success', `Redis db${selectedRedisDb} 备份完成：${Number(result.keys || 0).toLocaleString()} 个键`)
+    } catch (error) {
+      updateTransferTask({ id: operationId, status: 'failed', message: error.message })
+      showToast('error', error.message)
+    } finally {
+      setIsRedisBackupRunning(false)
+    }
+  }
+
+  const openRedisRestore = async () => {
+    if (!selectedRedis) {
+      showToast('error', 'Select a Redis connection first.')
+      return
+    }
+    if (!resourceConnectionAvailable(selectedRedis, servers)) {
+      showToast('error', resourceConnectionError(selectedRedis))
+      return
+    }
+    const result = await window.opsFlow.selectRedisBackup()
+    if (result.canceled) return
+    if (!result.ok) {
+      showToast('error', result.message || '无法读取 Redis 备份')
+      return
+    }
+    setRedisRestoreDialog({
+      file: result,
+      conflict: 'skip',
+      confirmation: '',
+      operationId: '',
+      running: false,
+      progress: null,
+      notice: ''
+    })
+  }
+
+  const startRedisRestore = async () => {
+    const dialogState = redisRestoreDialog
+    if (!dialogState || !selectedRedis) return
+    if (dialogState.confirmation.trim().toUpperCase() !== 'RESTORE') {
+      setRedisRestoreDialog((current) => current ? { ...current, notice: '请输入 RESTORE 确认恢复。' } : current)
+      return
+    }
+    const operationId = `redis-restore-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    setRedisRestoreDialog((current) => current ? {
+      ...current,
+      operationId,
+      running: true,
+      notice: '',
+      progress: { status: 'running', keys: 0, totalKeys: current.file.keys, message: '正在校验备份…' }
+    } : current)
+    updateTransferTask({
+      id: operationId,
+      type: 'redis-restore',
+      name: dialogState.file.name,
+      localPath: dialogState.file.path,
+      transferred: 0,
+      total: 100,
+      status: 'running',
+      message: `正在恢复到 Redis db${selectedRedisDb}…`
+    })
+    try {
+      const result = await window.opsFlow.restoreRedisDatabase(
+        withRedisRuntime(selectedRedis, servers),
+        selectedRedisDb,
+        {
+          operationId,
+          filePath: dialogState.file.path,
+          conflict: dialogState.conflict
+        }
+      )
+      if (result.canceled) {
+        showToast('info', 'Redis 恢复已取消，已经写入的键不会自动回滚。')
+        return
+      }
+      if (!result.ok) {
+        setRedisRestoreDialog((current) => current ? { ...current, running: false, notice: result.message } : current)
+        showToast('error', result.message)
+        return
+      }
+      showToast('success', `Redis db${selectedRedisDb} 恢复完成：写入 ${Number(result.restored || 0).toLocaleString()} 个键`)
+      await refreshRedisDatabases(selectedRedis)
+    } catch (error) {
+      setRedisRestoreDialog((current) => current ? { ...current, running: false, notice: error.message } : current)
+      showToast('error', error.message)
+    }
+  }
+
+  const cancelRedisRestore = async () => {
+    const operationId = redisRestoreDialog?.operationId
+    if (!operationId || !redisRestoreDialog?.running) return
+    const result = await window.opsFlow.cancelRedisRestore(operationId)
+    if (!result.ok) showToast('error', result.message)
+  }
+
+  function appendLog(message) {
+    setLogs((current) => [...current.slice(-9), `[${time()}] ${message}`])
+  }
+
+  function appendTerminal(output) {
+    setTerminalOutput((current) => {
+      const next = `${current.trimEnd()}\n\n${output}`.trimStart()
+      terminalTextRef.current = next
+      return next
+    })
+    terminalRef.current?.writeln(output)
+  }
+
+  function normalizeTerminalOutputData(data) {
+    return String(data || '')
+      .replace(/\x1B\][^\x07]*(?:\x07|\x1B\\)/g, '')
+      .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+  }
+
+  function limitTerminalOutput(output) {
+    const text = compactDuplicatePromptLines(String(output || ''))
+    return text.length > 60000 ? text.slice(-60000) : text
+  }
+
+  function compactDuplicatePromptLines(output) {
+    const lines = String(output || '').split('\n')
+    const compacted = []
+    lines.forEach((line) => {
+      const previous = compacted[compacted.length - 1]
+      const trimmed = normalizeTerminalLineForCompare(line)
+      const previousTrimmed = normalizeTerminalLineForCompare(previous || '')
+      if (trimmed && previousTrimmed === trimmed && /[#$]\s*$/.test(trimmed)) return
+      compacted.push(line)
+    })
+    return compacted.join('\n')
+  }
+
+  function normalizeTerminalLineForCompare(line) {
+    return String(line || '')
+      .replace(/\x1B\][^\x07]*(?:\x07|\x1B\\)/g, '')
+      .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
+      .trim()
+  }
+
+  function getShellSessionId(serverId) {
+    if (!serverId) return null
+    return shellSessionsRef.current[serverId] || null
+  }
+
+  function findShellServerId(sessionId) {
+    if (!sessionId) return ''
+    return Object.entries(shellSessionsRef.current).find(([, currentSessionId]) => currentSessionId === sessionId)?.[0] || ''
+  }
+
+  function activateShellForServer(serverId) {
+    const sessionId = getShellSessionId(serverId)
+    shellSessionRef.current = sessionId
+    shellServerIdRef.current = sessionId ? serverId : ''
+    return sessionId
+  }
+
+  async function stopShellForServer(serverId) {
+    const sessionId = getShellSessionId(serverId)
+    if (!sessionId) return
+    intentionalShellCloseRef.current = sessionId
+    await window.opsFlow.stopSshShell(sessionId)
+    delete shellSessionsRef.current[serverId]
+    if (shellSessionRef.current === sessionId) {
+      shellSessionRef.current = null
+      shellServerIdRef.current = ''
+    }
+  }
+
+  function appendTerminalOutputData(data, serverId) {
+    const isSelectedServerShell = serverId === selectedServerIdLiveRef.current
+    const isVisibleShell = isSelectedServerShell
+      && getShellSessionId(serverId) === shellSessionRef.current
+      && activeModuleRef.current === 'command'
+
+    // A PTY stream contains cursor movement, erase and redraw sequences that may
+    // not contain printable text. They must reach xterm unchanged; otherwise the
+    // remote readline cursor and the cursor shown by xterm drift apart.
+    if (isVisibleShell) terminalRef.current?.write(data)
+
+    const chunk = normalizeTerminalOutputData(data)
+    if (!chunk) return
+    const base = isVisibleShell
+      ? terminalTextRef.current
+      : (workspaceCacheRef.current[serverId]?.terminalOutput || '')
+    const rawNext = `${base}${chunk}`
+    const next = limitTerminalOutput(rawNext)
+
+    if (serverId) {
+      workspaceCacheRef.current[serverId] = {
+        ...(workspaceCacheRef.current[serverId] || {}),
+        terminalOutput: next
+      }
+    }
+
+    if (isSelectedServerShell) {
+      terminalTextRef.current = next
+      setTerminalOutput(next)
+    }
+
+  }
+
+  function replaceTerminalDisplay(output) {
+    if (!terminalRef.current) return
+    const text = limitTerminalOutput(output)
+    terminalTextRef.current = text
+    terminalRef.current.reset()
+    if (text) {
+      terminalRef.current.write(text.replace(/\r?\n/g, '\r\n'))
+    }
+    fitAddonRef.current?.fit()
+    terminalRef.current.scrollToBottom()
+  }
+
+  function stopShellIfDifferentServer(serverId) {
+    activateShellForServer(serverId)
+  }
+
+  function renderWorkspaceTerminal(output, serverId) {
+    activateShellForServer(serverId)
+    replaceTerminalDisplay(output)
+  }
+
+  function showToast(type, message) {
+    const fixedMessages = {
+      'Clipboard is empty': t('toast.clipboardEmpty', 'Clipboard is empty'),
+      'Connect before pasting': t('toast.connectBeforePaste', 'Connect before pasting'),
+      'Copied': t('toast.copied', 'Copied'),
+      'Click Connect to open the SSH terminal.': t('toast.openTerminal', 'Click Connect to open the SSH terminal.'),
+      'SSH connection closed': t('toast.sshClosed', 'SSH connection closed'),
+      'Server save failed': t('toast.serverSaveFailed', 'Server save failed'),
+      'SSH connected': t('toast.sshConnected', 'SSH connected'),
+      'SSH connection failed': t('toast.sshFailed', 'SSH connection failed'),
+      'Add a server before connecting.': t('toast.addServerFirst', 'Add a server before connecting.'),
+      'Connect server first.': t('common.connectFirst', 'Connect server first.'),
+      'Select a workflow first.': t('toast.selectWorkflow', 'Select a workflow first.'),
+      'Add at least one server first.': t('toast.addServerForWorkflow', 'Add at least one server first.'),
+      'Select at least one server.': t('toast.selectServer', 'Select at least one server.'),
+      'Workflow duplicated': t('toast.workflowDuplicated', 'Workflow duplicated'),
+      'Keep at least one workflow.': t('toast.keepWorkflow', 'Keep at least one workflow.'),
+      'Workflow deleted': t('toast.workflowDeleted', 'Workflow deleted'),
+      'Enter a workflow name.': t('toast.enterWorkflowName', 'Enter a workflow name.'),
+      'Workflow saved with items to review': t('toast.workflowSavedReview', 'Workflow saved with items to review'),
+      'Workflow saved': t('toast.workflowSaved', 'Workflow saved'),
+      'Add at least one workflow node.': t('toast.addWorkflowNode', 'Add at least one workflow node.'),
+      'System inspector loaded': t('toast.inspectorLoaded', 'System inspector loaded'),
+      'Unsupported service name.': t('toast.unsupportedService', 'Unsupported service name.'),
+      'Enter privilege password first.': t('toast.privilegePassword', 'Enter privilege password first.'),
+      'Schedule and command are required.': t('toast.scheduleRequired', 'Schedule and command are required.'),
+      'Cron updated.': t('toast.cronUpdated', 'Cron updated.'),
+      'Select tables to export.': t('toast.selectExportTables', 'Select tables to export.'),
+      'Select a database connection first.': t('toast.selectDatabase', 'Select a database connection first.'),
+      'Select a Redis connection first.': t('toast.selectRedis', 'Select a Redis connection first.'),
+      'Testing Redis connection...': t('toast.testingRedis', 'Testing Redis connection...'),
+      'Redis connected': t('toast.redisConnected', 'Redis connected'),
+      'Redis connection failed': t('toast.redisFailed', 'Redis connection failed'),
+      'Select a table first.': t('toast.selectTable', 'Select a table first.'),
+      'Please fill required table information.': t('toast.tableRequired', 'Please fill required table information.'),
+      'Table updated.': t('toast.tableUpdated', 'Table updated.'),
+      'Select a field first.': t('toast.selectField', 'Select a field first.'),
+      'Please fill required column information.': t('toast.columnRequired', 'Please fill required column information.'),
+      'Column updated.': t('toast.columnUpdated', 'Column updated.'),
+      'Select a Redis key first.': t('toast.selectRedisKey', 'Select a Redis key first.'),
+      'Key deleted.': t('toast.keyDeleted', 'Key deleted.'),
+      'Loaded first 1000 keys.': t('toast.firstKeys', 'Loaded first 1000 keys.'),
+      'Upload failed': t('toast.uploadFailed', 'Upload failed'),
+      'Package uploaded': t('toast.packageUploaded', 'Package uploaded'),
+      'Confirm the operation first.': t('toast.confirmOperation', 'Confirm the operation first.'),
+      'Enter a downloadable package URL first.': t('toast.enterPackageUrl', 'Enter a downloadable package URL first.'),
+      'Upload a package or enter its remote path first.': t('toast.uploadPackagePath', 'Upload a package or enter its remote path first.')
+    }
+    setToast({ type, message: fixedMessages[message] || message })
+    window.clearTimeout(toastTimerRef.current)
+    const duration = type === 'error' ? 30000 : type === 'info' ? 5000 : 2600
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null)
+      toastTimerRef.current = null
+    }, duration)
+  }
+
+  function dismissToast() {
+    window.clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = null
+    setToast(null)
+  }
+
+  function scrollModuleTabs(direction) {
+    const target = moduleTabsRef.current
+    if (!target) return
+    target.scrollBy({
+      left: direction * Math.max(180, target.clientWidth * 0.65),
+      behavior: 'smooth'
+    })
+  }
+
+  function updateTransferTask(payload) {
+    const activeIds = activeTransferIdsRef.current
+    const status = payload.status
+    if (status === 'running') {
+      if (!activeIds.has(payload.id) && activeIds.size === 0) {
+        transferSessionHasErrorRef.current = false
+      }
+      activeIds.add(payload.id)
+      window.clearTimeout(transferPanelTimerRef.current)
+    } else if (['done', 'failed', 'cancelled'].includes(status)) {
+      activeIds.delete(payload.id)
+      if (status === 'failed') transferSessionHasErrorRef.current = true
+      window.clearTimeout(transferPanelTimerRef.current)
+    }
+    setTransferTasks((current) => {
+      const existing = current.find((item) => item.id === payload.id)
+      const nextTask = {
+        ...existing,
+        ...payload,
+        updatedAt: Date.now()
+      }
+      const next = existing
+        ? current.map((item) => (item.id === payload.id ? nextTask : item))
+        : [nextTask, ...current]
+      const limited = next.slice(0, 50)
+      window.opsFlow.setStore('transferTasks', limited)
+      return limited
+    })
+    setTransferPanelOpen(true)
+    if (['done', 'cancelled'].includes(status) && activeIds.size === 0 && !transferSessionHasErrorRef.current) {
+      transferPanelTimerRef.current = window.setTimeout(() => {
+        setTransferPanelOpen(false)
+        transferPanelTimerRef.current = null
+      }, 1400)
+    }
+  }
+
+  function clearTransferTasks() {
+    window.clearTimeout(transferPanelTimerRef.current)
+    transferPanelTimerRef.current = null
+    activeTransferIdsRef.current.clear()
+    transferSessionHasErrorRef.current = false
+    setTransferTasks([])
+    setTransferPanelOpen(false)
+    window.opsFlow.setStore('transferTasks', [])
+  }
+
+  function saveCurrentWorkspace() {
+    if (!selectedServerId) return
+    if (selectedServer.status !== 'connected') return
+    workspaceCacheRef.current[selectedServerId] = buildWorkspaceSnapshot()
+  }
+
+  function buildWorkspaceSnapshot() {
+    const ownsRemoteState = remoteServerId === selectedServerId
+    return {
+      remotePath: ownsRemoteState ? remotePath : '/',
+      remoteItems: ownsRemoteState ? remoteItems : [],
+      remoteSort,
+      remoteFilesScrollTop: ownsRemoteState ? remoteFilesScrollTopRef.current : 0,
+      selectedRemoteItem: ownsRemoteState ? selectedRemoteItem : null,
+      remotePrivilege: ownsRemoteState && remotePrivilege.serverId === selectedServerId
+        ? { ...remotePrivilege, cached: false }
+        : { enabled: false, serverId: '', mode: 'auto', cached: false },
+      previewFile,
+      previewContent,
+      selectedDatabaseId,
+      selectedDbTable,
+      selectedDbColumn,
+      tableColumns,
+      sqlScript,
+      sqlFileInfo,
+      sqlResult,
+      terminalInput,
+      terminalOutput,
+      resourceHistory,
+      systemInspectorResult,
+      servicePrivilege: { ...servicePrivilege, password: '' },
+      serviceSearch,
+      selectedWorkflowId,
+      activeModule,
+      workflowRunLogs,
+      selectedWorkflowLogNodeId,
+      servicesScrollTop: servicesScrollTopRef.current
+    }
+  }
+
+  function restoreServerWorkspace(workspace) {
+    stopShellIfDifferentServer(selectedServer.id)
+    setRemotePath(workspace.remotePath || '/')
+    setRemoteServerId(selectedServer.id || '')
+    setRemoteItems(workspace.remoteItems || [])
+    setRemoteSort(workspace.remoteSort || { key: 'name', direction: 'asc' })
+    remoteFilesScrollTopRef.current = workspace.remoteFilesScrollTop || 0
+    setRemoteFilesScrollTop(workspace.remoteFilesScrollTop || 0)
+    setSelectedRemoteItem(workspace.selectedRemoteItem || null)
+    setRemotePrivilege(workspace.remotePrivilege?.enabled
+      ? { ...workspace.remotePrivilege, serverId: selectedServer.id, cached: true }
+      : { enabled: false, serverId: '', mode: 'auto', cached: false })
+    setRemotePrivilegeDialog(null)
+    setRemotePermissionError(null)
+    setIsRemoteLoading(false)
+    setPreviewFile(workspace.previewFile || null)
+    setPreviewContent(workspace.previewContent || '')
+    setSelectedDatabaseId(workspace.selectedDatabaseId || '')
+    setSelectedDbTable(workspace.selectedDbTable || null)
+    setSelectedDbColumn(workspace.selectedDbColumn || null)
+    setTableColumns(workspace.tableColumns || [])
+    setSqlScript(workspace.sqlScript || sqlTemplate)
+    setSqlFileInfo(workspace.sqlFileInfo || null)
+    setIsSqlRunning(false)
+    setSqlExecutionTaskId('')
+    setSqlResult(workspace.sqlResult || '')
+    setTerminalInput(workspace.terminalInput || '')
+    const output = limitTerminalOutput(workspace.terminalOutput || [
+      `${selectedServer.name} is connected.`,
+      `${selectedServer.username}@${selectedServer.host}:${selectedServer.port}`,
+      'Click Connect to open the SSH terminal.',
+      ''
+    ].join('\n'))
+    setTerminalOutput(output)
+    renderWorkspaceTerminal(output, selectedServer.id)
+    setResourceHistory(workspace.resourceHistory || makeInitialUsageHistory())
+    resetSystemInspectorExecution()
+    setSystemInspectorResult(workspace.systemInspectorResult || null)
+    setServicePrivilege({ ...(workspace.servicePrivilege || { mode: 'auto' }), password: '', cached: false })
+    setServiceSearch(workspace.serviceSearch || { open: false, query: '' })
+    setSelectedWorkflowId(workspace.selectedWorkflowId || workflows[0]?.id || workflowTemplates[0].id)
+    setActiveModule(visibleModuleIds.includes(workspace.activeModule) ? workspace.activeModule : 'command')
+    setWorkflowRunLogs(workspace.workflowRunLogs || {})
+    setSelectedWorkflowLogNodeId(workspace.selectedWorkflowLogNodeId || '')
+    setWorkflowDialog(null)
+    setWorkflowDraft(null)
+    setWorkflowReturnMode('')
+    setWorkflowPendingResource(null)
+    servicesScrollTopRef.current = workspace.servicesScrollTop || 0
+    setInspectorBusyKey('')
+    if (!workspace.systemInspectorResult?.runtimes?.length) systemInspectorAutoLoadKeyRef.current = ''
+  }
+
+  function resetTerminalForDisconnectedServer(server) {
+    stopShellForServer(server.id)
+    if (!terminalRef.current) return
+    terminalRef.current.reset()
+    terminalRef.current.writeln(`${server.name} is disconnected.`)
+    terminalRef.current.writeln('Click Connect to start the SSH terminal.')
+    fitAddonRef.current?.fit()
+  }
+
+  function setDisconnectedWorkspace(server) {
+    resetTerminalForDisconnectedServer(server)
+    setRemotePath('/')
+    setRemoteServerId(server.id || '')
+    setRemoteItems([])
+    remoteFilesScrollTopRef.current = 0
+    setRemoteFilesScrollTop(0)
+    setSelectedRemoteItem(null)
+    setRemotePrivilege({ enabled: false, serverId: '', mode: 'auto', cached: false })
+    setRemotePrivilegeDialog(null)
+    setRemotePermissionError(null)
+    setIsRemoteLoading(false)
+    setPreviewFile(null)
+    setPreviewContent('')
+    setSelectedDbTable(null)
+    setSelectedDbColumn(null)
+    setTableColumns([])
+    setSqlScript(sqlTemplate)
+    setSqlFileInfo(null)
+    setIsSqlRunning(false)
+    setSqlExecutionTaskId('')
+    setSqlResult('')
+    setTerminalInput('')
+    setTerminalOutput([
+      `${server.name} is disconnected.`,
+      'Click Connect to start the SSH terminal.',
+      ''
+    ].join('\n'))
+    setSelectedDatabaseId(databases.find((item) => item.serverId === server.id)?.id || '')
+    resetSystemInspectorExecution()
+    setSystemInspectorResult(null)
+    setServicePrivilege({ mode: 'auto', password: '', cached: false })
+    setServiceSearch({ open: false, query: '' })
+    setSelectedWorkflowId(workflows[0]?.id || workflowTemplates[0].id)
+    setActiveModule('command')
+    setWorkflowRunLogs({})
+    setSelectedWorkflowLogNodeId('')
+    setWorkflowDialog(null)
+    setWorkflowDraft(null)
+    setWorkflowReturnMode('')
+    setWorkflowPendingResource(null)
+    servicesScrollTopRef.current = 0
+    setInspectorBusyKey('')
+    systemInspectorAutoLoadKeyRef.current = ''
+  }
+
+  function setConnectedWorkspace(server) {
+    stopShellIfDifferentServer(server.id)
+    setRemotePath('/')
+    setRemoteServerId(server.id || '')
+    setRemoteItems([])
+    remoteFilesScrollTopRef.current = 0
+    setRemoteFilesScrollTop(0)
+    setSelectedRemoteItem(null)
+    setRemotePrivilege({ enabled: false, serverId: '', mode: 'auto', cached: false })
+    setRemotePrivilegeDialog(null)
+    setRemotePermissionError(null)
+    setIsRemoteLoading(true)
+    setPreviewFile(null)
+    setPreviewContent('')
+    setSelectedDbTable(null)
+    setSelectedDbColumn(null)
+    setTableColumns([])
+    setSqlScript(sqlTemplate)
+    setSqlFileInfo(null)
+    setIsSqlRunning(false)
+    setSqlExecutionTaskId('')
+    setSqlResult('')
+    setTerminalInput('')
+    const output = [
+      `${server.name} is connected.`,
+      `${server.username}@${server.host}:${server.port}`,
+      'Click Connect to open the SSH terminal.',
+      ''
+    ].join('\n')
+    setTerminalOutput(output)
+    renderWorkspaceTerminal(output, server.id)
+    setSelectedDatabaseId(databases.find((item) => item.serverId === server.id)?.id || '')
+    resetSystemInspectorExecution()
+    setSystemInspectorResult(null)
+    setServicePrivilege({ mode: 'auto', password: '', cached: false })
+    setServiceSearch({ open: false, query: '' })
+    setSelectedWorkflowId(workflows[0]?.id || workflowTemplates[0].id)
+    setActiveModule('command')
+    setWorkflowRunLogs({})
+    setSelectedWorkflowLogNodeId('')
+    setWorkflowDialog(null)
+    setWorkflowDraft(null)
+    setWorkflowReturnMode('')
+    setWorkflowPendingResource(null)
+    servicesScrollTopRef.current = 0
+    setInspectorBusyKey('')
+    systemInspectorAutoLoadKeyRef.current = ''
+    loadRemoteDirectory('/', server, { privileged: false })
+  }
+
+  function resetServerWorkspace() {
+    stopShellIfDifferentServer('')
+    setRemotePath('/')
+    setRemoteServerId('')
+    setRemoteItems([])
+    remoteFilesScrollTopRef.current = 0
+    setRemoteFilesScrollTop(0)
+    setSelectedRemoteItem(null)
+    setRemotePrivilege({ enabled: false, serverId: '', mode: 'auto', cached: false })
+    setRemotePrivilegeDialog(null)
+    setRemotePermissionError(null)
+    setIsRemoteLoading(false)
+    setSelectedDatabaseId('')
+    setSelectedDbTable(null)
+    setSelectedDbColumn(null)
+    setTableColumns([])
+    setSqlScript(sqlTemplate)
+    setSqlFileInfo(null)
+    setIsSqlRunning(false)
+    setSqlExecutionTaskId('')
+    setSqlResult('')
+    setPreviewFile(null)
+    setPreviewContent('')
+    setTerminalInput('')
+    const output = [
+      'Select a server, then click Connect to start the SSH terminal.',
+      ''
+    ].join('\n')
+    setTerminalOutput(output)
+    replaceTerminalDisplay(output)
+    resetSystemInspectorExecution()
+    setSystemInspectorResult(null)
+    setServicePrivilege({ mode: 'auto', password: '', cached: false })
+    setServiceSearch({ open: false, query: '' })
+    setSelectedWorkflowId(workflows[0]?.id || workflowTemplates[0].id)
+    setActiveModule('command')
+    setWorkflowRunLogs({})
+    setSelectedWorkflowLogNodeId('')
+    setWorkflowDialog(null)
+    setWorkflowDraft(null)
+    setWorkflowReturnMode('')
+    setWorkflowPendingResource(null)
+    servicesScrollTopRef.current = 0
+    setInspectorBusyKey('')
+    systemInspectorAutoLoadKeyRef.current = ''
+  }
+
+  function updateResourceHistory(server, reset = false) {
+    const cpu = normalizePercent(server.cpuUsage)
+    const memory = normalizePercent(server.memoryUsage)
+    setResourceHistory((current) => {
+      const base = reset ? makeInitialUsageHistory(cpu, memory) : current
+      return {
+        cpu: [...base.cpu.slice(-23), cpu],
+        memory: [...base.memory.slice(-23), memory]
+      }
+    })
+  }
+
+  function startAppSidebarResize(event) {
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = appSidebarWidth
+    document.body.classList.add('is-resizing-panel')
+
+    const handleMove = (moveEvent) => {
+      const maxWidth = Math.min(420, Math.max(260, window.innerWidth * 0.36))
+      const nextWidth = Math.min(maxWidth, Math.max(220, startWidth + moveEvent.clientX - startX))
+      setAppSidebarWidth(nextWidth)
+    }
+
+    const handleUp = () => {
+      document.body.classList.remove('is-resizing-panel')
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
+
+  function startWorkflowResize(event) {
+    event.preventDefault()
+    const bounds = workflowLayoutRef.current?.getBoundingClientRect()
+    if (!bounds?.width) return
+    document.body.classList.add('is-resizing-panel')
+
+    const handleMove = (moveEvent) => {
+      const nextPercent = ((moveEvent.clientX - bounds.left) / bounds.width) * 100
+      setWorkflowSplit(Math.min(48, Math.max(22, nextPercent)))
+    }
+
+    const handleUp = () => {
+      document.body.classList.remove('is-resizing-panel')
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
+
+  return (
+    <I18nContext.Provider value={{ language, t, themeMode, resolvedTheme }}>
+    <div
+      className="app-shell"
+      style={{ gridTemplateColumns: `${appSidebarWidth}px 10px minmax(0, 1fr)` }}
+    >
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-mark"><Boxes size={22} /></div>
+          <div>
+            <strong>Ops Flow</strong>
+            <span>{t('app.serverOperations', 'Server operations')}</span>
+          </div>
+        </div>
+
+        <button className="primary-button" onClick={openAddServer}>
+          <Plus size={16} />
+          {t('app.addServer', 'Add server')}
+        </button>
+
+        <div className="server-list">
+          {servers.length ? (
+            servers.map((server) => (
+              <button
+                key={server.id}
+                className={`server-item server-${server.status || 'disconnected'} ${server.id === selectedServerId ? 'active' : ''}`}
+                onClick={() => selectServer(server)}
+              >
+                <Server size={18} />
+                <span>
+                  <strong title={server.name}>{server.name}</strong>
+                  <small title={`${server.host}:${server.port}`}>{server.host}:{server.port}</small>
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="server-empty">
+              <strong>{t('app.noServers', 'No servers')}</strong>
+              <span>{t('app.addFirstSsh', 'Add your first SSH connection.')}</span>
+            </div>
+          )}
+        </div>
+
+        <section className="side-log">
+          <div>{t('app.toolLog', 'Tool log')}</div>
+          <pre>{logs.slice(-6).join('\n')}</pre>
+        </section>
+      </aside>
+      <div
+        className="app-shell-splitter"
+        role="separator"
+        aria-orientation="vertical"
+        title="Drag to resize sidebar"
+        onMouseDown={startAppSidebarResize}
+      />
+
+      <main className="workspace">
+        <header className="topbar">
+          <div>
+            <h1>{selectedServer.id ? selectedServer.name : t('app.noServerSelected', 'No server selected')}</h1>
+            <p>{selectedServer.username}@{selectedServer.host}:{selectedServer.port}</p>
+          </div>
+          <div className="topbar-actions">
+            <div className="transfer-center">
+              <button
+                title={t('topbar.transfers', 'Transfers')}
+                className={transferPanelOpen ? 'selected' : ''}
+                onClick={() => {
+                  window.clearTimeout(transferPanelTimerRef.current)
+                  transferPanelTimerRef.current = null
+                  setTransferPanelOpen((current) => !current)
+                }}
+              >
+              <Boxes size={16} />{t('topbar.transfers', 'Transfers')}
+              </button>
+              {transferPanelOpen && (
+                <TransferPopover transfers={transferTasks} onClear={clearTransferTasks} onCancelTask={cancelTransferTask} onRetryRollback={retryWorkflowRollback} />
+              )}
+            </div>
+            <button className="connect-button" onClick={connectServer} disabled={!selectedServer.id || isTestingServer}>
+              <Power size={16} />{isTestingServer ? t('topbar.connecting', 'Connecting') : t('topbar.connect', 'Connect')}
+            </button>
+            <button onClick={openEditServer} disabled={!selectedServer.id || isTestingServer}>
+              <SquarePen size={16} />{t('topbar.edit', 'Edit')}
+            </button>
+            <button onClick={disconnectServer} disabled={!selectedServer.id || selectedServer.status !== 'connected'}>
+              <PowerOff size={16} />{t('topbar.disconnect', 'Disconnect')}
+            </button>
+            <button className="danger-button" onClick={removeSelectedServer} disabled={!selectedServer.id}>
+              <Trash2 size={16} />{t('topbar.remove', 'Remove')}
+            </button>
+            <button
+              className="help-button"
+              title={t('topbar.settings', 'Settings')}
+              onClick={() => setSettingsDialogOpen(true)}
+            >
+              <Settings size={16} />{t('topbar.settings', 'Settings')}
+            </button>
+          </div>
+        </header>
+
+        <section className="metrics">
+          <Metric icon={<Activity />} label={t('metric.load', 'Load')} value={selectedServer.load} />
+          <Metric icon={<HardDrive />} label={t('metric.memory', 'Memory')} value={selectedServer.memory} />
+          <Metric icon={<Server />} label={t('metric.cpu', 'CPU')} value={selectedServer.cpu} />
+          <Metric icon={<ShieldCheck />} label={t('metric.status', 'Status')} value={t(`status.${selectedServer.status}`, selectedServer.status)} tone={selectedServer.status} />
+        </section>
+
+        <section className="desktop-grid">
+          <div className="left-stack">
+            <Panel title={t('panel.basicInfo', 'Basic info')} icon={<Server size={17} />}>
+              <InfoGrid server={selectedServer} history={resourceHistory} onCopy={(value) => copyText(value, showToast)} />
+            </Panel>
+            <RemoteFilesPanel
+              serverId={selectedServer.id}
+              path={displayedRemotePath}
+              items={displayedRemoteItems}
+              sort={remoteSort}
+              scrollTop={remoteFilesScrollTop}
+              focusedItemName={pendingRemoteFocusName}
+              selectedItem={selectedRemoteItem}
+              loading={isRemoteLoading}
+              transferring={isFileTransferRunning}
+              privilege={remotePrivilege.enabled && remotePrivilege.serverId === selectedServer.id ? remotePrivilege : null}
+              permissionError={remotePermissionError}
+              pathHistory={selectedRemotePathHistory}
+              onOpen={openRemoteItem}
+              onOpenDirectory={openRemoteDirectory}
+              onOpenPath={(path) => loadRemoteDirectory(path)}
+              onToggleFavorite={toggleRemotePathFavorite}
+              onClearRecentPaths={clearRecentRemotePaths}
+              onCopyPath={(value) => copyText(value, showToast)}
+              onSort={(key) => {
+                setRemoteSort((current) => ({
+                  key,
+                  direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+                }))
+              }}
+              onFocusHandled={() => setPendingRemoteFocusName('')}
+              onScroll={(scrollTop) => {
+                remoteFilesScrollTopRef.current = scrollTop
+              }}
+              onParent={goRemoteParent}
+              onCreateFile={() => openRemoteCreateDialog('file')}
+              onCreateDirectory={() => openRemoteCreateDialog('dir')}
+              onRename={openRemoteRenameDialog}
+              onUpload={uploadFile}
+              onDownload={downloadFile}
+              onEditFile={previewRemoteFile}
+              onDelete={deleteRemoteItem}
+              onRefresh={() => loadRemoteDirectory(displayedRemotePath)}
+              onGlobalSearch={searchAllRemoteFiles}
+              onCancelGlobalSearch={(executionId) => window.opsFlow.cancelSshExec(executionId)}
+              onOpenPrivilege={(path) => openRemotePrivilegeAccess(path)}
+              onExitPrivilege={disableRemotePrivilegeAccess}
+            />
+          </div>
+
+          <div className="right-stack">
+            <section className="ops-panel">
+              <div className="module-tabs-shell">
+                <button className="tab-scroll-button" title={t('tab.scrollLeft', 'Scroll left')} onClick={() => scrollModuleTabs(-1)}>&lt;</button>
+                <nav className="module-tabs" ref={moduleTabsRef}>
+                  <button className={activeModule === 'command' ? 'selected' : ''} onClick={() => setActiveModule('command')}>
+                    <SquareTerminal size={16} />{t('tab.command', 'Command')}
+                  </button>
+                  <button className={activeModule === 'database' ? 'selected' : ''} onClick={() => setActiveModule('database')}>
+                    <Database size={16} />{t('tab.database', 'Database')}
+                  </button>
+                  <button className={activeModule === 'redis' ? 'selected' : ''} onClick={() => setActiveModule('redis')}>
+                    <Cable size={16} />{t('tab.redis', 'Redis')}
+                  </button>
+                  <button className={activeModule === 'workflow' ? 'selected' : ''} onClick={() => setActiveModule('workflow')}>
+                    <Workflow size={16} />{t('tab.workflow', 'Workflow')}
+                  </button>
+                  <button className={activeModule === 'security-audit' ? 'selected' : ''} onClick={() => setActiveModule('security-audit')}>
+                    <ShieldCheck size={16} />{t('tab.audit', 'Audit')}
+                  </button>
+                  <button className={activeModule === 'package-deployer' ? 'selected' : ''} onClick={() => setActiveModule('package-deployer')}>
+                    <Download size={16} />{t('tab.deployer', 'Deployer')}
+                  </button>
+                  <button className={activeModule === 'backup-recovery' ? 'selected' : ''} onClick={() => setActiveModule('backup-recovery')}>
+                    <RotateCcw size={16} />{t('tab.backupRecovery', 'Backup & Recovery')}
+                  </button>
+                  <button className={activeModule === 'system-inspector' ? 'selected' : ''} onClick={() => setActiveModule('system-inspector')}>
+                    <Server size={16} />{t('tab.inspector', 'Host Management')}
+                  </button>
+                </nav>
+                <button className="tab-scroll-button" title={t('tab.scrollRight', 'Scroll right')} onClick={() => scrollModuleTabs(1)}>&gt;</button>
+              </div>
+
+              <div className={`command-workspace ${activeModule === 'command' ? '' : 'hidden-module'}`}>
+                <CommandSnippetToolbar
+                  serverId={selectedServer.id}
+                  snippets={visibleCommandSnippets}
+                  onFill={fillCommandSnippet}
+                  onSave={saveCommandSnippet}
+                  onDelete={deleteCommandSnippet}
+                />
+                <div className="terminal-shell">
+                  <div className="terminal-xterm" ref={terminalHostRef} />
+                </div>
+              </div>
+
+              {activeModule === 'workflow' && (
+                <div className="workflow-workspace">
+                  <div className="workflow-toolbar">
+                    <div>
+                      <strong>{t('workflow.title', 'Workflow orchestration')}</strong>
+                      <span>{t('workflow.description', 'Compose file, connector, output and executor nodes for repeatable operations.')}</span>
+                    </div>
+                    <div className="workflow-toolbar-actions">
+                      <button onClick={openCreateWorkflow}><Plus size={15} />{t('workflow.add', 'Add')}</button>
+                      <button onClick={openEditWorkflow} disabled={!selectedWorkflow}><SquarePen size={15} />{t('workflow.edit', 'Edit')}</button>
+                      <button onClick={duplicateWorkflow} disabled={!selectedWorkflow}><Save size={15} />{t('workflow.copy', 'Copy')}</button>
+                      <button className="danger-button" onClick={deleteWorkflow} disabled={!selectedWorkflow || workflows.length <= 1}><Trash2 size={15} />{t('workflow.delete', 'Delete')}</button>
+                      <button className="solid-button" onClick={() => openWorkflowRunDialog()} disabled={!selectedWorkflow || workflowRunIsActive}><CirclePlay size={15} />{t('workflow.run', 'Run')}</button>
+                    </div>
+                  </div>
+                  <div
+                    className="workflow-layout"
+                    ref={workflowLayoutRef}
+                    style={{ gridTemplateColumns: `minmax(220px, ${workflowSplit}%) 10px minmax(0, 1fr)` }}
+                  >
+                    <aside className="workflow-list">
+                      <div className="workflow-list-title">
+                        <strong>{t('workflow.instances', 'Instances')}</strong>
+                        <span>{t('workflow.flows', '{count} flows', { count: workflows.length })}</span>
+                      </div>
+                      {workflows.map((workflow) => (
+                        <button
+                          key={workflow.id}
+                          className={workflow.id === selectedWorkflowId ? 'selected' : ''}
+                          onClick={() => setSelectedWorkflowId(workflow.id)}
+                        >
+                          <strong>{workflow.name}</strong>
+                          <span>{workflow.description}</span>
+                          <em>{t('workflow.nodes', '{count} nodes', { count: workflow.nodes.length })}</em>
+                        </button>
+                      ))}
+                    </aside>
+                    <div
+                      className="workflow-splitter"
+                      role="separator"
+                      aria-orientation="vertical"
+                      title="Drag to resize workflow list and detail"
+                      onMouseDown={startWorkflowResize}
+                    />
+                    <section className="workflow-detail">
+                      <div className="workflow-detail-title">
+                        <div>
+                          <strong>{selectedWorkflow.name}</strong>
+                          <span>{selectedWorkflow.description}</span>
+                        </div>
+                        <span className="workflow-node-count">{t('workflow.nodes', '{count} nodes', { count: selectedWorkflow.nodes.length })}</span>
+                      </div>
+                      <div className="flow-canvas">
+                        <ReactFlow nodes={selectedWorkflow.nodes} edges={selectedWorkflow.edges} fitView nodesDraggable={false}>
+                          <Controls />
+                          <Background gap={18} size={1} color="var(--flow-grid)" />
+                        </ReactFlow>
+                      </div>
+                      <div className="workflow-bottom">
+                        <div className="workflow-run-detail-list">
+                          <div className="workflow-run-detail-head">
+                            <strong>{t('workflow.runDetails', 'Run details')}</strong>
+                            <div className="workflow-run-detail-actions">
+                              {workflowRunIsActive && (
+                                <button
+                                  type="button"
+                                  className="workflow-cancel-button"
+                                  onClick={cancelActiveWorkflowRun}
+                                  disabled={workflowRunIsCancelling}
+                                >
+                                  <CircleStop size={14} />
+                                  {workflowRunIsCancelling ? t('workflow.cancelling', 'Cancelling…') : t('workflow.cancelRun', 'Cancel run')}
+                                </button>
+                              )}
+                              <div className="workflow-run-view-toggle">
+                                <button
+                                  className={workflowRunViewMode === 'server' ? 'selected' : ''}
+                                  onClick={() => setWorkflowRunViewMode('server')}
+                                >
+                                  {t('workflow.byServer', 'By server')}
+                                </button>
+                                <button
+                                  className={workflowRunViewMode === 'step' ? 'selected' : ''}
+                                  onClick={() => {
+                                    setWorkflowRunViewMode('step')
+                                    if (!selectedWorkflowLogNodeId) setSelectedWorkflowLogNodeId('__connect__')
+                                  }}
+                                >
+                                  {t('workflow.byStep', 'By step')}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          {workflowRunViewMode === 'server' ? (
+                            <div className="workflow-step-log-list">
+                              {visibleWorkflowRunTargets.length ? (
+                                visibleWorkflowRunTargets.map((target) => (
+                                  <button
+                                    key={target.runId}
+                                    className={target.runId === selectedWorkflowRunTargetId ? 'selected' : ''}
+                                    onClick={() => setSelectedWorkflowRunTargetId(target.runId)}
+                                  >
+                                    <strong>{target.serverName}</strong>
+                                    <span>{target.message || target.currentStepName || t('workflow.queued', 'Queued')} · scopes {formatWorkflowScopes(target.scopes || ['app'])}</span>
+                                    <em className={target.status || 'pending'}>{target.status || 'pending'}</em>
+                                  </button>
+                                ))
+                              ) : (
+                                <div className="workflow-run-empty">{t('workflow.emptyRunServer', 'Run a workflow to see each server here.')}</div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="workflow-step-log-list">
+                              {getWorkflowRunSteps(selectedWorkflow).map((step) => {
+                                const summary = summarizeWorkflowStep(visibleWorkflowRunTargets, step.id)
+                                return (
+                                  <button
+                                    key={step.id}
+                                    className={step.id === selectedWorkflowLogNodeId ? 'selected' : ''}
+                                    onClick={() => setSelectedWorkflowLogNodeId(step.id)}
+                                  >
+                                    <strong>{step.label}</strong>
+                                    <span>{visibleWorkflowRunTargets.length ? formatWorkflowStepSummary(summary) : step.summary}</span>
+                                    <em className={summary.status}>{summary.status}</em>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                        <pre ref={workflowLogOutputRef}>
+                          {workflowRunViewMode === 'server'
+                            ? formatWorkflowServerLogs(getSelectedWorkflowRunTarget(visibleWorkflowRunTargets, selectedWorkflowRunTargetId))
+                            : formatWorkflowAggregateStepLogs(visibleWorkflowRunTargets, selectedWorkflowLogNodeId || '__connect__')}
+                        </pre>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              )}
+
+              {activeModule === 'security-audit' && (
+                <div className="audit-workspace">
+                  <div className="audit-toolbar">
+                    <div>
+                      <strong>{t('audit.title', 'Security audit reports')}</strong>
+                      <span>{t('audit.description', 'Run audit workflows created in Workflow, then review result summaries and execution logs here.')}</span>
+                    </div>
+                    <div className="audit-toolbar-actions">
+                      <label className="audit-workflow-picker">
+                        <span>{t('audit.workflow', 'Audit workflow')}</span>
+                        <select
+                          value={selectedAuditWorkflow?.id || ''}
+                          onChange={(event) => setSelectedWorkflowId(event.target.value)}
+                        >
+                          {auditWorkflows.length ? (
+                            auditWorkflows.map((workflow) => (
+                              <option key={workflow.id} value={workflow.id}>{workflow.name}</option>
+                            ))
+                          ) : (
+                            <option value="">{t('audit.noWorkflows', 'No audit workflows')}</option>
+                          )}
+                        </select>
+                      </label>
+                      <button className="solid-button" onClick={() => openWorkflowRunDialog(selectedAuditWorkflow)} disabled={!selectedAuditWorkflow}>
+                        <CirclePlay size={15} />{t('audit.run', 'Run')}
+                      </button>
+                    </div>
+                  </div>
+                  {selectedAuditWorkflow ? (
+                    <div className="audit-run-dashboard">
+                      <section className="audit-detail">
+                        <div className="audit-summary">
+                          <div>
+                            <span>{t('audit.score', 'Score')}</span>
+                            <strong>{auditScoreSummary.score == null ? t('audit.noScore', 'No score') : `${auditScoreSummary.score}/100`}</strong>
+                          </div>
+                          <div>
+                            <span>{t('audit.highRisks', 'High risks')}</span>
+                            <strong>{auditScoreSummary.high ?? '-'}</strong>
+                          </div>
+                          <div>
+                            <span>{t('audit.warnings', 'Warnings')}</span>
+                            <strong>{auditScoreSummary.medium ?? '-'}</strong>
+                          </div>
+                          <div>
+                            <span>{t('audit.targetsDone', 'Targets done')}</span>
+                            <strong>{auditRunStats.done || 0} / {auditRunStats.total || 0}</strong>
+                          </div>
+                        </div>
+                        <section className="audit-output-summary">
+                          <div className="audit-section-head">
+                            <strong>{t('audit.reportFiles', 'Report files')}</strong>
+                            <span>{auditArtifacts.length
+                              ? t('audit.filesGenerated', '{count} files generated', { count: auditArtifacts.length })
+                              : t('audit.generatedAfterRun', 'Generated after run')}</span>
+                          </div>
+                          {auditArtifacts.length ? (
+                            <div className="audit-output-list">
+                              {auditArtifacts.map((artifact, index) => (
+                                <div key={`${artifact.serverName}-${artifact.localPath}-${index}`} className="audit-output-row">
+                                  <strong>{artifact.name}</strong>
+                                  <span>
+                                    {artifact.serverName}
+                                    {' · '}
+                                    {(artifact.format || 'file').toUpperCase()}
+                                    {' · '}
+                                    {artifact.localPath || artifact.remotePath}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : auditOutputNodes.length ? (
+                            <div className="audit-output-list">
+                              {auditOutputNodes.map((node) => (
+                                <div key={node.id} className="audit-output-row pending">
+                                  <strong>{node.data?.label || t('audit.outputNode', 'Output node')}</strong>
+                                  <span>
+                                    Output format is configured in Workflow:
+                                    {' '}
+                                    {(node.data?.config?.format || 'txt').toUpperCase()}
+                                    {' · '}
+                                    {node.data?.config?.outputPath || 'No remote output path'}
+                                    {auditDownloadNodes.length ? ` · download to ${auditDownloadNodes[0].data?.config?.localDir || 'local directory'}` : ' · add a Download file node to save locally'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="workflow-run-empty">{t('audit.configureOutput', 'Configure an Output format node in Workflow to generate an audit report file.')}</div>
+                          )}
+                        </section>
+                        <section className="audit-insights">
+                          <div className="audit-risk-distribution">
+                            <div className="audit-section-head">
+                              <strong>{t('audit.riskDistribution', 'Risk distribution')}</strong>
+                              <span>{auditRiskTotal ? t('audit.findingsCount', '{count} findings', { count: auditRiskTotal }) : t('audit.generatedAfterRun', 'Generated after run')}</span>
+                            </div>
+                            <div className="audit-donut-wrap">
+                              <div className={`audit-donut${auditRiskTotal ? '' : ' empty'}`} style={auditRiskDonutStyle}>
+                                <strong>{auditRiskTotal || '-'}</strong>
+                                <span>{t('audit.total', 'Total')}</span>
+                              </div>
+                              <div className="audit-risk-legend">
+                                <span><i className="high" />{t('audit.high', 'High')} {auditScoreSummary.high || 0}</span>
+                                <span><i className="medium" />{t('audit.warning', 'Warning')} {auditScoreSummary.medium || 0}</span>
+                                <span><i className="low" />{t('audit.low', 'Low')} {auditScoreSummary.low || 0}</span>
+                                <span><i className="pass" />{t('audit.passed', 'Passed')} {auditScoreSummary.passed || 0}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="audit-finding-list">
+                            <div className="audit-section-head">
+                              <strong>{t('audit.riskFindings', 'Risk findings')}</strong>
+                              <span>{auditFindingRows.length ? t('audit.parsedCount', '{count} parsed', { count: auditFindingRows.length }) : t('audit.noFindings', 'No findings yet')}</span>
+                            </div>
+                            {auditFindingRows.length ? (
+                              <div className="audit-finding-table">
+                                {auditFindingRows.slice(0, 12).map((finding, index) => (
+                                  <div key={`${finding.serverName}-${finding.message}-${index}`} className="audit-finding-row">
+                                    <span className={`audit-severity ${finding.level}`}>{finding.label}</span>
+                                    <strong>{finding.message}</strong>
+                                    <em>{finding.serverName}</em>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="workflow-run-empty">{t('audit.runForFindings', 'Run an audit workflow to generate risk distribution and findings.')}</div>
+                            )}
+                          </div>
+                        </section>
+                        <div className="audit-report-panels">
+                          <section>
+                            <div className="audit-section-head">
+                              <strong>{t('audit.runStatus', 'Run status')}</strong>
+                              <div className="workflow-run-view-toggle">
+                                <button
+                                  className={workflowRunViewMode === 'server' ? 'selected' : ''}
+                                  onClick={() => setWorkflowRunViewMode('server')}
+                                >
+                                  {t('workflow.byServer', 'By server')}
+                                </button>
+                                <button
+                                  className={workflowRunViewMode === 'step' ? 'selected' : ''}
+                                  onClick={() => setWorkflowRunViewMode('step')}
+                                >
+                                  {t('workflow.byStep', 'By step')}
+                                </button>
+                              </div>
+                            </div>
+                            <div className="workflow-step-log-list audit-run-list">
+                              {workflowRunViewMode === 'server' ? (
+                                visibleWorkflowRunTargets.length ? (
+                                  visibleWorkflowRunTargets.map((target) => (
+                                    <button
+                                      key={target.runId}
+                                      className={target.runId === selectedWorkflowRunTargetId ? 'selected' : ''}
+                                      onClick={() => setSelectedWorkflowRunTargetId(target.runId)}
+                                    >
+                                      <strong>{target.serverName}</strong>
+                                      <span>{target.message || target.currentStepName || t('workflow.queued', 'Queued')}</span>
+                                      <em className={target.status || 'pending'}>{target.status || 'pending'}</em>
+                                    </button>
+                                  ))
+                                ) : (
+                                  <div className="workflow-run-empty">{t('audit.runForProgress', 'Run an audit workflow to see server progress.')}</div>
+                                )
+                              ) : (
+                                getWorkflowRunSteps(selectedAuditWorkflow).map((step) => {
+                                  const summary = summarizeWorkflowStep(visibleWorkflowRunTargets, step.id)
+                                  return (
+                                    <button
+                                      key={step.id}
+                                      className={step.id === selectedWorkflowLogNodeId ? 'selected' : ''}
+                                      onClick={() => setSelectedWorkflowLogNodeId(step.id)}
+                                    >
+                                      <strong>{step.label}</strong>
+                                      <span>{visibleWorkflowRunTargets.length ? formatWorkflowStepSummary(summary) : step.summary}</span>
+                                      <em className={summary.status}>{summary.status}</em>
+                                    </button>
+                                  )
+                                })
+                              )}
+                            </div>
+                          </section>
+                          <pre>
+                            {workflowRunViewMode === 'server'
+                              ? formatWorkflowServerLogs(getSelectedWorkflowRunTarget(visibleWorkflowRunTargets, selectedWorkflowRunTargetId))
+                              : formatWorkflowAggregateStepLogs(visibleWorkflowRunTargets, selectedWorkflowLogNodeId || '__connect__')}
+                          </pre>
+                        </div>
+                      </section>
+                    </div>
+                  ) : (
+                    <div className="audit-empty">
+                      <ShieldCheck size={34} />
+                      <strong>{t('audit.emptyTitle', 'No audit workflow available')}</strong>
+                      <span>{t('audit.emptyDescription', 'Create or tag audit workflows in Workflow first. This page only runs audits and reviews reports.')}</span>
+                      <button className="solid-button" onClick={() => setActiveModule('workflow')}>{t('audit.openWorkflow', 'Open Workflow')}</button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeModule === 'database' && (
+                <MaintenanceModule
+                  empty={false}
+                  title={t('database.emptyTitle', 'No database configured')}
+                  actionLabel={t('database.addDatabase', 'Add database')}
+                  onAdd={addDatabase}
+                >
+                  <DatabaseBrowser
+                    databases={selectedDatabases}
+                    selectedDatabase={selectedDatabase}
+                    connectionAvailable={resourceConnectionAvailable(selectedDatabase, servers)}
+                    servers={servers}
+                    selectedTable={selectedDbTable}
+                    selectedColumn={selectedDbColumn}
+                    privileges={selectedDatabase ? databasePrivileges[selectedDatabase.id] : null}
+                    columns={tableColumns}
+                    loading={isTableLoading}
+                    privilegeLoading={isPrivilegeLoading}
+                    sqlScript={sqlScript}
+                    sqlFileInfo={sqlFileInfo}
+                    sqlRunning={isSqlRunning}
+                    sqlExecutionTaskId={sqlExecutionTaskId}
+                    sqlResult={sqlResult}
+                    onAdd={addDatabase}
+                    onCreateDatabase={openCreateDatabase}
+                    onSelectDatabase={(database) => setSelectedDatabaseId(database.id)}
+                    onSelectColumn={setSelectedDbColumn}
+                    onEdit={editDatabase}
+                    onDuplicate={duplicateDatabase}
+                    onDelete={deleteDatabase}
+                    onRefreshTables={refreshDatabaseTables}
+                    onCheckPrivileges={checkDatabasePrivileges}
+                    onOpenTable={loadTableColumns}
+                    onExportTables={exportDatabaseTables}
+                    onOpenBackup={openDatabaseBackup}
+                    onSqlChange={(value) => {
+                      setSqlScript(value)
+                      setSqlFileInfo((current) => current ? { ...current, modified: true } : null)
+                    }}
+                    onSelectSqlFile={selectLocalSqlFile}
+                    onClearSqlFile={clearLocalSqlFile}
+                    onRunSql={runSql}
+                    onCancelSql={cancelSqlFileExecution}
+                    onSqlFileOptionChange={(patch) => setSqlFileInfo((current) => current ? { ...current, ...patch } : null)}
+                    onCopy={(value) => copyText(value, showToast)}
+                    onAddTable={openAddTable}
+                    onEditTable={openEditTable}
+                    onDeleteTable={deleteTable}
+                    onAddColumn={openAddColumn}
+                    onEditColumn={openEditColumn}
+                    onDeleteColumn={deleteColumn}
+                  />
+                </MaintenanceModule>
+              )}
+
+              {activeModule === 'redis' && (
+                <MaintenanceModule
+                  empty={!selectedRedisStores.length}
+                  title={t('redis.emptyTitle', 'No Redis configured')}
+                  actionLabel={t('redis.addRedis', 'Add Redis')}
+                  onAdd={addRedis}
+                >
+                  <RedisBrowser
+                    connections={selectedRedisStores}
+                    selected={selectedRedis}
+                    connectionAvailable={resourceConnectionAvailable(selectedRedis, servers)}
+                    servers={servers}
+                    databases={redisDatabases}
+                    selectedDb={selectedRedisDb}
+                    keys={redisKeys}
+                    pattern={redisKeyPattern}
+                    selectedKey={selectedRedisKey}
+                    detail={redisKeyDetail}
+                    loading={isRedisLoading}
+                    backupRunning={isRedisBackupRunning}
+                    onAdd={addRedis}
+                    onEdit={editRedis}
+                    onDelete={deleteRedis}
+                    onSelect={(redis) => {
+                      setSelectedRedisId(redis.id)
+                      setRedisDatabases([])
+                      setRedisKeys([])
+                      setSelectedRedisKey('')
+                      setRedisKeyDetail(null)
+                    }}
+                    onRefresh={refreshRedisDatabases}
+                    onSelectDb={(database) => loadRedisKeys(selectedRedis, database)}
+                    onPatternChange={setRedisKeyPattern}
+                    onSearch={() => loadRedisKeys(selectedRedis, selectedRedisDb)}
+                    onOpenKey={openRedisKey}
+                    onDeleteKey={deleteRedisKey}
+                    onFlushDb={flushRedisDb}
+                    onBackup={backupRedisDb}
+                    onRestore={openRedisRestore}
+                  />
+                </MaintenanceModule>
+              )}
+
+              <div className={activeModule === 'package-deployer' ? 'module-keepalive active' : 'module-keepalive'}>
+                <PackageDeployerPanel
+                  server={selectedServer}
+                  inspectorResult={systemInspectorResult}
+                  statusLoading={isSystemInspectorLoading}
+                  privilege={servicePrivilege}
+                  onPrivilegeChange={setServicePrivilege}
+                  onPreparePrivilege={prepareServicePrivilege}
+                  onForgetPrivilege={forgetServicePrivilege}
+                  onRefreshStatus={loadSystemInspector}
+                  onToast={showToast}
+                  onTaskUpdate={updateTransferTask}
+                />
+              </div>
+
+              {activeModule === 'backup-recovery' && (
+                <BackupRecoveryPanel
+                  serverConnected={selectedServer.status === 'connected'}
+                  result={backupRecoveryResult}
+                  loading={isBackupRecoveryLoading}
+                  loadingMessage={backupRecoveryStage}
+                  selectedTaskId={selectedBackupTaskId}
+                  databases={selectedDatabases}
+                  privilege={servicePrivilege}
+                  onPrivilegeChange={setServicePrivilege}
+                  onForgetPrivilege={forgetServicePrivilege}
+                  onRefresh={loadBackupRecovery}
+                  onSelectTask={setSelectedBackupTaskId}
+                  onScanArtifacts={scanBackupArtifacts}
+                  onConfigureTarget={openBackupTargetConfig}
+                  onVerify={verifyBackupArtifact}
+                  onViewContent={(task, artifact) => setBackupContentDialog({ task, artifact })}
+                  onRestore={openBackupRestore}
+                  onOpenDatabase={() => setActiveModule('database')}
+                />
+              )}
+
+              {activeModule === 'system-inspector' && (
+                  <SystemInspectorPanel
+                    serverConnected={selectedServer.status === 'connected'}
+                    result={systemInspectorResult}
+                    loading={isSystemInspectorLoading}
+                    loadingMessage={systemInspectorStage}
+                    busyKey={inspectorBusyKey}
+                    privilege={servicePrivilege}
+                    serviceSearch={serviceSearch}
+                    servicesScrollTop={servicesScrollTopRef.current}
+                    onRefresh={loadSystemInspector}
+                    onCancel={cancelSystemInspector}
+                    onServiceAction={runServiceAction}
+                    onPrivilegeChange={setServicePrivilege}
+                    onServiceSearchChange={setServiceSearch}
+                    onForgetPrivilege={forgetServicePrivilege}
+                    onServicesScroll={(value) => {
+                      servicesScrollTopRef.current = value
+                    }}
+                    onAddCron={() => openCronDialog('add')}
+                    onEditCron={(cron) => openCronDialog('edit', cron)}
+                    onDeleteCron={deleteCronEntry}
+                    sshPort={selectedServer.port}
+                    onAddFirewallPort={openFirewallPortDialog}
+                    onDeleteFirewallRule={deleteFirewallRule}
+                    onToggleFirewall={toggleFirewall}
+                  />
+              )}
+
+            </section>
+          </div>
+        </section>
+      </main>
+      {isServerDialogOpen && (
+        <ServerDialog
+          form={serverForm}
+          mode={editingServerId ? 'edit' : 'add'}
+          isTesting={isTestingServer}
+          notice={serverNotice}
+          onClose={() => {
+            setIsServerDialogOpen(false)
+            setServerNotice(null)
+          }}
+          onSave={saveServer}
+          onTest={testServerConnection}
+          onDuplicate={duplicateServerConnection}
+        />
+      )}
+      {previewFile && (
+        <FilePreviewDialog
+          file={previewFile}
+          content={previewContent}
+          saving={isPreviewSaving}
+          copying={isPreviewCopying}
+          onChange={setPreviewContent}
+          onClose={() => setPreviewFile(null)}
+          onCopy={copyPreviewFile}
+          onSave={savePreviewFile}
+        />
+      )}
+      {isDatabaseDialogOpen && (
+        <DatabaseDialog
+          form={databaseForm}
+          servers={servers}
+          mode={editingDatabaseId ? 'edit' : 'add'}
+          isTesting={isDatabaseTesting}
+          notice={databaseNotice}
+          onChange={(key, value) => setDatabaseForm((current) => ({ ...current, [key]: value }))}
+          onClose={() => {
+            setIsDatabaseDialogOpen(false)
+            setEditingDatabaseId('')
+            setDatabaseNotice(null)
+            setWorkflowPendingResource(null)
+            resumeWorkflowAfterResource()
+          }}
+          onSave={saveDatabase}
+          onTest={testDatabaseConnection}
+        />
+      )}
+      {databaseCreateDialog && (
+        <DatabaseCreateDialog
+          value={databaseCreateDialog}
+          databases={databases}
+          servers={servers}
+          onChange={(patch) => setDatabaseCreateDialog((current) => current ? { ...current, ...patch, notice: null } : current)}
+          onChangeSource={changeDatabaseCreateSource}
+          onLoadOptions={() => loadDatabaseCreateOptions(databaseCreateDialog)}
+          onPrepare={prepareDatabaseCreation}
+          onCreate={createDatabase}
+          onClose={() => {
+            if (!databaseCreateDialog.running) setDatabaseCreateDialog(null)
+          }}
+        />
+      )}
+      {remotePrivilegeDialog && (
+        <RemotePrivilegeDialog
+          dialog={remotePrivilegeDialog}
+          server={selectedServer}
+          onChange={(patch) => setRemotePrivilegeDialog((current) => current ? { ...current, ...patch } : current)}
+          onClose={() => setRemotePrivilegeDialog(null)}
+          onSubmit={enableRemotePrivilegeAccess}
+        />
+      )}
+      {remoteCreateDialog && (
+        <RemoteCreateDialog
+          dialog={remoteCreateDialog}
+          onChange={(patch) => setRemoteCreateDialog((current) => current ? { ...current, ...patch, notice: null } : current)}
+          onClose={() => setRemoteCreateDialog(null)}
+          onSubmit={createRemoteItem}
+        />
+      )}
+      {remoteRenameDialog && (
+        <RemoteRenameDialog
+          dialog={remoteRenameDialog}
+          onChange={(patch) => setRemoteRenameDialog((current) => current ? { ...current, ...patch, notice: null } : current)}
+          onClose={() => setRemoteRenameDialog(null)}
+          onSubmit={renameRemoteItem}
+        />
+      )}
+      {isRedisDialogOpen && (
+        <RedisDialog
+          form={redisForm}
+          servers={servers}
+          mode={editingRedisId ? 'edit' : 'add'}
+          isTesting={isRedisTesting}
+          notice={redisNotice}
+          onChange={(key, value) => setRedisForm((current) => ({ ...current, [key]: value }))}
+          onClose={() => {
+            setIsRedisDialogOpen(false)
+            setEditingRedisId('')
+            setRedisNotice(null)
+            setWorkflowPendingResource(null)
+            resumeWorkflowAfterResource()
+          }}
+          onSave={saveRedis}
+          onTest={testRedisConnection}
+        />
+      )}
+      {dangerConfirm && (
+        <DangerConfirmDialog
+          value={dangerConfirm}
+          onClose={() => setDangerConfirm(null)}
+          onConfirm={() => {
+            const action = dangerConfirm.onConfirm
+            setDangerConfirm(null)
+            action?.()
+          }}
+        />
+      )}
+      {tableDialog && (
+        <TableDialog
+          mode={tableDialog.mode}
+          form={tableForm}
+          onChange={setTableForm}
+          onClose={() => setTableDialog(null)}
+          onSave={saveTableChange}
+        />
+      )}
+      {columnDialog && (
+        <ColumnDialog
+          mode={columnDialog.mode}
+          form={columnForm}
+          onChange={(key, value) => setColumnForm((current) => ({ ...current, [key]: value }))}
+          onClose={() => setColumnDialog(null)}
+          onSave={saveColumnChange}
+        />
+      )}
+      {databaseBackupDialog && (
+        <DatabaseBackupDialog
+          value={databaseBackupDialog}
+          onChange={(patch) => setDatabaseBackupDialog((current) => current ? { ...current, ...patch } : current)}
+          onClose={() => !databaseBackupDialog.running && setDatabaseBackupDialog(null)}
+          onStart={startDatabaseBackup}
+          onCancel={cancelDatabaseBackup}
+        />
+      )}
+      {redisRestoreDialog && (
+        <RedisRestoreDialog
+          value={redisRestoreDialog}
+          targetDb={selectedRedisDb}
+          onChange={(patch) => setRedisRestoreDialog((current) => current ? { ...current, ...patch, notice: '' } : current)}
+          onClose={() => !redisRestoreDialog.running && setRedisRestoreDialog(null)}
+          onStart={startRedisRestore}
+          onCancel={cancelRedisRestore}
+        />
+      )}
+      {cronDialog && (
+        <CronDialog
+          mode={cronDialog.mode}
+          value={cronForm}
+          saving={inspectorBusyKey === 'cron:save'}
+          onChange={setCronForm}
+          onClose={() => {
+            closeCronDialog()
+            setWorkflowPendingResource(null)
+            resumeWorkflowAfterResource()
+          }}
+          onSave={saveCronEntry}
+        />
+      )}
+      {firewallPortDialogOpen && (
+        <FirewallPortDialog
+          firewall={systemInspectorResult?.firewall || {}}
+          value={firewallPortForm}
+          saving={inspectorBusyKey === 'firewall:add'}
+          onChange={setFirewallPortForm}
+          onClose={() => setFirewallPortDialogOpen(false)}
+          onSave={saveFirewallPort}
+        />
+      )}
+      {backupRestoreDialog && (
+        <BackupRestoreDialog
+          value={backupRestoreDialog}
+          databases={selectedDatabases}
+          onChange={(patch) => setBackupRestoreDialog((current) => current ? { ...current, ...patch, notice: null } : current)}
+          onClose={() => !backupRestoreDialog.running && setBackupRestoreDialog(null)}
+          onRestore={restoreSystemBackup}
+          onOpenDatabase={() => {
+            setBackupRestoreDialog(null)
+            setActiveModule('database')
+          }}
+        />
+      )}
+      {backupTargetDialog && (
+        <BackupTargetDialog
+          value={backupTargetDialog}
+          databases={selectedDatabases}
+          onChange={(patch) => setBackupTargetDialog((current) => current ? { ...current, ...patch, notice: null } : current)}
+          onClose={() => !backupTargetDialog.saving && setBackupTargetDialog(null)}
+          onSave={saveBackupTargetConfig}
+          onOpenDatabase={() => {
+            setBackupTargetDialog(null)
+            setActiveModule('database')
+          }}
+        />
+      )}
+      {backupContentDialog && (
+        <BackupContentDialog
+          value={backupContentDialog}
+          onClose={() => setBackupContentDialog(null)}
+        />
+      )}
+      {workflowRunDialogOpen && (
+        <WorkflowRunDialog
+          workflow={workflowRunWorkflow}
+          servers={runnableServers}
+          config={workflowRunConfig}
+          onChange={updateWorkflowRunConfig}
+          onToggleServer={toggleWorkflowRunTarget}
+          onToggleServerScope={toggleWorkflowRunServerScope}
+          onClose={() => setWorkflowRunDialogOpen(false)}
+          onRun={startWorkflowRunFromDialog}
+        />
+      )}
+      {workflowDialog && workflowDraft && (
+        <WorkflowDialog
+          key={workflowDraft.id}
+          mode={workflowDialog}
+          draft={workflowDraft}
+          moduleGroups={workflowModuleGroups}
+          databases={selectedDatabases}
+          redisStores={selectedRedisStores}
+          cronEntries={systemInspectorResult?.cronEntries || []}
+          server={selectedServer}
+          onAddDatabase={(nodeId) => {
+            leaveWorkflowForResource(addDatabase, { kind: 'database', nodeId })
+          }}
+          onAddRedis={(nodeId) => {
+            leaveWorkflowForResource(addRedis, { kind: 'redis', nodeId })
+          }}
+          onAddCron={(nodeId) => {
+            leaveWorkflowForResource(() => openCronDialog('add'), { kind: 'cron', nodeId })
+          }}
+          onRefreshCron={() => loadSystemInspector()}
+          onChange={setWorkflowDraft}
+          onClose={() => {
+            setWorkflowDialog(null)
+            setWorkflowDraft(null)
+          }}
+          onSave={saveWorkflowDraft}
+        />
+      )}
+      {workflowTemplateMarketOpen && (
+        <WorkflowTemplateMarketDialog
+          templates={workflowTemplateCatalog}
+          onSelect={createWorkflowFromTemplate}
+          onClose={() => setWorkflowTemplateMarketOpen(false)}
+        />
+      )}
+      {settingsDialogOpen && (
+        <SettingsDialog
+          language={language}
+          themeMode={themeMode}
+          section={settingsSection}
+          onLanguageChange={changeLanguage}
+          onThemeChange={changeTheme}
+          onSectionChange={setSettingsSection}
+          onClose={() => setSettingsDialogOpen(false)}
+        />
+      )}
+      {toast && (
+        <div className={`app-toast ${toast.type}`} role={toast.type === 'error' ? 'alert' : 'status'}>
+          <span>{toast.message}</span>
+          <button type="button" onClick={dismissToast} title={t('common.close', 'Close')} aria-label={t('common.close', 'Close')}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+    </div>
+    </I18nContext.Provider>
+  )
+}
+
+function SettingsDialog({ language, themeMode, section, onLanguageChange, onThemeChange, onSectionChange, onClose }) {
+  const { t } = useI18n()
+  const [productVersion, setProductVersion] = useState('')
+  const [damengDriverStatus, setDamengDriverStatus] = useState(null)
+  const [damengDriverBusy, setDamengDriverBusy] = useState(false)
+  const [damengDriverNotice, setDamengDriverNotice] = useState(null)
+  const [securityStatus, setSecurityStatus] = useState(null)
+  const [securityBusy, setSecurityBusy] = useState('')
+  const [securityNotice, setSecurityNotice] = useState(null)
+  const [exportOptions, setExportOptions] = useState({
+    password: '',
+    confirmPassword: '',
+    includeCredentials: false,
+    includeHistory: false
+  })
+  const [importFile, setImportFile] = useState(null)
+  const [importPassword, setImportPassword] = useState('')
+  const [importPreview, setImportPreview] = useState(null)
+  const [configProgress, setConfigProgress] = useState(null)
+  const [configElapsed, setConfigElapsed] = useState(0)
+  const configOperationRef = useRef('')
+
+  useEffect(() => {
+    window.opsFlow.getAppVersion?.()
+      .then((version) => setProductVersion(String(version || '')))
+      .catch(() => setProductVersion(''))
+  }, [])
+
+  useEffect(() => {
+    if (section !== 'general' || damengDriverStatus) return
+    window.opsFlow.getDamengDriverStatus?.()
+      .then(setDamengDriverStatus)
+      .catch((error) => setDamengDriverNotice({ type: 'error', message: formatDamengSettingsError(error) }))
+  }, [section, damengDriverStatus])
+
+  useEffect(() => window.opsFlow.onConfigOperationProgress?.((payload) => {
+    if (!payload?.operationId || payload.operationId !== configOperationRef.current) return
+    setConfigProgress((current) => ({
+      ...current,
+      ...payload,
+      previousStage: payload.stage === 'canceled' ? current?.stage : (payload.previousStage || current?.previousStage),
+      startedAt: current?.startedAt || Date.now()
+    }))
+  }), [])
+
+  useEffect(() => {
+    if (!configProgress?.startedAt) return undefined
+    const updateElapsed = () => setConfigElapsed(Math.max(0, Date.now() - configProgress.startedAt))
+    updateElapsed()
+    if (['completed', 'error', 'canceled'].includes(configProgress.stage)) return undefined
+    const intervalId = window.setInterval(updateElapsed, 250)
+    return () => window.clearInterval(intervalId)
+  }, [configProgress?.operationId, configProgress?.stage, configProgress?.startedAt])
+
+  const beginConfigOperation = (kind, stage) => {
+    const operationId = `config-${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    configOperationRef.current = operationId
+    setConfigElapsed(0)
+    setConfigProgress({ operationId, kind, stage, startedAt: Date.now(), timestamp: Date.now() })
+    return operationId
+  }
+
+  const failConfigOperation = (error) => {
+    const message = cleanConfigError(error)
+    setConfigProgress((current) => current ? { ...current, previousStage: current.stage, stage: 'error', message, timestamp: Date.now() } : current)
+    return message
+  }
+
+  const selectDamengDriver = async () => {
+    setDamengDriverBusy(true)
+    setDamengDriverNotice(null)
+    try {
+      const result = await window.opsFlow.selectDamengDriver()
+      if (result?.canceled) return
+      setDamengDriverStatus(result)
+      setDamengDriverNotice({ type: 'success', message: t('settings.general.damengSelected', 'External Dameng driver configured.') })
+    } catch (error) {
+      setDamengDriverNotice({ type: 'error', message: formatDamengSettingsError(error) })
+      window.opsFlow.getDamengDriverStatus?.().then(setDamengDriverStatus).catch(() => {})
+    } finally {
+      setDamengDriverBusy(false)
+    }
+  }
+
+  const clearDamengDriver = async () => {
+    if (!window.confirm(t('settings.general.damengClearConfirm', 'Stop using the configured external Dameng driver?'))) return
+    setDamengDriverBusy(true)
+    setDamengDriverNotice(null)
+    try {
+      const result = await window.opsFlow.clearDamengDriver()
+      setDamengDriverStatus(result)
+      setDamengDriverNotice({ type: 'success', message: t('settings.general.damengCleared', 'External Dameng driver disabled.') })
+    } catch (error) {
+      setDamengDriverNotice({ type: 'error', message: formatDamengSettingsError(error) })
+    } finally {
+      setDamengDriverBusy(false)
+    }
+  }
+
+  const setDamengLegacyMode = async (enabled) => {
+    setDamengDriverBusy(true)
+    setDamengDriverNotice(null)
+    try {
+      const result = await window.opsFlow.setDamengLegacyMode(enabled)
+      if (result?.canceled) return
+      setDamengDriverStatus(result)
+      setDamengDriverNotice({
+        type: 'success',
+        message: enabled
+          ? t('settings.general.damengLegacyEnabled', 'Isolated legacy Dameng compatibility mode enabled.')
+          : t('settings.general.damengLegacyDisabled', 'Legacy Dameng compatibility mode disabled.')
+      })
+    } catch (error) {
+      setDamengDriverNotice({ type: 'error', message: formatDamengSettingsError(error) })
+      window.opsFlow.getDamengDriverStatus?.().then(setDamengDriverStatus).catch(() => {})
+    } finally {
+      setDamengDriverBusy(false)
+    }
+  }
+
+  const selectDamengLegacyNode = async () => {
+    setDamengDriverBusy(true)
+    setDamengDriverNotice(null)
+    try {
+      const result = await window.opsFlow.selectDamengLegacyNode()
+      if (result?.canceled) return
+      setDamengDriverStatus(result)
+      setDamengDriverNotice({ type: 'success', message: t('settings.general.damengLegacyNodeSelected', 'Node.js runtime configured for isolated Dameng compatibility.') })
+    } catch (error) {
+      setDamengDriverNotice({ type: 'error', message: formatDamengSettingsError(error) })
+    } finally {
+      setDamengDriverBusy(false)
+    }
+  }
+
+  const clearDamengLegacyNode = async () => {
+    setDamengDriverBusy(true)
+    setDamengDriverNotice(null)
+    try {
+      const result = await window.opsFlow.clearDamengLegacyNode()
+      setDamengDriverStatus(result)
+      setDamengDriverNotice({ type: 'success', message: t('settings.general.damengLegacyNodeCleared', 'Automatic Node.js runtime detection restored.') })
+    } catch (error) {
+      setDamengDriverNotice({ type: 'error', message: formatDamengSettingsError(error) })
+    } finally {
+      setDamengDriverBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    if (section !== 'security' || securityStatus) return
+    window.opsFlow.getConfigSecurityStatus()
+      .then(setSecurityStatus)
+      .catch((error) => setSecurityNotice({ scope: 'local', type: 'error', message: cleanConfigError(error) }))
+  }, [section, securityStatus])
+
+  const exportEncryptedConfig = async () => {
+    if (exportOptions.password.length < 8) {
+      setSecurityNotice({ scope: 'export', type: 'error', message: '加密密码至少需要 8 个字符。' })
+      return
+    }
+    if (exportOptions.password !== exportOptions.confirmPassword) {
+      setSecurityNotice({ scope: 'export', type: 'error', message: '两次输入的加密密码不一致。' })
+      return
+    }
+    setSecurityBusy('export')
+    setSecurityNotice(null)
+    const operationId = beginConfigOperation('export', 'preparing')
+    try {
+      const result = await window.opsFlow.exportEncryptedConfig({
+        operationId,
+        password: exportOptions.password,
+        includeCredentials: exportOptions.includeCredentials,
+        includeHistory: exportOptions.includeHistory
+      })
+      if (!result?.canceled) {
+        setSecurityNotice({ scope: 'export', type: 'success', message: `加密配置已导出：${result.path}` })
+        setExportOptions((current) => ({ ...current, password: '', confirmPassword: '' }))
+      } else {
+        setSecurityNotice({
+          scope: 'export',
+          type: 'info',
+          message: t('settings.security.exportCanceled', 'Export canceled. No configuration backup file was created.')
+        })
+      }
+    } catch (error) {
+      setSecurityNotice({ scope: 'export', type: 'error', message: failConfigOperation(error) })
+    } finally {
+      setSecurityBusy('')
+    }
+  }
+
+  const selectEncryptedConfig = async () => {
+    setSecurityNotice(null)
+    try {
+      const result = await window.opsFlow.selectEncryptedConfigFile()
+      if (result?.canceled) return
+      setImportFile(result)
+      setImportPassword('')
+      setImportPreview(null)
+      setConfigProgress((current) => current?.kind === 'export' ? current : null)
+    } catch (error) {
+      setSecurityNotice({ scope: 'import', type: 'error', message: cleanConfigError(error) })
+    }
+  }
+
+  const inspectEncryptedConfig = async () => {
+    if (!importFile?.path) {
+      setSecurityNotice({ scope: 'import', type: 'error', message: '请先选择加密配置文件。' })
+      return
+    }
+    if (importPassword.length < 8) {
+      setSecurityNotice({ scope: 'import', type: 'error', message: '请输入导出时设置的加密密码。' })
+      return
+    }
+    setSecurityBusy('preview')
+    setSecurityNotice(null)
+    const operationId = beginConfigOperation('preview', 'reading')
+    try {
+      const preview = await window.opsFlow.inspectEncryptedConfig({ operationId, path: importFile.path, password: importPassword })
+      setImportPreview(preview)
+      setImportPassword('')
+      setSecurityNotice({ scope: 'import', type: 'success', message: '解密成功。请核对下方内容数量后再覆盖导入。' })
+    } catch (error) {
+      setImportPreview(null)
+      setSecurityNotice({ scope: 'import', type: 'error', message: failConfigOperation(error) })
+    } finally {
+      setSecurityBusy('')
+    }
+  }
+
+  const applyEncryptedConfig = async () => {
+    if (!importPreview?.token) return
+    const confirmed = window.confirm('导入会覆盖当前服务器、数据库、Redis、工作流和其他设置。\n\n程序会先创建加密回滚备份。确定继续吗？')
+    if (!confirmed) return
+    setSecurityBusy('apply')
+    setSecurityNotice(null)
+    const operationId = beginConfigOperation('apply', 'validating')
+    try {
+      const result = await window.opsFlow.applyEncryptedConfig(importPreview.token, operationId)
+      setSecurityNotice({
+        scope: 'import',
+        type: 'success',
+        message: `${t('settings.security.importSucceeded', 'Configuration imported successfully. A pre-import rollback backup was created. The interface will reload shortly.')}\n${result.rollbackPath}`
+      })
+      window.setTimeout(() => window.location.reload(), 1800)
+    } catch (error) {
+      setSecurityNotice({ scope: 'import', type: 'error', message: failConfigOperation(error) })
+      setSecurityBusy('')
+    }
+  }
+
+  const navigation = [
+    ['general', t('settings.nav.general', 'General')],
+    ['security', t('settings.nav.security', 'Configuration security')],
+    ['quick', t('help.nav.quick', 'Quick start')],
+    ['features', t('help.nav.features', 'Feature overview')],
+    ['files', t('help.nav.files', 'Files & search')],
+    ['workflow', t('help.nav.workflow', 'Workflow & privilege')],
+    ['backup', t('help.nav.backup', 'Backup & recovery')],
+    ['data', t('help.nav.data', 'Data & transfers')],
+    ['safety', t('help.nav.safety', 'Safe operation')],
+    ['faq', t('help.nav.faq', 'FAQ')],
+    ['about', t('help.nav.about', 'About')]
+  ]
+
+  return (
+    <div className="modal-backdrop">
+      <section className="help-about-dialog" role="dialog" aria-modal="true" aria-label={t('settings.title', 'Settings')}>
+        <div className="dialog-title">
+          <div>
+            <strong>{t('settings.title', 'Settings')}</strong>
+            <span>{t('settings.description', 'Language, theme, help and product information.')}</span>
+          </div>
+          <button onClick={onClose} disabled={Boolean(securityBusy) || damengDriverBusy} aria-label={t('action.close', 'Close')}><X size={18} /></button>
+        </div>
+        <div className="help-dialog-layout">
+          <nav className="help-navigation" aria-label={t('settings.title', 'Settings')}>
+            {navigation.map(([key, label]) => (
+              <button
+                key={key}
+                className={section === key ? 'selected' : ''}
+                disabled={Boolean(securityBusy) || damengDriverBusy}
+                onClick={() => onSectionChange(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+          <main className="help-content">
+            {section === 'general' && (
+              <article>
+                <h2>{t('settings.general.title', 'General settings')}</h2>
+                <div className="settings-form">
+                  <label className="settings-row">
+                    <span>{t('settings.general.language', 'Interface language')}</span>
+                    <select value={language} onChange={(event) => onLanguageChange(event.target.value)}>
+                      {LANGUAGE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="settings-row">
+                    <span>{t('settings.general.theme', 'Theme')}</span>
+                    <select value={themeMode} onChange={(event) => onThemeChange(event.target.value)}>
+                      <option value="system">{t('settings.theme.system', 'Follow system')}</option>
+                      <option value="light">{t('settings.theme.light', 'Light')}</option>
+                      <option value="dark">{t('settings.theme.dark', 'Dark')}</option>
+                    </select>
+                  </label>
+                </div>
+                <section className="config-security-panel dameng-driver-panel">
+                  <div className="config-security-heading">
+                    <div>
+                      <strong>{t('settings.general.damengTitle', 'Dameng database')}</strong>
+                      <p>{t('settings.general.damengHint', 'Configure this only when using Dameng databases.')}</p>
+                    </div>
+                    <span className={damengDriverStatus === null ? 'security-status checking' : damengDriverStatus.configured ? 'security-status enabled' : 'security-status unavailable'}>
+                      <Database size={15} />
+                      {damengDriverStatus === null
+                        ? t('common.loading', 'Loading')
+                        : damengDriverStatus.configured
+                        ? t('settings.general.damengConfigured', 'Configured')
+                        : t('settings.general.damengNotConfigured', 'Not configured')}
+                    </span>
+                  </div>
+                  {damengDriverStatus?.configured ? (
+                    <div className="dameng-driver-summary">
+                      <span className="dameng-driver-ready"><CheckCircle2 size={17} /></span>
+                      <div>
+                        <strong>{t('settings.general.damengDriverReady', 'Driver ready')}</strong>
+                        <small>dmdb {damengDriverStatus.version}</small>
+                      </div>
+                      <button type="button" onClick={selectDamengDriver} disabled={damengDriverBusy}>
+                        {t('settings.general.damengReplace', 'Change')}
+                      </button>
+                    </div>
+                  ) : damengDriverStatus?.path ? (
+                    <div className="dialog-notice error">{damengDriverStatus.error || damengDriverStatus.path}</div>
+                  ) : (
+                    <button type="button" className="dameng-primary-action" onClick={selectDamengDriver} disabled={damengDriverBusy}>
+                      <Folder size={16} />
+                      {damengDriverBusy ? t('common.loading', 'Loading') : t('settings.general.damengSelect', 'Select driver folder')}
+                    </button>
+                  )}
+                  <div className={`dameng-legacy-settings ${damengDriverStatus?.legacyMode ? 'enabled' : ''}`}>
+                    <label className="dameng-legacy-toggle">
+                      <span>
+                        <strong>{t('settings.general.damengLegacyTitle', 'Support older Dameng servers')}</strong>
+                        <small>{t('settings.general.damengLegacyHint', 'Enable only when the connection reports an old cipher or Unknown cipher.')}</small>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(damengDriverStatus?.legacyMode)}
+                        onChange={(event) => setDamengLegacyMode(event.target.checked)}
+                        disabled={damengDriverBusy || (!damengDriverStatus?.configured && !damengDriverStatus?.legacyMode)}
+                      />
+                    </label>
+                    {damengDriverStatus?.legacyMode && (
+                      <span className={damengDriverStatus?.legacyRuntime?.compatible ? 'dameng-compat-ready' : 'dameng-compat-unavailable'}>
+                        {damengDriverStatus?.legacyRuntime?.compatible
+                          ? t('settings.general.damengLegacyReady', 'Compatibility environment ready')
+                          : t('settings.general.damengLegacyNeedsSetup', 'Compatibility environment needs setup')}
+                      </span>
+                    )}
+                  </div>
+                  {damengDriverNotice && <ConfigSecurityNotice notice={damengDriverNotice} />}
+                  {damengDriverStatus?.configured && (
+                    <details className="dameng-advanced-settings">
+                      <summary>{t('settings.general.damengAdvanced', 'Advanced settings and diagnostics')}</summary>
+                      <div className="dameng-advanced-content">
+                        <label>
+                          <span>{t('settings.general.damengDriverPath', 'Driver folder')}</span>
+                          <code title={damengDriverStatus.path}>{damengDriverStatus.path}</code>
+                        </label>
+                        <label>
+                          <span>{t('settings.general.damengLegacyRuntime', 'Compatibility runtime')}</span>
+                          <code title={damengDriverStatus?.legacyRuntime?.path || ''}>
+                            {damengDriverStatus?.legacyRuntime?.compatible
+                              ? `${damengDriverStatus.legacyRuntime.version} · ${damengDriverStatus.legacyRuntime.path}`
+                              : t('settings.general.damengLegacyRuntimeMissing', 'Unavailable')}
+                          </code>
+                        </label>
+                        <div className="dameng-runtime-actions">
+                          <button type="button" onClick={selectDamengLegacyNode} disabled={damengDriverBusy}>
+                            <Folder size={15} />{t('settings.general.damengLegacySelectNode', 'Select compatibility runtime')}
+                          </button>
+                          {damengDriverStatus?.legacyRuntime?.source === 'selected' && (
+                            <button type="button" onClick={clearDamengLegacyNode} disabled={damengDriverBusy}>
+                              <RotateCcw size={15} />{t('settings.general.damengLegacyClearNode', 'Use auto-detection')}
+                            </button>
+                          )}
+                          <button type="button" className="danger-button" onClick={clearDamengDriver} disabled={damengDriverBusy}>
+                            <X size={15} />{t('settings.general.damengClear', 'Stop using')}
+                          </button>
+                        </div>
+                        <small>{t('settings.general.damengLegacyWarning', 'Compatibility affects only Dameng connections and runs in an isolated process. Turn it off after the database server is upgraded.')}</small>
+                        <small>{t('settings.general.damengSecurity', 'Use only an official dmdb package obtained lawfully. The driver and local paths are not exported with configuration backups.')}</small>
+                      </div>
+                    </details>
+                  )}
+                </section>
+              </article>
+            )}
+            {section === 'security' && (
+              <article className="config-security-settings">
+                <h2>{t('settings.security.title', 'Configuration security and migration')}</h2>
+                <p className="help-lead">{t('settings.security.intro', 'Connection passwords and private keys are protected by the operating system. Use a separately password-protected encrypted backup when moving configuration to another computer.')}</p>
+
+                <section className="config-security-panel local-protection-panel">
+                  <div className="config-security-heading">
+                    <div>
+                      <strong>{t('settings.security.localTitle', 'Local credential protection')}</strong>
+                      <p>{t('settings.security.localHint', 'Windows protects credentials for the current signed-in user. Copying the raw configuration file to another computer will not make it decryptable; use encrypted export below.')}</p>
+                    </div>
+                    <span className={securityStatus === null ? 'security-status checking' : securityStatus.localProtectionAvailable ? 'security-status enabled' : 'security-status unavailable'}>
+                      <ShieldCheck size={15} />
+                      {securityStatus === null
+                        ? '检测中…'
+                        : securityStatus.localProtectionAvailable
+                        ? t('settings.security.localEnabled', 'Enabled')
+                        : t('settings.security.localUnavailable', 'Unavailable')}
+                    </span>
+                  </div>
+                  <small>{securityStatus?.backupFormat || 'scrypt + AES-256-GCM'}</small>
+                  {securityNotice?.scope === 'local' && <ConfigSecurityNotice notice={securityNotice} />}
+                </section>
+
+                <section className="config-security-panel">
+                  <div className="config-security-heading">
+                    <div>
+                      <strong>{t('settings.security.exportTitle', 'Export encrypted configuration')}</strong>
+                      <p>{t('settings.security.exportHint', 'Creates an .opsflow-backup file. Use a password of at least 8 characters and share it separately through a secure channel.')}</p>
+                    </div>
+                    <Download size={20} />
+                  </div>
+                  <div className="config-security-passwords">
+                    <label>
+                      <span>{t('settings.security.password', 'Encryption password')}</span>
+                      <input
+                        type="password"
+                        value={exportOptions.password}
+                        onChange={(event) => setExportOptions((current) => ({ ...current, password: event.target.value }))}
+                        autoComplete="new-password"
+                        disabled={Boolean(securityBusy)}
+                      />
+                    </label>
+                    <label>
+                      <span>{t('settings.security.confirmPassword', 'Confirm password')}</span>
+                      <input
+                        type="password"
+                        value={exportOptions.confirmPassword}
+                        onChange={(event) => setExportOptions((current) => ({ ...current, confirmPassword: event.target.value }))}
+                        autoComplete="new-password"
+                        disabled={Boolean(securityBusy)}
+                      />
+                    </label>
+                  </div>
+                  <label className="config-security-check">
+                    <input
+                      type="checkbox"
+                      checked={exportOptions.includeCredentials}
+                      onChange={(event) => setExportOptions((current) => ({ ...current, includeCredentials: event.target.checked }))}
+                      disabled={Boolean(securityBusy)}
+                    />
+                    <span>
+                      <strong>{t('settings.security.includeCredentials', 'Include connection passwords and private keys')}</strong>
+                      <small>{t('settings.security.includeCredentialsHint', 'Off by default. Enabling it lets the new computer use connections immediately, so protect the backup password carefully.')}</small>
+                    </span>
+                  </label>
+                  <label className="config-security-check">
+                    <input
+                      type="checkbox"
+                      checked={exportOptions.includeHistory}
+                      onChange={(event) => setExportOptions((current) => ({ ...current, includeHistory: event.target.checked }))}
+                      disabled={Boolean(securityBusy)}
+                    />
+                    <span><strong>{t('settings.security.includeHistory', 'Include transfer history')}</strong></span>
+                  </label>
+                  {configProgress?.kind === 'export' && (
+                    <ConfigOperationProgress progress={configProgress} elapsed={configElapsed} t={t} />
+                  )}
+                  {securityNotice?.scope === 'export' && <ConfigSecurityNotice notice={securityNotice} />}
+                  <div className="config-security-actions">
+                    <button type="button" className="primary-button" disabled={Boolean(securityBusy)} onClick={exportEncryptedConfig}>
+                      <Download size={16} />
+                      {securityBusy === 'export' ? '正在加密…' : t('settings.security.export', 'Choose location and export')}
+                    </button>
+                  </div>
+                </section>
+
+                <section className="config-security-panel">
+                  <div className="config-security-heading">
+                    <div>
+                      <strong>{t('settings.security.importTitle', 'Decrypt and import')}</strong>
+                      <p>{t('settings.security.importHint', 'Decrypt a preview first, then confirm replacement. An encrypted rollback backup using the same password is created before import.')}</p>
+                    </div>
+                    <Upload size={20} />
+                  </div>
+                  <div className="config-import-file-row">
+                    <button type="button" onClick={selectEncryptedConfig} disabled={Boolean(securityBusy)}>
+                      <Folder size={16} />{t('settings.security.selectFile', 'Select encrypted configuration')}
+                    </button>
+                    <span title={importFile?.path || ''}>{importFile?.name || t('settings.security.noFile', 'No file selected')}</span>
+                  </div>
+                  <label className="config-import-password">
+                    <span>{t('settings.security.password', 'Encryption password')}</span>
+                    <input
+                      type="password"
+                      value={importPassword}
+                      onChange={(event) => {
+                        setImportPassword(event.target.value)
+                        setImportPreview(null)
+                        setSecurityNotice((current) => current?.scope === 'import' ? null : current)
+                        setConfigProgress((current) => ['preview', 'apply'].includes(current?.kind) ? null : current)
+                      }}
+                      autoComplete="current-password"
+                      disabled={!importFile || Boolean(securityBusy)}
+                    />
+                  </label>
+                  {['preview', 'apply'].includes(configProgress?.kind) && (
+                    <ConfigOperationProgress progress={configProgress} elapsed={configElapsed} t={t} />
+                  )}
+                  {securityNotice?.scope === 'import' && <ConfigSecurityNotice notice={securityNotice} />}
+                  <div className="config-security-actions">
+                    <button type="button" disabled={Boolean(securityBusy) || !importFile} onClick={inspectEncryptedConfig}>
+                      <Eye size={16} />
+                      {securityBusy === 'preview' ? '正在解密…' : t('settings.security.preview', 'Decrypt preview')}
+                    </button>
+                  </div>
+
+                  {importPreview && (
+                    <div className="config-import-preview">
+                      <div className="config-import-meta">
+                        <strong>{importPreview.sourceName}</strong>
+                        <span>{importPreview.createdAt ? new Date(importPreview.createdAt).toLocaleString() : '-'}</span>
+                        <span>{importPreview.summary?.hasCredentials
+                          ? t('settings.security.credentialsIncluded', 'Credentials included')
+                          : t('settings.security.credentialsExcluded', 'Credentials excluded')}</span>
+                      </div>
+                      <div className="config-import-counts">
+                        <span><strong>{importPreview.summary?.servers || 0}</strong>{t('settings.security.servers', 'Servers')}</span>
+                        <span><strong>{importPreview.summary?.databases || 0}</strong>{t('settings.security.databases', 'Databases')}</span>
+                        <span><strong>{importPreview.summary?.redisStores || 0}</strong>{t('settings.security.redis', 'Redis')}</span>
+                        <span><strong>{importPreview.summary?.workflows || 0}</strong>{t('settings.security.workflows', 'Workflows')}</span>
+                        <span><strong>{importPreview.summary?.transferTasks || 0}</strong>{t('settings.security.transferTasks', 'Transfers')}</span>
+                      </div>
+                      <div className="config-security-actions danger-zone">
+                        <button type="button" className="danger-button" disabled={Boolean(securityBusy)} onClick={applyEncryptedConfig}>
+                          <RotateCcw size={16} />
+                          {securityBusy === 'apply' ? '正在导入…' : t('settings.security.apply', 'Replace configuration and reload')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              </article>
+            )}
+            {section === 'quick' && (
+              <article>
+                <h2>{t('help.quick.title', 'Quick start')}</h2>
+                <p className="help-lead">{t('help.quick.intro', 'Test the connection first, then follow: select a server, connect, run a feature, and verify the result.')}</p>
+                <div className="help-warning">
+                  <strong>{t('help.support.title', 'Current support scope')}</strong>
+                  <span>{t('help.support.text', 'The desktop client supports Windows. SSH, SFTP, commands, deployment, services, runtimes, backup/recovery and host management currently target remote Linux servers. Databases and Redis can be reached directly or through a Linux SSH connection. Full Windows Server deployment and service management are not yet supported.')}</span>
+                </div>
+                <div className="help-step-list">
+                  <HelpTextBlock title={t('help.quick.server.title', '1. Add a server')} text={t('help.quick.server.text', 'Click Add server in the left sidebar, enter the address, SSH port, username and authentication details. Test the connection before saving.')} />
+                  <HelpTextBlock title={t('help.quick.connect.title', '2. Connect')} text={t('help.quick.connect.text', 'Select a server on the left and click Connect. Basic information, remote files and all feature modules load after the connection succeeds.')} />
+                  <HelpTextBlock title={t('help.quick.module.title', '3. Choose a feature')} text={t('help.quick.module.text', 'Use Command for ad hoc tasks; Database and Redis for data maintenance; Workflow for repeatable tasks; Audit for checks; and Deployer or Host Management for system-level work.')} />
+                  <HelpTextBlock title={t('help.quick.verify.title', '4. Verify the result')} text={t('help.quick.verify.text', 'Review page results, tool logs and server output. For deletion, restart, deployment or firewall changes, verify the target server and parameters again.')} />
+                </div>
+              </article>
+            )}
+            {section === 'features' && (
+              <article>
+                <h2>{t('help.features.title', 'Feature guide')}</h2>
+                <p className="help-lead">{t('help.features.intro', 'Features follow a daily operations flow: connect to a server, then choose command, file, data, automation, audit, deployment or host-management tools. Each module shows the current state before actions that change the server.')}</p>
+                <div className="help-card-grid">
+                  <HelpTextBlock title={t('help.features.terminal.title', 'Command terminal')} text={t('help.features.terminal.text', 'Use the interactive SSH terminal for troubleshooting, one-off commands and live output. The terminal follows the selected server and prompts you to reconnect after disconnection.')} />
+                  <HelpTextBlock title={t('help.features.files.title', 'Remote files')} text={t('help.features.files.text', 'Browse SFTP directories, go to the parent folder, refresh, upload, download, edit, rename or delete files. Sort by file name or filter names in real time; clearing the search restores the full list.')} />
+                  <HelpTextBlock title={t('help.features.database.title', 'Database management')} text={t('help.features.database.text', 'Manage database connections, inspect tables, fields and data, run SQL, and export query results. Independent table and field searches make large schemas easier to navigate.')} />
+                  <HelpTextBlock title={t('help.features.redis.title', 'Redis management')} text={t('help.features.redis.text', 'Manage Redis connections, load and inspect keys, and delete confirmed keys. Search and refresh help investigate cache, queue and temporary state data.')} />
+                  <HelpTextBlock title={t('help.features.workflow.title', 'Workflow')} text={t('help.features.workflow.text', 'Combine command, file, database, Redis and scheduled-task steps into reusable flows for inspections, release checks and repeated maintenance, with a result for every step.')} />
+                  <HelpTextBlock title={t('help.features.audit.title', 'Security audit')} text={t('help.features.audit.text', 'Generate reports from check-oriented workflows and review results by server or step to find issues in configuration, permissions, ports, services and runtimes.')} />
+                  <HelpTextBlock title={t('help.features.deployer.title', 'Deployer')} text={t('help.features.deployer.text', 'Detect runtimes and install software from an online source, download URL or offline package. Review the version, path, ports, checksum and generated command before execution.')} />
+                  <HelpTextBlock title={t('help.features.backup.title', 'Backup & recovery')} text={t('help.features.backup.text', 'Discover existing backup tasks from cron and systemd timers, classify database, service and file-resource backups, then configure targets, scan artifacts, verify content and perform confirmed restoration.')} />
+                  <HelpTextBlock title={t('help.features.host.title', 'Host Management')} text={t('help.features.host.text', 'Inspect runtimes, manage system services and user cron entries, and detect firewall controllers, allowed rules, listening ports and persistence status. Risky changes depend on permissions and rule detection.')} />
+                  <HelpTextBlock title={t('help.features.transfer.title', 'Transfer center')} text={t('help.features.transfer.text', 'Review upload and download progress, results and errors in one place, even after switching features or servers.')} />
+                </div>
+              </article>
+            )}
+            {section === 'files' && (
+              <article>
+                <h2>{t('help.files.title', 'Remote files, search and privileged access')}</h2>
+                <p className="help-lead">{t('help.files.intro', 'Remote files use SFTP as the current SSH user by default. Search scope and permission scope differ, so confirm the current path, privileged state, and whether results are complete.')}</p>
+                <div className="help-step-list">
+                  <HelpTextBlock title={t('help.files.browse.title', 'Browse, create, copy and edit files')} text={t('help.files.browse.text', 'Open directories and use the toolbar to create a folder or text file, upload, download, delete, refresh, or enable privileged access. Existing names are never overwritten, and a new file opens directly in the editor. A normal list copies the displayed file name; global results copy the full path. The editor supports Ctrl+F, highlighted matches, previous/next, replace one/all, and a timestamped backup before saving.')} />
+                  <HelpTextBlock title={t('help.files.paths.title', 'Recent and favorite paths')} text={t('help.files.paths.text', 'The clock button in the path bar shows recently opened and favorite directories for the current server. Recent paths are de-duplicated and limited to 20. Use the star to add or remove a favorite; clearing recent paths does not remove favorites.')} />
+                  <HelpTextBlock title={t('help.files.commands.title', 'Saved commands')} text={t('help.files.commands.text', 'Saved commands can include a name, command body, tags, notes and either global or current-server scope. Search and click an item to paste it into the active SSH command line. No Enter key is sent, so review the command and press Enter yourself.')} />
+                  <HelpTextBlock title={t('help.files.localSearch.title', 'Filter the current directory')} text={t('help.files.localSearch.text', 'Open the name search and enter text to filter only items already loaded in the current directory. Clear the field, close search, or press Esc to restore the complete current list.')} />
+                  <HelpTextBlock title={t('help.files.globalSearch.title', 'Global file-name search')} text={t('help.files.globalSearch.text', 'Enter at least two characters and click Global to recursively match names from the server root. Results use pages of 10, retain at most 500 entries, and stop after 25 seconds while preserving results found so far. Close global results to return to the original directory.')} />
+                  <HelpTextBlock title={t('help.files.searchPermission.title', 'Search results and directory permissions')} text={t('help.files.searchPermission.text', 'Global search can enter only directories readable by the active identity. If some paths are denied, results are incomplete. Enable privileged access and search again when appropriate, but sudo/su policy, mounts and server security still define the final scope. Search never changes files.')} />
+                  <HelpTextBlock title={t('help.files.privilege.title', 'Open with administrator privileges')} text={t('help.files.privilege.text', 'Use the shield button or Open as administrator from a permission warning, then choose auto detect, sudo or su. sudo uses the current SSH user password; su uses the root password. Privileged mode does not chmod or chown the target directory and can be exited from its status badge.')} />
+                  <HelpTextBlock title={t('help.files.transfer.title', 'Cancel uploads and downloads')} text={t('help.files.transfer.text', 'Open Transfers and use the stop button on a running upload or download. Canceling a download removes the incomplete local file. Canceling an upload stops its SFTP session and attempts to remove the current remote partial file; files already completed in a directory upload remain in place.')} />
+                </div>
+              </article>
+            )}
+            {section === 'workflow' && (
+              <article>
+                <h2>{t('help.workflow.title', 'Workflow execution, privileges and rollback')}</h2>
+                <p className="help-lead">{t('help.workflow.intro', 'Workflows save repeated operations as reusable flows. Before running, confirm the selected workflow, target servers, server roles, run order and privilege identity.')}</p>
+                <div className="help-step-list">
+                  <HelpTextBlock title={t('help.workflow.select.title', 'Select, copy and edit workflows')} text={t('help.workflow.select.text', 'The selected item in the left list is the edit and run target. A copy is independent and can be renamed and edited immediately. Command nodes run multiline commands in order. App, Script, Database and Nginx scopes run only on servers with matching roles; other servers are skipped.')} />
+                  <HelpTextBlock title={t('help.workflow.create.title', 'Create workflows and add nodes')} text={t('help.workflow.create.text', 'Use Add to start from a blank flow or template, then Edit to open the node editor. Drag nodes from the left palette onto the canvas, select a node to configure it, and connect nodes in execution order. Required values and invalid paths are checked before saving.')} />
+                  <HelpTextBlock title={t('help.workflow.nodes.title', 'Node types and purposes')} text={t('help.workflow.nodes.text', 'Flow nodes provide Start, End and Output format. File nodes upload or download. Connectors cover Database and Redis. Executors include Command, HTTP request, Cron, Dependency check and custom Rollback. Release safety provides Create release backup and Restore release backup.')} />
+                  <HelpTextBlock title={t('help.workflow.nodeConfig.title', 'Node parameters, scope and execution policy')} text={t('help.workflow.nodeConfig.text', 'File nodes require local and absolute remote paths; Database and Redis nodes require saved connections; Command runs one command per line. App, Script, Database and Nginx scopes match server roles, while parallel, rolling and batch policies control progress across matched servers.')} />
+                  <HelpTextBlock title={t('help.workflow.identity.title', 'Run as auto, current user, sudo or su')} text={t('help.workflow.identity.text', 'Auto detect first uses the current SSH identity and applies a verified privilege method when a node needs system access. Current SSH user never elevates. sudo uses the SSH user password and su uses the root password. A server may disable direct root SSH while still allowing sudo or su.')} />
+                  <HelpTextBlock title={t('help.workflow.password.title', 'Privilege password lifetime')} text={t('help.workflow.password.text', 'Passwords stay only in application-process memory and are not written to server records, workflows or persistent local storage. The same server, SSH user and privilege method can reuse a verified credential across Remote Files, Workflow, Deployer and Host Management. Exiting the app clears it.')} />
+                  <HelpTextBlock title={t('help.workflow.order.title', 'Run order and concurrency')} text={t('help.workflow.order.text', 'By server completes the whole flow on one server at a time. By step connects targets first and advances only after matching servers finish the current node. Parallel mode obeys the concurrency limit; rolling mode runs one server at a time. Failure policy can continue and summarize or stop at the first failure.')} />
+                  <HelpTextBlock title={t('help.workflow.logs.title', 'Command progress and unified status')} text={t('help.workflow.logs.text', 'Command nodes report each command, stdout, stderr and exit result. Run details can be viewed by server or by step, while upload, download and related tasks also appear in Transfers. Long silence usually means the last reported command is still running.')} />
+                  <HelpTextBlock title={t('help.workflow.cancel.title', 'Cancel a workflow run')} text={t('help.workflow.cancel.text', 'Cancel stops queued servers and steps and attempts to interrupt the current SSH command. Commands already completed are not undone. Cancellation applies to the whole run, not only the step selected in the log view.')} />
+                  <HelpTextBlock title={t('help.workflow.rollback.title', 'Release backup and automatic restore')} text={t('help.workflow.rollback.text', 'Create release backup generates a verified archive bound to the current release ID. Restore release backup uses that exact archive after a failure or an approved stop-and-restore action; it never guesses the latest historical file. Custom rollback nodes remain available for other recovery commands.')} />
+                </div>
+              </article>
+            )}
+            {section === 'backup' && (
+              <article>
+                <h2>{t('help.backup.title', 'Backup & recovery')}</h2>
+                <p className="help-lead">{t('help.backup.intro', 'This module discovers backup jobs and artifacts that already exist on a server, then restores only after the target is configured, the artifact is verified, and the operator explicitly confirms the action. It does not replace a backup platform or guess ambiguous targets.')}</p>
+                <div className="help-step-list">
+                  <HelpTextBlock title={t('help.backup.scan.title', '1. Scan backup tasks')} text={t('help.backup.scan.text', 'Connect the server, select scan privilege, and choose Scan tasks. The app reads user crontab, /etc/cron.d and systemd timers plus associated commands or scripts, then classifies database, business-service, configuration and file-resource backups. Low-confidence matches require manual review.')} />
+                  <HelpTextBlock title={t('help.backup.target.title', '2. Configure the restore target')} text={t('help.backup.target.text', 'Database tasks require a compatible saved database connection. File tasks can restore to one explicit file or directory, or apply archive-relative paths under an absolute root. Single-target mode rejects the server root. An optional related service can be stopped before restoration and started afterward.')} />
+                  <HelpTextBlock title={t('help.backup.artifact.title', '3. Scan, verify and inspect artifacts')} text={t('help.backup.artifact.text', 'Scan backup searches for actual files produced by the selected task. Verify checks existence, archive format, path safety, checksum and readable content. Archive entries can be inspected before restoration. Do not restore an artifact that fails verification or cannot be safely identified.')} />
+                  <HelpTextBlock title={t('help.backup.restore.title', '4. Perform restoration')} text={t('help.backup.restore.text', 'Review the artifact, target, database connection and related service, then type RESTORE. File restoration attempts to stop the related service, create a pre-restore snapshot or copy, stage replacement, and restart the service. Progress and cancellation appear in Transfers.')} />
+                  <HelpTextBlock title={t('help.backup.database.title', 'Database recovery boundaries')} text={t('help.backup.database.text', 'Database restoration depends on backup format, client availability, connection privilege and native transaction behavior. Imports may replace current objects and data, and some DDL or custom formats cannot be completely rolled back. Create a database-native backup and schedule a maintenance window first.')} />
+                  <HelpTextBlock title={t('help.backup.privilege.title', 'Scan privilege and credentials')} text={t('help.backup.privilege.text', 'Choose auto detect, current SSH user, sudo or su. Normal access may not read system schedules or backup directories. Verified elevation passwords are reused only in application-process memory and are cleared when the app exits.')} />
+                </div>
+              </article>
+            )}
+            {section === 'data' && (
+              <article>
+                <h2>{t('help.data.title', 'Databases, SQL files and unified status')}</h2>
+                <p className="help-lead">{t('help.data.intro', 'Database and transfer tasks publish progress, success, failure and cancellation in Transfers. Important data changes still require the database own backup and restore strategy.')}</p>
+                <div className="help-step-list">
+                  <HelpTextBlock title={t('help.data.database.title', 'Database objects and SQL editor')} text={t('help.data.database.text', 'Connections can use the current server SSH tunnel or connect directly. Saved connections can be copied into a new connection to reuse transport, endpoint and account details. In SSH mode, TCP host and port are reached from the remote server’s perspective; MySQL can alternatively use an instance-specific Unix Socket path. Table and column names support fuzzy filtering, and SQL can be reviewed before execution.')} />
+                  <HelpTextBlock title={t('help.data.logicalBackup.title', '1. Export a database logical backup')} text={t('help.data.logicalBackup.text', 'Select a database connection, choose Backup, then select scope, content and plain or GZIP-compressed SQL output. Choose a local path to start. Progress, cancellation and results appear in the dialog and Transfers.')} />
+                  <HelpTextBlock title={t('help.data.sqlFile.title', '2. Import an SQL or GZIP backup')} text={t('help.data.sqlFile.text', 'Select the target database first, preferably an empty database or schema for a full restore. Choose Run script and select an .sql or .sql.gz file. Small scripts can be reviewed in the editor; scripts larger than 10 MB are scanned and executed as streams without an editor size limit.')} />
+                  <HelpTextBlock title={t('help.data.sqlRollback.title', '3. Rollback on error and Stop & rollback')} text={t('help.data.sqlRollback.text', 'Rollback on error/stop is enabled by default for a loaded SQL file. A failed batch rolls back the transaction. Stop & rollback waits for the current batch to finish, then rolls back at a safe boundary. Some MySQL, Oracle and DM DDL implicitly commits, and administration statements may be non-transactional, so a complete rollback cannot always be guaranteed.')} />
+                  <HelpTextBlock title={t('help.data.redis.title', '4. Back up and restore a Redis logical database')} text={t('help.data.redis.text', 'Back up Redis DUMP payloads and expiration times to .opsredis, or restore a verified backup into the selected database with skip, replace, or stop-on-conflict behavior.')} />
+                  <HelpTextBlock title={t('help.data.status.title', '5. Track progress in Transfers')} text={t('help.data.status.text', 'Transfers keeps recent uploads, downloads, saves, deletes, deployments and SQL-file tasks. When everything succeeds or is intentionally canceled, the panel closes automatically. Errors keep it open with the failure message until you close or clear it.')} />
+                </div>
+              </article>
+            )}
+            {section === 'safety' && (
+              <article>
+                <h2>{t('help.safety.title', 'High-risk operation guide')}</h2>
+                <div className="help-warning">{t('help.safety.warning', 'Before connecting to production, confirm that a usable backup and an alternative login path exist. Do not delete, stop, uninstall or alter firewall rules without understanding the impact.')}</div>
+                <div className="help-step-list">
+                  <HelpTextBlock title={t('help.safety.permission.title', 'Permissions and read-only states')} text={t('help.safety.permission.text', 'Normal access can inspect only part of the system. Choose sudo or su and enter valid credentials to change services, cron or firewall settings. Complex rules that cannot be identified safely remain read-only.')} />
+                  <HelpTextBlock title={t('help.safety.credentials.title', 'Credentials and in-memory reuse')} text={t('help.safety.credentials.text', 'sudo uses the current SSH user password; su uses the root password. Verified credentials are cached only for this app process and isolated by server, SSH user and privilege mode. Never embed plaintext passwords in workflow commands, notes or files.')} />
+                  <HelpTextBlock title={t('help.safety.firewall.title', 'Firewall and ports')} text={t('help.safety.firewall.text', 'Listening means a process is bound to a port; allowed means a firewall rule permits traffic. They are different states. The current SSH port is protected, and rules are backed up to /var/lib/ops-flow/firewall-backups/ before changes.')} />
+                  <HelpTextBlock title={t('help.safety.controller.title', 'Firewall controllers')} text={t('help.safety.controller.text', 'Avoid managing firewalld, UFW, nftables and iptables at the same time. If a controller conflict, insufficient permission, duplicate rule or complex iptables condition is detected, verify it manually on the server first.')} />
+                  <HelpTextBlock title={t('help.safety.data.title', 'Data and system changes')} text={t('help.safety.data.text', 'Deleting tables, columns or Redis keys, running SQL, stopping services, editing cron, and installing or uninstalling software may be irreversible. Confirm the server, database, object, command and rollback path first.')} />
+                  <HelpTextBlock title={t('help.safety.rollback.title', 'Rollback boundaries')} text={t('help.safety.rollback.text', 'Workflow rollback requires configured rollback nodes, SQL rollback requires a database transaction, and file recovery requires a backup copy. None is a machine snapshot. Implicit DDL commits, completed remote commands, external side effects and network loss may prevent automatic recovery.')} />
+                  <HelpTextBlock title={t('help.safety.configMigration.title', 'Encrypted configuration export and migration')} text={t('help.safety.configMigration.text', 'Configuration security can export servers, databases, Redis, workflows, backup targets and saved commands as an encrypted file. Export options control credentials and history. Import first decrypts a preview, then replaces local configuration and creates an encrypted pre-import rollback backup using the same password. Transfer the file and password through separate channels.')} />
+                </div>
+              </article>
+            )}
+            {section === 'faq' && (
+              <article>
+                <h2>{t('help.faq.title', 'Frequently asked questions')}</h2>
+                <div className="help-faq-list">
+                  <HelpFaq question={t('help.faq.readonly.q', 'Why is an action read-only or disabled?')} answer={t('help.faq.readonly.a', 'Typical causes are no server connection, insufficient permissions, an unknown or conflicting firewall controller, or a rule with complex source, state or multi-port conditions.')} />
+                  <HelpFaq question={t('help.faq.ports.q', 'Why do allowed ports and listening ports differ?')} answer={t('help.faq.ports.a', 'Firewall rules and process listeners are independent. An allowed port without a listener has no service; a listener without an allowed rule may still be blocked from external access.')} />
+                  <HelpFaq question={t('help.faq.inspect.q', 'Why is inspection data empty or permission required?')} answer={t('help.faq.inspect.a', 'Connect the server first, choose an appropriate service privilege, and inspect again. Some distributions may also lack a command required by a particular check.')} />
+                  <HelpFaq question={t('help.faq.search.q', 'What is the difference between current-directory and global search?')} answer={t('help.faq.search.a', 'Current-directory search filters only the loaded list. Global search recursively scans from the root, retains up to 500 results, and shows 10 per page. Closing either search restores the original list, and neither changes files.')} />
+                  <HelpFaq question={t('help.faq.globalPermission.q', 'Why does global search say results may be incomplete?')} answer={t('help.faq.globalPermission.a', 'The search identity cannot enter some directories. Privileged search often expands coverage, but sudoers, SELinux, mount options and server policy can still limit access. Do not treat results as a complete inventory while permission errors are reported.')} />
+                  <HelpFaq question={t('help.faq.privilegePassword.q', 'Which password does sudo or su use, and why am I not always asked again?')} answer={t('help.faq.privilegePassword.a', 'sudo normally uses the current SSH user password; su uses the root password. A verified credential is reused in memory for the same server, SSH user and privilege method during this app session, then cleared when the app exits.')} />
+                  <HelpFaq question={t('help.faq.workflowCancel.q', 'Does canceling a workflow undo completed steps?')} answer={t('help.faq.workflowCancel.a', 'A normal cancellation only stops later steps. When Auto rollback and restore-on-stop are enabled, the current command is interrupted first and restore nodes then run on servers that successfully created a backup for this release.')} />
+                  <HelpFaq question={t('help.faq.sqlRollback.q', 'Why can schema changes remain after SQL reports a rollback?')} answer={t('help.faq.sqlRollback.a', 'Some databases implicitly commit CREATE, ALTER, DROP or TRUNCATE, and some administration statements are non-transactional. The app warns about recognized risks but cannot override database transaction rules.')} />
+                  <HelpFaq question={t('help.faq.transferCancel.q', 'Can canceling an upload or download leave a file behind?')} answer={t('help.faq.transferCancel.a', 'Incomplete local downloads are removed and the current remote upload residue is cleaned up when possible. Completed files in a directory upload remain. If the network was already lost, reconnect and inspect the destination.')} />
+                  <HelpFaq question={t('help.faq.dameng.q', 'Why must the Dameng database driver be selected separately?')} answer={t('help.faq.dameng.a', 'The official dmdb driver uses a vendor license, so Ops Flow does not bundle it in the installer or source repository. Install the official package yourself, then select its directory under Settings → General → Dameng database driver. This local path is never exported or imported with encrypted configuration.')} />
+                </div>
+              </article>
+            )}
+            {section === 'about' && (
+              <article className="help-about-content">
+                <div className="help-product-mark"><Boxes size={26} /></div>
+                <h2>{t('help.about.title', 'About Ops Flow Plus')}</h2>
+                <p className="help-lead">{t('help.about.summary', 'A Windows desktop tool primarily for SSH, SFTP, databases, Redis, workflows and operations on remote Linux servers.')}</p>
+                <dl className="help-product-details">
+                  <div><dt>{t('help.about.product', 'Product')}</dt><dd>{PRODUCT_NAME}</dd></div>
+                  <div><dt>{t('help.about.version', 'Version')}</dt><dd>{productVersion || '-'}</dd></div>
+                  <div><dt>{t('help.about.author', 'Author')}</dt><dd>{PRODUCT_AUTHOR}</dd></div>
+                  <div><dt>{t('help.about.email', 'Contact email')}</dt><dd><a href={`mailto:${PRODUCT_EMAIL}`}>{PRODUCT_EMAIL}</a></dd></div>
+                  <div>
+                    <dt>{t('help.about.source', 'Source code')}</dt>
+                    <dd>
+                      <a
+                        href={PRODUCT_SOURCE_URL}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          window.opsFlow?.openExternal?.(PRODUCT_SOURCE_URL)
+                        }}
+                      >
+                        github.com/qinyouxuan/ops-flow
+                      </a>
+                    </dd>
+                  </div>
+                </dl>
+                <div className="help-license">
+                  <strong>{t('help.about.copyright', 'Copyright © 2026 Qin Yu.')}</strong>
+                  <p>{t('help.about.license', 'The original source code of this software is released under the Mozilla Public License 2.0 (MPL-2.0). You may use, modify and distribute the source code under that license.')}</p>
+                  <small>{t('help.about.sourceNotice', 'Source code corresponding to an installer is available from the matching tag or release in the repository above. If it is unavailable, contact the maintainer using the email address above.')}</small>
+                  <small>{t('help.about.thirdParty', 'Third-party open-source components included in this software remain subject to their respective licenses.')}</small>
+                </div>
+              </article>
+            )}
+          </main>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function ConfigSecurityNotice({ notice }) {
+  const Icon = notice.type === 'success' ? CheckCircle2 : notice.type === 'error' ? X : ShieldCheck
+  return (
+    <div
+      className={`config-security-notice ${notice.type}`}
+      role={notice.type === 'error' ? 'alert' : 'status'}
+      aria-live="polite"
+    >
+      <Icon size={17} />
+      <span>{notice.message}</span>
+    </div>
+  )
+}
+
+function ConfigOperationProgress({ progress, elapsed, t }) {
+  const definitions = {
+    export: {
+      title: t('settings.security.progress.export', 'Exporting encrypted configuration'),
+      steps: [
+        ['preparing', t('settings.security.stage.preparing', 'Prepare configuration')],
+        ['selecting', t('settings.security.stage.selecting', 'Choose save location')],
+        ['encrypting', t('settings.security.stage.encrypting', 'Derive key and encrypt')],
+        ['writing', t('settings.security.stage.writingExport', 'Write backup file')],
+        ['completed', t('settings.security.progress.completed', 'Completed')]
+      ]
+    },
+    preview: {
+      title: t('settings.security.progress.preview', 'Decrypting and validating configuration'),
+      steps: [
+        ['reading', t('settings.security.stage.reading', 'Read backup file')],
+        ['decrypting', t('settings.security.stage.decrypting', 'Derive key and decrypt')],
+        ['validating', t('settings.security.stage.validatingPreview', 'Validate configuration')],
+        ['completed', t('settings.security.progress.completed', 'Completed')]
+      ]
+    },
+    apply: {
+      title: t('settings.security.progress.apply', 'Replacing configuration'),
+      steps: [
+        ['validating', t('settings.security.stage.validatingApply', 'Check import session')],
+        ['backing-up', t('settings.security.stage.backingUp', 'Create rollback backup')],
+        ['writing', t('settings.security.stage.writingImport', 'Write new configuration')],
+        ['completed', t('settings.security.progress.completed', 'Completed')]
+      ]
+    }
+  }
+  const definition = definitions[progress.kind] || definitions.export
+  const terminal = ['completed', 'error', 'canceled'].includes(progress.stage)
+  const effectiveStage = ['error', 'canceled'].includes(progress.stage) ? progress.previousStage : progress.stage
+  const activeIndex = Math.max(0, definition.steps.findIndex(([stage]) => stage === effectiveStage))
+  const elapsedSeconds = (elapsed / 1000).toFixed(elapsed < 10000 ? 1 : 0)
+  const statusText = progress.stage === 'error'
+    ? t('settings.security.progress.failed', 'Operation failed')
+    : progress.stage === 'canceled'
+      ? t('settings.security.progress.canceled', 'Operation canceled')
+      : progress.stage === 'completed'
+        ? t('settings.security.progress.completed', 'Operation completed')
+        : definition.steps[activeIndex]?.[1]
+
+  return (
+    <section className={`config-operation-progress ${progress.stage}`} aria-live="polite" aria-busy={!terminal}>
+      <div className="config-operation-progress-head">
+        <div>
+          <strong>{definition.title}</strong>
+          <span>{statusText}</span>
+        </div>
+        <small>{t('settings.security.progress.elapsed', 'Elapsed {seconds}s', { seconds: elapsedSeconds })}</small>
+      </div>
+      <div className="config-operation-progress-track" aria-hidden="true">
+        <i />
+      </div>
+      <div className="config-operation-steps">
+        {definition.steps.map(([stage, label], index) => {
+          const completed = progress.stage === 'completed' || index < activeIndex
+          const active = index === activeIndex && progress.stage !== 'completed'
+          return (
+            <span key={stage} className={completed ? 'completed' : active ? progress.stage === 'error' ? 'error' : 'active' : ''}>
+              <i>{completed ? '✓' : index + 1}</i>{label}
+            </span>
+          )
+        })}
+      </div>
+      {progress.stage === 'error' && progress.message && <p>{progress.message}</p>}
+    </section>
+  )
+}
+
+function cleanConfigError(error) {
+  const message = String(error?.message || error || '配置操作失败。')
+  return message
+    .replace(/^Error invoking remote method '[^']+':\s*/i, '')
+    .replace(/^Error:\s*/i, '')
+}
+
+function formatDamengSettingsError(error) {
+  const message = cleanConfigError(error)
+  if (/bad option:\s*--openssl-legacy-provider|legacy cryptography|legacy cipher|No compatible Node\.js runtime/i.test(message)) {
+    return '兼容环境自动检测失败。请到“高级设置与诊断”重新选择兼容运行环境。'
+  }
+  if (/Cannot find module/i.test(message)) {
+    return '达梦驱动依赖不完整，请在驱动安装目录重新安装官方 dmdb 后再试。'
+  }
+  if (/dmdb package|Dameng driver/i.test(message)) {
+    return '达梦驱动不可用，请重新选择已完整安装的官方 dmdb 目录。'
+  }
+  return message
+}
+
+function HelpTextBlock({ title, text }) {
+  return (
+    <section className="help-text-block">
+      <h3>{title}</h3>
+      <p>{text}</p>
+    </section>
+  )
+}
+
+function HelpFaq({ question, answer }) {
+  return (
+    <section>
+      <h3>{question}</h3>
+      <p>{answer}</p>
+    </section>
+  )
+}
+
+function WorkflowRunDialog({ workflow, servers, config, onChange, onToggleServer, onToggleServerScope, onClose, onRun }) {
+  const { t } = useI18n()
+  const selectedCount = config.targetServerIds?.length || 0
+  const selectedServers = servers.filter((server) => config.targetServerIds?.includes(server.id))
+  const needsConnection = selectedServers.some((server) => server.status !== 'connected')
+  const maxConcurrency = Math.max(1, Math.min(8, servers.length || 1))
+  const hasUploadNode = workflow?.nodes?.some((node) => node.data?.kind === 'file-upload')
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog workflow-run-dialog">
+        <div className="dialog-title">
+          <div>
+            <strong>{t('workflow.runDialogTitle', 'Run workflow')}</strong>
+            <span>{needsConnection
+              ? t('workflow.runDialogDescription', 'Select target servers and execution policy. Disconnected servers are connected automatically.')
+              : t('workflow.selectedReady', 'All selected servers are connected and ready to run.')}</span>
+          </div>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="workflow-run-body">
+          <section className="workflow-run-summary">
+            <div>
+              <strong>{workflow?.name || t('tab.workflow', 'Workflow')}</strong>
+              <span>{workflow?.description || t('workflow.noDescription', 'No description.')}</span>
+            </div>
+            <em>{t('workflow.nodes', '{count} nodes', { count: workflow?.nodes?.length || 0 })}</em>
+          </section>
+
+          <section className="workflow-run-section">
+            <div className="workflow-run-section-title">
+              <strong>{t('workflow.targetServers', 'Target servers')}</strong>
+              <span>{t('workflow.selectedCount', '{count} selected', { count: selectedCount })}</span>
+            </div>
+            <div className="workflow-run-server-list">
+              {servers.map((server) => (
+                <label key={server.id} className={config.targetServerIds.includes(server.id) ? 'selected' : ''}>
+                  <input
+                    type="checkbox"
+                    checked={config.targetServerIds.includes(server.id)}
+                    onChange={() => onToggleServer(server.id)}
+                  />
+                  <span>
+                    <strong>{server.name}</strong>
+                    <small>{server.username}@{server.host}:{server.port}</small>
+                    {config.targetServerIds.includes(server.id) && (
+                      <span className="workflow-run-scope-pills">
+                        {workflowExecutionScopes.map((scope) => (
+                          <button
+                            key={scope.id}
+                            type="button"
+                            className={normalizeWorkflowScopes(config.serverScopes?.[server.id], ['app']).includes(scope.id) ? 'selected' : ''}
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              onToggleServerScope(server.id, scope.id)
+                            }}
+                          >
+                            {scope.label}
+                          </button>
+                        ))}
+                      </span>
+                    )}
+                  </span>
+                  <em className={server.status || 'disconnected'}>{formatServerStatus(server)}</em>
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section className="workflow-run-grid">
+            <Field label={t('workflow.privilege', 'Run as')}>
+              <select
+                value={config.privilege?.mode || 'auto'}
+                onChange={(event) => onChange({
+                  privilege: {
+                    mode: event.target.value,
+                    password: '',
+                    passwordRequired: false,
+                    suggestedMode: event.target.value
+                  }
+                })}
+              >
+                <option value="auto">{t('workflow.privilegeAuto', 'Auto detect (recommended)')}</option>
+                <option value="normal">{t('workflow.privilegeCurrent', 'Current SSH user')}</option>
+                <option value="sudo">sudo root</option>
+                <option value="su">su root</option>
+              </select>
+            </Field>
+            {((config.privilege?.mode && !['auto', 'normal'].includes(config.privilege.mode)) || config.privilege?.passwordRequired) && (
+              <Field label={t('workflow.privilegePassword', 'Privilege password')}>
+                <div className="workflow-privilege-password">
+                  <input
+                    type="password"
+                    value={config.privilege?.password || ''}
+                    onChange={(event) => onChange({ privilege: { ...config.privilege, password: event.target.value } })}
+                    placeholder={`${config.privilege?.suggestedMode === 'su' || config.privilege?.mode === 'su' ? 'root' : 'sudo'} password`}
+                    autoComplete="new-password"
+                  />
+                  <small>{config.privilege?.suggestedMode === 'su' || config.privilege?.mode === 'su'
+                    ? 'su 使用 root 用户密码'
+                    : 'sudo 使用当前 SSH 用户的密码，不是 root 密码'}</small>
+                </div>
+              </Field>
+            )}
+            <Field label={t('workflow.runOrder', 'Run order')}>
+              <select value={config.orchestrationMode || 'byServer'} onChange={(event) => onChange({ orchestrationMode: event.target.value })}>
+                <option value="byServer">{t('workflow.runByServer', 'By server: each server runs the full flow')}</option>
+                <option value="byStep">{t('workflow.runByStep', 'By step: cluster topology order')}</option>
+              </select>
+            </Field>
+            <Field label={t('workflow.executionMode', 'Execution mode')}>
+              <select value={config.mode} onChange={(event) => onChange({ mode: event.target.value })}>
+                <option value="parallel">{t('workflow.parallel', 'Parallel batch')}</option>
+                <option value="rolling">{t('workflow.rolling', 'Rolling one by one')}</option>
+              </select>
+            </Field>
+            {hasUploadNode && (
+              <Field label={t('workflow.uploadStrategy', 'Upload strategy')}>
+                <label className="workflow-inline-check">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(config.reuseRemoteFiles)}
+                    onChange={(event) => onChange({ reuseRemoteFiles: event.target.checked })}
+                  />
+                  {t('workflow.reuseRemoteFiles', 'Use existing server package (skip upload)')}
+                </label>
+                <small className="workflow-field-help">
+                  {t('workflow.reuseRemoteFilesHelp', 'The remote path configured on each upload node is checked first; no package name is hard-coded.')}
+                </small>
+              </Field>
+            )}
+            <Field label={t('workflow.concurrency', 'Concurrency')}>
+              <input
+                type="number"
+                min="1"
+                max={maxConcurrency}
+                value={config.concurrency}
+                disabled={config.mode === 'rolling'}
+                onChange={(event) => onChange({ concurrency: event.target.value })}
+              />
+            </Field>
+            <Field label={t('workflow.failureStrategy', 'Failure strategy')}>
+              <select value={config.failureStrategy} onChange={(event) => onChange({ failureStrategy: event.target.value })}>
+                <option value="continue">{t('workflow.continueSummary', 'Continue and summarize')}</option>
+                <option value="stop">{t('workflow.stopFirstFailure', 'Stop on first failure')}</option>
+              </select>
+            </Field>
+            <Field label={t('workflow.autoRollback', 'Auto rollback')}>
+              <label className="workflow-inline-check">
+                <input
+                  type="checkbox"
+                  checked={Boolean(config.autoRollback)}
+                  onChange={(event) => onChange({ autoRollback: event.target.checked })}
+                />
+                {t('workflow.rollbackFailed', 'Run rollback nodes on failed servers')}
+              </label>
+              {config.autoRollback && (
+                <label className="workflow-inline-check">
+                  <input
+                    type="checkbox"
+                    checked={config.rollbackOnCancel !== false}
+                    onChange={(event) => onChange({ rollbackOnCancel: event.target.checked })}
+                  />
+                  {t('workflow.rollbackOnCancel', 'Stopping a run also restores its release backup')}
+                </label>
+              )}
+            </Field>
+            <Field label={t('workflow.runNote', 'Run note')}>
+              <input value={config.note} onChange={(event) => onChange({ note: event.target.value })} placeholder={t('workflow.runNotePlaceholder', 'optional release note')} />
+            </Field>
+            <div className="workflow-run-variables-field">
+              <Field label={t('workflow.runVariables', 'Release variables')}>
+                <textarea
+                  value={config.variablesText || ''}
+                  onChange={(event) => onChange({ variablesText: event.target.value })}
+                  placeholder={'APP_NAME=demo-api\nAPP_DIR=/opt/apps/demo-api\nSERVICE_NAME=demo-api.service\nBACKUP_DIR=/opt/backups/ops-flow'}
+                />
+                <small>{t('workflow.runVariablesHelp', 'Use KEY=value, one per line. Reference values in paths and commands as {{KEY}}. Built-ins include {{release.id}}, {{server.name}} and {{backup.path}}.')}</small>
+              </Field>
+            </div>
+          </section>
+
+          <div className="workflow-run-hint">
+            {t('workflow.runHint', 'By server runs the full workflow on each server. By step connects all selected servers first, then advances each node across matched server roles before moving to the next node.')}
+            <br />
+            {t('workflow.privilegeMemoryHint', 'The password is kept only in memory for this app session and is cleared when the app exits. The same server, SSH user, and privilege mode can reuse it across modules.')}
+          </div>
+        </div>
+        <div className="dialog-actions">
+          <button onClick={onClose}>{t('common.cancel', 'Cancel')}</button>
+          <button className="solid-button" onClick={onRun} disabled={!selectedCount}>
+            <CirclePlay size={15} />
+            {needsConnection ? t('workflow.runAndConnect', 'Run and connect') : t('workflow.runNow', 'Run workflow')}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function ServerDialog({ form, mode, isTesting, notice, onClose, onSave, onTest, onDuplicate }) {
+  const { t } = useI18n()
+  const isEdit = mode === 'edit'
+  const [draft, setDraft] = useState(form)
+
+  useEffect(() => {
+    setDraft(form)
+  }, [form])
+
+  const updateDraft = (key, value) => {
+    setDraft((current) => ({ ...current, [key]: value }))
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog">
+        <div className="dialog-title">
+          <div>
+            <strong>{isEdit ? t('server.dialog.editTitle', 'Edit server') : t('server.dialog.addTitle', 'Add server')}</strong>
+            <span>{isEdit ? t('server.dialog.editDescription', 'Update SSH connection information.') : t('server.dialog.addDescription', 'Save SSH connection information locally.')}</span>
+          </div>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="server-form">
+          <Field label={t('server.field.name', 'Name')}>
+            <input value={draft.name} onChange={(event) => updateDraft('name', event.target.value)} placeholder="prod-api-01" />
+          </Field>
+          <Field label={t('server.field.env', 'Env')}>
+            <input value={draft.env} onChange={(event) => updateDraft('env', event.target.value)} placeholder="prod" />
+          </Field>
+          <Field label={t('server.field.host', 'Host')}>
+            <input value={draft.host} onChange={(event) => updateDraft('host', event.target.value)} placeholder="192.0.2.10" />
+          </Field>
+          <Field label={t('server.field.port', 'Port')}>
+            <input type="number" value={draft.port} onChange={(event) => updateDraft('port', event.target.value)} />
+          </Field>
+          <Field label={t('server.field.username', 'Username')}>
+            <input value={draft.username} onChange={(event) => updateDraft('username', event.target.value)} placeholder="root" />
+          </Field>
+          <Field label={t('server.field.auth', 'Auth')}>
+            <select value={draft.authType} onChange={(event) => updateDraft('authType', event.target.value)}>
+              <option value="password">{t('server.auth.password', 'Password')}</option>
+              <option value="privateKey">{t('server.auth.privateKey', 'Private key')}</option>
+            </select>
+          </Field>
+          {draft.authType === 'password' ? (
+            <Field label={t('server.field.password', 'Password')}>
+              <input type="password" value={draft.password} onChange={(event) => updateDraft('password', event.target.value)} />
+            </Field>
+          ) : (
+            <>
+              <Field label={t('server.field.passphrase', 'Passphrase')}>
+                <input type="password" value={draft.passphrase} onChange={(event) => updateDraft('passphrase', event.target.value)} />
+              </Field>
+              <label className="field field-wide">
+                <span>{t('server.field.privateKey', 'Private key')}</span>
+                <textarea value={draft.privateKey} onChange={(event) => updateDraft('privateKey', event.target.value)} />
+              </label>
+            </>
+          )}
+        </div>
+        {notice && <div className={`dialog-notice ${notice.type}`}>{notice.text}</div>}
+        <div className="dialog-actions">
+          {isEdit && (
+            <button onClick={() => onDuplicate(draft)} disabled={isTesting}>
+              <Copy size={16} />{t('server.duplicateConnection', 'Copy as new connection')}
+            </button>
+          )}
+          <button onClick={() => onTest(draft)} disabled={isTesting}>
+            <CheckCircle2 size={16} />{isTesting ? t('common.testing', 'Testing') : t('common.testConnection', 'Test connection')}
+          </button>
+          <button className="solid-button" onClick={() => onSave(draft)}>{isEdit ? t('common.saveChanges', 'Save changes') : t('server.saveServer', 'Save server')}</button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function RemotePrivilegeDialog({ dialog, server, onChange, onClose, onSubmit }) {
+  const { t } = useI18n()
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog remote-privilege-dialog">
+        <div className="dialog-title">
+          <div>
+            <strong>{t('remote.privilegeDialogTitle', 'Enable privileged file access')}</strong>
+            <span>{t('remote.privilegeDialogDescription', 'Use sudo or su to read protected files temporarily without changing directory permissions.')}</span>
+          </div>
+          <button type="button" onClick={onClose} disabled={dialog.loading}><X size={18} /></button>
+        </div>
+        <div className="remote-privilege-target">
+          <span>{server.username}@{server.host}:{server.port}</span>
+          <code title={dialog.targetPath}>{dialog.targetPath}</code>
+        </div>
+        <div className="server-form remote-privilege-form">
+          <Field label={t('remote.privilegeMode', 'Privilege mode')}>
+            <select
+              value={dialog.mode || 'auto'}
+              onChange={(event) => onChange({ mode: event.target.value, password: '', notice: null })}
+              disabled={dialog.loading}
+            >
+              <option value="auto">{t('workflow.privilegeAuto', 'Auto detect (recommended)')}</option>
+              <option value="sudo">sudo root</option>
+              <option value="su">su root</option>
+            </select>
+          </Field>
+          <Field label={t('workflow.privilegePassword', 'Privilege password')}>
+            <input
+              type="password"
+              value={dialog.password || ''}
+              onChange={(event) => onChange({ password: event.target.value, notice: null })}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') onSubmit()
+              }}
+              placeholder={dialog.mode === 'su' ? 'root password' : dialog.mode === 'sudo' ? 'sudo password' : 'sudo / root password (if required)'}
+              disabled={dialog.loading}
+              autoFocus
+            />
+          </Field>
+          <p className="remote-privilege-hint"><ShieldCheck size={15} />{t('remote.privilegePasswordHint', 'The password stays only in application memory and is shared with workflows and host management.')}</p>
+        </div>
+        {dialog.notice && <div className={`dialog-notice ${dialog.notice.type}`}>{dialog.notice.text}</div>}
+        <div className="dialog-actions">
+          <button type="button" onClick={onClose} disabled={dialog.loading}>{t('common.cancel', 'Cancel')}</button>
+          <button type="button" className="solid-button" onClick={onSubmit} disabled={dialog.loading}>
+            <ShieldCheck size={16} />{dialog.loading ? t('common.testing', 'Testing') : t('remote.enablePrivilege', 'Verify and enable')}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function RemoteCreateDialog({ dialog, onChange, onClose, onSubmit }) {
+  const { t } = useI18n()
+  const isDirectory = dialog.type === 'dir'
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog remote-create-dialog">
+        <div className="dialog-title">
+          <div>
+            <strong>{isDirectory ? t('remote.createFolderTitle', 'Create remote folder') : t('remote.createFileTitle', 'Create remote file')}</strong>
+            <span>{t('remote.createDescription', 'The item is created in the current directory; an existing name is never overwritten.')}</span>
+          </div>
+          <button type="button" onClick={onClose} disabled={dialog.loading}><X size={18} /></button>
+        </div>
+        <div className="remote-create-target">
+          <span>{isDirectory ? t('remote.newFolder', 'New folder') : t('remote.newFile', 'New file')}</span>
+          <code title={dialog.parentPath}>{dialog.parentPath}</code>
+        </div>
+        <div className="server-form remote-create-form">
+          <Field label={t('remote.createName', 'Name')}>
+            <input
+              value={dialog.name || ''}
+              onChange={(event) => onChange({ name: event.target.value })}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  onSubmit()
+                }
+              }}
+              placeholder={isDirectory ? 'new-folder' : 'new-file.conf'}
+              disabled={dialog.loading}
+              autoFocus
+            />
+          </Field>
+        </div>
+        {dialog.notice && <div className={`dialog-notice ${dialog.notice.type}`}>{dialog.notice.text}</div>}
+        <div className="dialog-actions">
+          <button type="button" onClick={onClose} disabled={dialog.loading}>{t('common.cancel', 'Cancel')}</button>
+          <button type="button" className="solid-button" onClick={onSubmit} disabled={dialog.loading || !String(dialog.name || '').trim()}>
+            {isDirectory ? <FolderPlus size={16} /> : <FilePlus size={16} />}
+            {dialog.loading
+              ? t('common.saving', 'Saving')
+              : isDirectory
+                ? t('remote.createFolder', 'Create folder')
+                : t('remote.createFile', 'Create and edit')}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function RemoteRenameDialog({ dialog, onChange, onClose, onSubmit }) {
+  const { t } = useI18n()
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog remote-create-dialog">
+        <div className="dialog-title">
+          <div>
+            <strong>{t('remote.renameTitle', 'Rename remote file or folder')}</strong>
+            <span>{t('remote.renameDescription', 'Only the item name changes; it is not moved to another directory and an existing item is never overwritten.')}</span>
+          </div>
+          <button type="button" onClick={onClose} disabled={dialog.loading}><X size={18} /></button>
+        </div>
+        <div className="remote-create-target">
+          <span>{t('remote.rename', 'Rename')}</span>
+          <code title={dialog.sourcePath}>{dialog.sourcePath}</code>
+        </div>
+        <div className="server-form remote-create-form">
+          <Field label={t('remote.newName', 'New name')}>
+            <input
+              value={dialog.name || ''}
+              onChange={(event) => onChange({ name: event.target.value })}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  onSubmit()
+                }
+              }}
+              disabled={dialog.loading}
+              autoFocus
+              onFocus={(event) => {
+                const value = event.currentTarget.value
+                const extensionIndex = dialog.item?.type === 'file' ? value.lastIndexOf('.') : -1
+                event.currentTarget.setSelectionRange(0, extensionIndex > 0 ? extensionIndex : value.length)
+              }}
+            />
+          </Field>
+        </div>
+        {dialog.notice && <div className={`dialog-notice ${dialog.notice.type}`}>{dialog.notice.text}</div>}
+        <div className="dialog-actions">
+          <button type="button" onClick={onClose} disabled={dialog.loading}>{t('common.cancel', 'Cancel')}</button>
+          <button
+            type="button"
+            className="solid-button"
+            onClick={onSubmit}
+            disabled={dialog.loading || !String(dialog.name || '').trim() || String(dialog.name || '').trim() === dialog.originalName}
+          >
+            <SquarePen size={16} />
+            {dialog.loading ? t('common.saving', 'Saving') : t('remote.rename', 'Rename')}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function Field({ label, className = '', children }) {
+  return (
+    <label className={`field ${className}`.trim()}>
+      <span>{label}</span>
+      {children}
+    </label>
+  )
+}
+
+function SearchableSelect({ value, options = [], placeholder = '请选择', disabled = false, onChange }) {
+  const rootRef = useRef(null)
+  const inputRef = useRef(null)
+  const selectedOption = options.find((option) => option.value === value)
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState(selectedOption?.label || '')
+  const [activeIndex, setActiveIndex] = useState(0)
+  const normalizedQuery = query.trim().toLocaleLowerCase()
+  const filteredOptions = useMemo(() => (
+    normalizedQuery
+      ? options.filter((option) => `${option.label || ''} ${option.searchText || ''}`.toLocaleLowerCase().includes(normalizedQuery))
+      : options
+  ), [options, normalizedQuery])
+
+  useEffect(() => {
+    if (!open) setQuery(selectedOption?.label || '')
+  }, [open, selectedOption?.label])
+
+  useEffect(() => {
+    if (!open) return undefined
+    const close = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
+  useEffect(() => {
+    setActiveIndex(0)
+  }, [normalizedQuery, options])
+
+  const selectOption = (option) => {
+    onChange(option.value)
+    setQuery(option.label)
+    setOpen(false)
+  }
+
+  const showOptions = () => {
+    if (disabled) return
+    setOpen(true)
+    window.requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  return (
+    <div className={`searchable-select ${open ? 'open' : ''} ${disabled ? 'disabled' : ''}`} ref={rootRef}>
+      <Search size={14} />
+      <input
+        ref={inputRef}
+        value={query}
+        disabled={disabled}
+        role="combobox"
+        aria-expanded={open}
+        aria-autocomplete="list"
+        placeholder={placeholder}
+        onFocus={showOptions}
+        onClick={showOptions}
+        onChange={(event) => {
+          setQuery(event.target.value)
+          setOpen(true)
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            setOpen(true)
+            setActiveIndex((current) => Math.min(filteredOptions.length - 1, current + 1))
+          } else if (event.key === 'ArrowUp') {
+            event.preventDefault()
+            setActiveIndex((current) => Math.max(0, current - 1))
+          } else if (event.key === 'Enter' && open && filteredOptions[activeIndex]) {
+            event.preventDefault()
+            selectOption(filteredOptions[activeIndex])
+          } else if (event.key === 'Escape') {
+            setOpen(false)
+          }
+        }}
+      />
+      <button type="button" tabIndex={-1} disabled={disabled} onClick={() => open ? setOpen(false) : showOptions()}>
+        <ChevronDown size={14} />
+      </button>
+      {open && (
+        <div className="searchable-select-menu" role="listbox">
+          {filteredOptions.length ? filteredOptions.map((option, index) => (
+            <button
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              className={`${option.value === value ? 'selected' : ''} ${index === activeIndex ? 'active' : ''}`}
+              key={`${option.value}:${option.label}`}
+              onMouseEnter={() => setActiveIndex(index)}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => selectOption(option)}
+            >
+              <strong>{option.label}</strong>
+              {option.description && <small>{option.description}</small>}
+            </button>
+          )) : (
+            <span className="searchable-select-empty">没有匹配项</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function InlineSearch({ value, open, title, placeholder, onOpen, onChange, onClose, onSubmit }) {
+  const { t } = useI18n()
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    window.requestAnimationFrame(() => inputRef.current?.focus())
+  }, [open])
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="inline-search-toggle"
+        title={title}
+        aria-label={title}
+        onClick={(event) => {
+          event.stopPropagation()
+          onOpen()
+        }}
+        onDoubleClick={(event) => event.stopPropagation()}
+      >
+        <Search size={14} />
+      </button>
+    )
+  }
+
+  return (
+    <div className="inline-search-box" onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
+      <Search size={13} />
+      <input
+        ref={inputRef}
+        value={value}
+        aria-label={title}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') onClose()
+          if (event.key === 'Enter' && onSubmit) {
+            event.preventDefault()
+            onSubmit()
+          }
+        }}
+      />
+      <button type="button" title={t('common.clearSearch', 'Clear search')} aria-label={t('common.clearSearch', 'Clear search')} onClick={onClose}>
+        <X size={13} />
+      </button>
+    </div>
+  )
+}
+
+function WorkflowMultiSelect({ options = [], value = [], placeholder = 'Select', emptyLabel = 'No options', disabled = false, onOpen, onChange }) {
+  const { t } = useI18n()
+  const [open, setOpen] = useState(false)
+  const selected = new Set(value)
+  const selectedOptions = options.filter((option) => selected.has(option.value))
+  const label = selectedOptions.length
+    ? selectedOptions.length <= 2
+      ? selectedOptions.map((option) => option.label).join(', ')
+      : t('workflow.selectedItems', '{count} selected', { count: selectedOptions.length })
+    : placeholder
+
+  const toggleOpen = () => {
+    if (disabled) return
+    const nextOpen = !open
+    setOpen(nextOpen)
+    if (nextOpen) onOpen?.()
+  }
+
+  const toggleValue = (nextValue) => {
+    const next = new Set(selected)
+    if (next.has(nextValue)) next.delete(nextValue)
+    else next.add(nextValue)
+    onChange?.([...next])
+  }
+
+  return (
+    <div className="workflow-multi-dropdown">
+      <button type="button" onClick={toggleOpen} disabled={disabled} title={label}>
+        <span>{label}</span>
+        <em>{open ? '▲' : '▼'}</em>
+      </button>
+      {open && (
+        <div className="workflow-multi-menu">
+          {options.length ? options.map((option) => (
+            <label key={option.value}>
+              <input type="checkbox" checked={selected.has(option.value)} onChange={() => toggleValue(option.value)} />
+              <span>{option.label}</span>
+            </label>
+          )) : (
+            <div className="workflow-multi-empty">{emptyLabel}</div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function WorkflowTemplateMarketDialog({ templates = [], onSelect, onClose }) {
+  const { t } = useI18n()
+  const [category, setCategory] = useState('All')
+  const [keyword, setKeyword] = useState('')
+  const categories = ['All', ...Array.from(new Set(templates.map((template) => template.category || 'General')))]
+  const normalizedKeyword = keyword.trim().toLowerCase()
+  const filteredTemplates = templates.filter((template) => {
+    const matchesCategory = category === 'All' || (template.category || 'General') === category
+    const haystack = [
+      template.name,
+      template.description,
+      template.category,
+      ...(template.tags || [])
+    ].join(' ').toLowerCase()
+    return matchesCategory && (!normalizedKeyword || haystack.includes(normalizedKeyword))
+  })
+
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog workflow-template-dialog">
+        <div className="dialog-title">
+          <div>
+            <strong>{t('workflow.templateMarket', 'Workflow template market')}</strong>
+            <span>{t('workflow.templateDescription', 'Choose an operations scenario, then adjust nodes and parameters before saving.')}</span>
+          </div>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="workflow-template-toolbar">
+          <button className="solid-button" type="button" onClick={() => onSelect(null)}>{t('workflow.blank', 'Blank workflow')}</button>
+          <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder={t('workflow.searchPlaceholder', 'Search deployment, mysql, redis...')} />
+        </div>
+        <div className="workflow-template-categories">
+          {categories.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className={item === category ? 'selected' : ''}
+              onClick={() => setCategory(item)}
+            >
+              {item === 'All' ? t('workflow.all', 'All') : item === 'General' ? t('workflow.general', 'General') : item}
+            </button>
+          ))}
+        </div>
+        <div className="workflow-template-grid">
+          {filteredTemplates.map((template) => (
+            <button key={template.id} type="button" className="workflow-template-card" onClick={() => onSelect(template)}>
+              <span>{template.category || t('workflow.general', 'General')}</span>
+              <strong>{template.name}</strong>
+              <em>{template.description}</em>
+              <small>{t('workflow.nodes', '{count} nodes', { count: template.nodes?.length || 0 })}</small>
+              <div>
+                {(template.tags || []).map((tag) => <b key={tag}>{tag}</b>)}
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function WorkflowDialog({ mode, draft, moduleGroups, databases = [], redisStores = [], cronEntries = [], server, onAddDatabase, onAddRedis, onAddCron, onRefreshCron, onChange, onClose, onSave }) {
+  const { t } = useI18n()
+  const canvasRef = useRef(null)
+  const nameInputRef = useRef(null)
+  const [identityFields, setIdentityFields] = useState(() => ({
+    name: draft.name || '',
+    description: draft.description || ''
+  }))
+  const [selectedNodeId, setSelectedNodeId] = useState(draft.nodes[0]?.id || '')
+  const [databaseMeta, setDatabaseMeta] = useState({})
+  const [databaseMetaLoading, setDatabaseMetaLoading] = useState('')
+  const selectedNode = draft.nodes.find((node) => node.id === selectedNodeId) || draft.nodes[0] || null
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      nameInputRef.current?.focus({ preventScroll: true })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [draft.id])
+
+  useEffect(() => {
+    if (!draft.nodes.some((node) => node.id === selectedNodeId)) {
+      setSelectedNodeId(draft.nodes[0]?.id || '')
+    }
+  }, [draft.nodes, selectedNodeId])
+
+  const update = (key, value) => {
+    if (key === 'name' || key === 'description') {
+      setIdentityFields((current) => ({ ...current, [key]: value }))
+    }
+    onChange((current) => ({ ...(current || draft), [key]: value }))
+  }
+
+  const addNode = (module, position) => {
+    const nextNode = createWorkflowNode(
+      makeId(module.id),
+      module.id,
+      position?.x ?? 80 + draft.nodes.length * 180,
+      position?.y ?? 120 + (draft.nodes.length % 3) * 68
+    )
+    onChange((current) => {
+      const base = current || draft
+      const nodes = [...base.nodes, nextNode]
+      return { ...base, nodes, edges: buildSequentialWorkflowEdges(nodes.map((node) => node.id)) }
+    })
+    setSelectedNodeId(nextNode.id)
+  }
+
+  const removeNode = (nodeId) => {
+    onChange((current) => {
+      const base = current || draft
+      const nodes = base.nodes.filter((node) => node.id !== nodeId)
+      return { ...base, nodes, edges: buildSequentialWorkflowEdges(nodes.map((node) => node.id)) }
+    })
+  }
+
+  const moveNode = (nodeId, direction) => {
+    onChange((current) => {
+      const base = current || draft
+      const index = base.nodes.findIndex((node) => node.id === nodeId)
+      const nextIndex = index + direction
+      if (index < 0 || nextIndex < 0 || nextIndex >= base.nodes.length) return base
+      const nodes = [...base.nodes]
+      const [node] = nodes.splice(index, 1)
+      nodes.splice(nextIndex, 0, node)
+      return { ...base, nodes, edges: buildSequentialWorkflowEdges(nodes.map((item) => item.id)) }
+    })
+  }
+
+  const updateNode = (nodeId, patch) => {
+    onChange((current) => {
+      const base = current || draft
+      const nodes = base.nodes.map((node) => {
+        if (node.id !== nodeId) return node
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            ...patch,
+            config: {
+              ...(node.data.config || {}),
+              ...(patch.config || {})
+            }
+          }
+        }
+      })
+      return { ...base, nodes, edges: buildSequentialWorkflowEdges(nodes.map((node) => node.id)) }
+    })
+  }
+
+  const onNodesChange = (changes) => {
+    onChange((current) => {
+      const base = current || draft
+      const nodes = applyNodeChanges(changes, base.nodes)
+      return { ...base, nodes, edges: buildSequentialWorkflowEdges(nodes.map((node) => node.id)) }
+    })
+  }
+
+  const onDragStart = (event, module) => {
+    event.dataTransfer.setData('application/ops-flow-node', module.id)
+    event.dataTransfer.effectAllowed = 'move'
+  }
+
+  const onDragOver = (event) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+  }
+
+  const onDrop = (event) => {
+    event.preventDefault()
+    const kind = event.dataTransfer.getData('application/ops-flow-node')
+    const module = getWorkflowModule(kind)
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!module || !rect) return
+    addNode(module, {
+      x: Math.max(20, event.clientX - rect.left - 80),
+      y: Math.max(20, event.clientY - rect.top - 24)
+    })
+  }
+
+  const selectedNodeIndex = selectedNode ? draft.nodes.findIndex((node) => node.id === selectedNode.id) : -1
+  const validationIssues = validateWorkflowDefinition(draft)
+  const loadWorkflowTables = async (databaseId) => {
+    if (!databaseId || databaseMeta[databaseId]?.tables?.length) return
+    const database = databases.find((item) => item.id === databaseId)
+    if (!database) return
+    setDatabaseMetaLoading(`tables:${databaseId}`)
+    try {
+      const result = await window.opsFlow.inspectDatabase(withDatabaseRuntime(database, server))
+      if (!result.ok) {
+        setDatabaseMeta((current) => ({ ...current, [databaseId]: { ...(current[databaseId] || {}), error: result.message } }))
+        return
+      }
+      setDatabaseMeta((current) => ({
+        ...current,
+        [databaseId]: {
+          ...(current[databaseId] || {}),
+          tables: normalizeDbTables(result.tables)
+        }
+      }))
+    } finally {
+      setDatabaseMetaLoading('')
+    }
+  }
+
+  const loadWorkflowColumns = async (databaseId, table) => {
+    if (!databaseId || !table?.name) return
+    const tableKey = workflowTableKey(table)
+    if (databaseMeta[databaseId]?.columns?.[tableKey]?.length) return
+    const database = databases.find((item) => item.id === databaseId)
+    if (!database) return
+    setDatabaseMetaLoading(`columns:${databaseId}:${tableKey}`)
+    try {
+      const result = await window.opsFlow.inspectDatabaseColumns(withDatabaseRuntime(database, server), table)
+      if (!result.ok) {
+        setDatabaseMeta((current) => ({ ...current, [databaseId]: { ...(current[databaseId] || {}), error: result.message } }))
+        return
+      }
+      setDatabaseMeta((current) => ({
+        ...current,
+        [databaseId]: {
+          ...(current[databaseId] || {}),
+          columns: {
+            ...(current[databaseId]?.columns || {}),
+            [tableKey]: normalizeDbColumns(result.columns)
+          }
+        }
+      }))
+    } finally {
+      setDatabaseMetaLoading('')
+    }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <section
+        className="server-dialog workflow-dialog"
+        onKeyDown={(event) => {
+          if (event.target.closest?.('input, textarea, select, [contenteditable="true"]')) event.stopPropagation()
+        }}
+        onKeyUp={(event) => {
+          if (event.target.closest?.('input, textarea, select, [contenteditable="true"]')) event.stopPropagation()
+        }}
+      >
+        <div className="dialog-title">
+          <div>
+            <strong>{mode === 'create' ? t('workflow.addTitle', 'Add workflow') : t('workflow.editTitle', 'Edit workflow')}</strong>
+            <span>{t('workflow.editorDescription', 'Build a linear workflow first; each node can later map to a real executor.')}</span>
+          </div>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="workflow-editor">
+          <aside className="workflow-editor-sidebar">
+            <Field label={t('workflow.name', 'Name')}>
+              <input
+                ref={nameInputRef}
+                className="workflow-identity-input"
+                value={identityFields.name}
+                onPointerDown={(event) => event.stopPropagation()}
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  event.currentTarget.focus()
+                }}
+                onChange={(event) => update('name', event.target.value)}
+              />
+            </Field>
+            <Field label={t('workflow.descriptionField', 'Description')}>
+              <textarea
+                className="workflow-identity-input"
+                value={identityFields.description}
+                onPointerDown={(event) => event.stopPropagation()}
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => update('description', event.target.value)}
+              />
+            </Field>
+            <div className="workflow-module-palette">
+              {moduleGroups.map((group) => (
+                <section key={group.id}>
+                  <strong>{group.name}</strong>
+                  {group.modules.map((module) => (
+                    <button
+                      key={module.id}
+                      type="button"
+                      draggable
+                      onDragStart={(event) => onDragStart(event, module)}
+                      onDoubleClick={() => addNode(module)}
+                    >
+                      <span>{module.name}</span>
+                      <em>{module.description}</em>
+                    </button>
+                  ))}
+                </section>
+              ))}
+            </div>
+          </aside>
+          <main className="workflow-editor-main">
+            <div className="workflow-editor-canvas" ref={canvasRef} onDragOver={onDragOver} onDrop={onDrop}>
+              <ReactFlow
+                nodes={draft.nodes.map((node) => ({ ...node, selected: node.id === selectedNodeId }))}
+                edges={draft.edges}
+                onNodesChange={onNodesChange}
+                onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+                deleteKeyCode={null}
+                fitView
+              >
+                <Controls />
+                <Background gap={18} size={1} color="var(--flow-grid)" />
+              </ReactFlow>
+            </div>
+          </main>
+          <aside className="workflow-config-panel">
+            {selectedNode ? (
+              <>
+                <div className="workflow-config-head">
+                  <div>
+                    <strong>{selectedNode.data.label}</strong>
+                    <span>{t('workflow.step', 'Step {count}', { count: selectedNodeIndex + 1 })} · {getWorkflowModule(selectedNode.data.kind)?.name || selectedNode.data.kind}</span>
+                  </div>
+                  <div className="workflow-config-actions">
+                    <button type="button" onClick={() => moveNode(selectedNode.id, -1)} disabled={selectedNodeIndex <= 0}>{t('workflow.up', 'Up')}</button>
+                    <button type="button" onClick={() => moveNode(selectedNode.id, 1)} disabled={selectedNodeIndex >= draft.nodes.length - 1}>{t('workflow.down', 'Down')}</button>
+                    <button type="button" className="danger-button" onClick={() => removeNode(selectedNode.id)}><Trash2 size={14} />{t('common.delete', 'Delete')}</button>
+                  </div>
+                </div>
+                <div className="workflow-config-scroll">
+                  <div className="workflow-config-fields">
+                    <Field label={t('workflow.nodeName', 'Node name')}>
+                      <input value={selectedNode.data.label} onChange={(event) => updateNode(selectedNode.id, { label: event.target.value })} />
+                    </Field>
+                    <div className="workflow-config-dynamic">
+                      {renderWorkflowNodeConfig(selectedNode, (config) => updateNode(selectedNode.id, { config }), {
+                        databases,
+                        databaseMeta,
+                        databaseMetaLoading,
+                        redisStores,
+                        cronEntries,
+                        onAddDatabase: () => onAddDatabase?.(selectedNode.id),
+                        onLoadDatabaseTables: loadWorkflowTables,
+                        onLoadDatabaseColumns: loadWorkflowColumns,
+                        onAddRedis: () => onAddRedis?.(selectedNode.id),
+                        onAddCron: () => onAddCron?.(selectedNode.id),
+                        onRefreshCron,
+                        t
+                      })}
+                    </div>
+                  </div>
+                  {validationIssues.filter((issue) => issue.nodeId === selectedNode.id).map((issue) => (
+                    <div key={`${issue.nodeId}-${issue.message}`} className={`workflow-config-issue ${issue.level}`}>{issue.message}</div>
+                  ))}
+                  {selectedNode.data.kind !== 'executor-command' && (
+                    <div className="workflow-config-summary">{formatWorkflowNodeSummary(selectedNode)}</div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="workflow-config-empty">{t('workflow.configEmpty', 'Drag a node from the left palette, then click it to configure.')}</div>
+            )}
+          </aside>
+        </div>
+        <div className="dialog-actions">
+          <div className="workflow-dialog-issues">
+            {validationIssues.length
+              ? t('workflow.issuesReview', '{count} issues to review', { count: validationIssues.length })
+              : t('workflow.ready', 'Workflow looks ready')}
+          </div>
+          <button onClick={onClose}>{t('common.cancel', 'Cancel')}</button>
+          <button
+            className="solid-button"
+            onClick={() => onSave({ ...draft, ...identityFields })}
+          >
+            {t('workflow.saveWorkflow', 'Save workflow')}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function renderWorkflowNodeConfig(node, onChange, context = {}) {
+  const t = context.t || ((_key, fallback) => fallback)
+  const config = node.data.config || {}
+  const update = (key, value) => onChange({ ...config, [key]: value })
+  const scopeField = renderWorkflowExecutionScopeConfig(config, update, t)
+  const policyField = renderWorkflowExecutionPolicyConfig(config, update, t)
+
+  if (node.data.kind === 'output-format') {
+    return (
+      <>
+        {scopeField}
+        {policyField}
+        <Field label={t('workflow.config.format', 'Format')}>
+          <select value={config.format || 'excel'} onChange={(event) => update('format', event.target.value)}>
+            <option value="excel">Excel</option>
+            <option value="csv">CSV</option>
+            <option value="sql">SQL</option>
+            <option value="txt">TXT</option>
+            <option value="json">JSON</option>
+            <option value="html">HTML</option>
+            <option value="word">Word</option>
+            <option value="ppt">PPT</option>
+            <option value="pdf">PDF</option>
+          </select>
+        </Field>
+        <Field label={t('workflow.config.outputPath', 'Output path')}>
+          <input value={config.outputPath || ''} onChange={(event) => update('outputPath', event.target.value)} placeholder="/tmp/export.xlsx" />
+        </Field>
+      </>
+    )
+  }
+
+  if (node.data.kind === 'file-upload') {
+    return (
+      <>
+        {scopeField}
+        {policyField}
+        <Field label={t('workflow.config.localPath', 'Local file or directory')}>
+          <div className="workflow-path-picker">
+            <input value={config.localPath || ''} onChange={(event) => update('localPath', event.target.value)} placeholder="C:\\release\\app.tar.gz or /Users/me/release" />
+            <button
+              type="button"
+              onClick={async () => {
+                const result = await window.opsFlow.selectLocalPath?.({ title: 'Select local file to upload' })
+                if (result?.ok && result.path) update('localPath', result.path)
+              }}
+            >
+              {t('workflow.config.browse', 'Browse')}
+            </button>
+          </div>
+        </Field>
+        <Field label={t('workflow.config.remotePath', 'Remote target path')}>
+          <input value={config.remotePath || ''} onChange={(event) => update('remotePath', event.target.value)} placeholder="/opt/uploads/app.tar.gz" />
+        </Field>
+      </>
+    )
+  }
+
+  if (node.data.kind === 'file-download') {
+    return (
+      <>
+        {scopeField}
+        {policyField}
+        <Field label={t('workflow.config.downloadTo', 'Download to')}>
+          <input value={config.localDir || ''} onChange={(event) => update('localDir', event.target.value)} placeholder="C:\\exports or /Users/me/Downloads" />
+        </Field>
+      </>
+    )
+  }
+
+  if (node.data.kind === 'connector-database') {
+    const selectedDatabase = context.databases?.find((item) => item.id === config.connectionId)
+    const meta = config.connectionId ? context.databaseMeta?.[config.connectionId] || {} : {}
+    const tables = meta.tables || []
+    const selectedTables = normalizeWorkflowSelectedTables(config)
+    const selectedTableKeys = selectedTables.map(workflowTableKey)
+    const selectedTable = selectedTables.length === 1
+      ? tables.find((table) => workflowTableKey(table) === selectedTableKeys[0]) || selectedTables[0]
+      : null
+    const columns = selectedTable && config.connectionId
+      ? meta.columns?.[workflowTableKey(selectedTable)] || []
+      : []
+    const selectedFields = normalizeWorkflowSelectedFields(config)
+    const tableLoading = config.connectionId && context.databaseMetaLoading === `tables:${config.connectionId}`
+    const columnLoading = config.connectionId && selectedTable && context.databaseMetaLoading === `columns:${config.connectionId}:${workflowTableKey(selectedTable)}`
+    const updateSelectedTables = (nextKeys) => {
+      const nextTables = nextKeys
+        .map((key) => tables.find((table) => workflowTableKey(table) === key))
+        .filter(Boolean)
+      onChange({
+        ...config,
+        table: nextTables.map(formatWorkflowTableName).join(', '),
+        tables: nextTables,
+        fields: nextTables.length === 1 ? config.fields || '*' : '*',
+        selectedFields: nextTables.length === 1 ? selectedFields : []
+      })
+      if (nextTables.length === 1) context.onLoadDatabaseColumns?.(config.connectionId, nextTables[0])
+    }
+    return (
+      <>
+        {scopeField}
+        {policyField}
+        <Field label={t('workflow.config.connection', 'Connection')}>
+          <div className="workflow-resource-picker">
+            <select
+              value={config.connectionId || ''}
+              onChange={(event) => {
+                const nextConnectionId = event.target.value
+                onChange({ ...config, connectionId: nextConnectionId, table: '', tables: [], fields: '*', selectedFields: [] })
+                context.onLoadDatabaseTables?.(nextConnectionId)
+              }}
+            >
+              <option value="">{t('workflow.config.selectDatabase', 'Select database connection')}</option>
+              {(context.databases || []).map((database) => (
+                <option key={database.id} value={database.id}>{database.name} · {database.engine} · {database.database || database.host}</option>
+              ))}
+            </select>
+            <button type="button" onClick={context.onAddDatabase}>{t('common.add', 'Add')}</button>
+          </div>
+        </Field>
+        {selectedDatabase && (
+          <div className="workflow-resource-hint">
+            {selectedDatabase.connectionMode === 'ssh' ? 'Via server SSH' : 'Direct'} · {formatDatabaseEndpoint(selectedDatabase)} · {selectedDatabase.username}
+          </div>
+        )}
+        <Field label={t('workflow.config.tables', 'Tables')}>
+          <WorkflowMultiSelect
+            options={tables.map((table) => ({ value: workflowTableKey(table), label: formatWorkflowTableName(table) }))}
+            value={selectedTableKeys}
+            placeholder={tableLoading ? t('workflow.config.loadingTables', 'Loading tables...') : t('workflow.config.selectTables', 'Select tables')}
+            emptyLabel={config.connectionId ? t('workflow.config.noTables', 'No tables loaded') : t('workflow.config.selectConnectionFirst', 'Select a connection first')}
+            onOpen={() => context.onLoadDatabaseTables?.(config.connectionId)}
+            onChange={updateSelectedTables}
+            disabled={!config.connectionId || tableLoading}
+          />
+          <small className="workflow-field-help">{tableLoading ? t('workflow.config.loadingTables', 'Loading tables...') : t('workflow.config.multiTableHelp', 'Multi-table export uses all fields for each table.')}</small>
+        </Field>
+        {selectedTables.length === 1 ? (
+          <Field label={t('workflow.config.fields', 'Fields')}>
+            <WorkflowMultiSelect
+              options={columns.map((column) => ({ value: column.name, label: `${column.name} · ${column.type}` }))}
+              value={selectedFields}
+              placeholder={columnLoading ? t('workflow.config.loadingFields', 'Loading fields...') : t('workflow.config.allFields', 'All fields (*)')}
+              emptyLabel={selectedTable ? t('workflow.config.noFields', 'No fields loaded') : t('workflow.config.selectOneTable', 'Select one table first')}
+              onOpen={() => context.onLoadDatabaseColumns?.(config.connectionId, selectedTable)}
+              onChange={(nextFields) => {
+                onChange({
+                  ...config,
+                  selectedFields: nextFields,
+                  fields: nextFields.length ? nextFields.join(', ') : '*'
+                })
+              }}
+              disabled={!selectedTable || columnLoading}
+            />
+            <small className="workflow-field-help">{columnLoading ? t('workflow.config.loadingFields', 'Loading fields...') : t('workflow.config.allFieldsHelp', 'Leave empty to output all fields (*) for this table.')}</small>
+          </Field>
+        ) : (
+          <div className="workflow-resource-hint">{t('workflow.config.multiTableFields', "Fields: * · Multi-table export keeps each table's own columns.")}</div>
+        )}
+        <Field label={t('workflow.config.filter', 'Filter')}>
+          <input value={config.filter || ''} onChange={(event) => update('filter', event.target.value)} placeholder="filter condition" />
+        </Field>
+      </>
+    )
+  }
+
+  if (node.data.kind === 'connector-redis') {
+    const selectedRedis = context.redisStores?.find((item) => item.id === config.connectionId)
+    return (
+      <>
+        {scopeField}
+        {policyField}
+        <Field label={t('workflow.config.connection', 'Connection')}>
+          <div className="workflow-resource-picker">
+            <select value={config.connectionId || ''} onChange={(event) => update('connectionId', event.target.value)}>
+              <option value="">{t('workflow.config.selectRedis', 'Select Redis connection')}</option>
+              {(context.redisStores || []).map((redis) => (
+                <option key={redis.id} value={redis.id}>{redis.name} · db{redis.database} · {redis.host}:{redis.port}</option>
+              ))}
+            </select>
+            <button type="button" onClick={context.onAddRedis}>{t('common.add', 'Add')}</button>
+          </div>
+        </Field>
+        {selectedRedis && (
+          <div className="workflow-resource-hint">
+            {selectedRedis.connectionMode === 'ssh' ? 'Via server SSH' : 'Direct'} · database {selectedRedis.database}
+          </div>
+        )}
+        <Field label={t('workflow.config.keyPattern', 'Key pattern')}>
+          <input value={config.keyPattern || ''} onChange={(event) => update('keyPattern', event.target.value)} placeholder="key pattern, e.g. user:*" />
+        </Field>
+      </>
+    )
+  }
+
+  if (node.data.kind === 'executor-command') {
+    return (
+      <>
+        {scopeField}
+        {policyField}
+        <Field label={t('workflow.config.command', 'Command')}>
+          <textarea
+            className="workflow-command-editor"
+            value={config.command || ''}
+            onChange={(event) => update('command', event.target.value)}
+            placeholder="shell command"
+            spellCheck="false"
+          />
+          <small className="workflow-field-help">{t('workflow.config.commandHelp', 'One command per line. Lines run sequentially inside this step; split into multiple command nodes only when another node must run between them.')}</small>
+        </Field>
+      </>
+    )
+  }
+
+  if (node.data.kind === 'executor-http') {
+    return (
+      <>
+        {scopeField}
+        {policyField}
+        <Field label={t('workflow.config.method', 'Method')}>
+          <select value={config.method || 'GET'} onChange={(event) => update('method', event.target.value)}>
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
+            <option value="PUT">PUT</option>
+            <option value="DELETE">DELETE</option>
+          </select>
+        </Field>
+        <Field label="URL">
+          <input value={config.url || ''} onChange={(event) => update('url', event.target.value)} placeholder="https://api.example.com/health" />
+        </Field>
+      </>
+    )
+  }
+
+  if (node.data.kind === 'executor-cron') {
+    const selectedCron = (context.cronEntries || []).find((cron) => String(cron.index) === String(config.cronEntryIndex))
+    return (
+      <>
+        {scopeField}
+        {policyField}
+        <Field label={t('workflow.config.existingTask', 'Existing task')}>
+          <div className="workflow-resource-picker">
+            <select
+              value={config.cronEntryIndex ?? ''}
+              onChange={(event) => {
+                const cron = (context.cronEntries || []).find((item) => String(item.index) === event.target.value)
+                onChange({
+                  ...config,
+                  cronEntryIndex: event.target.value,
+                  cronLine: cron?.line || '',
+                  cron: cron?.expression || config.cron,
+                  command: cron?.command || config.command
+                })
+              }}
+            >
+              <option value="">{t('workflow.config.createManual', 'Create or enter manually')}</option>
+              {(context.cronEntries || []).map((cron) => (
+                <option key={cron.index} value={cron.index}>{cron.enabled ? '' : '# '}{cron.expression} · {cron.command}</option>
+              ))}
+            </select>
+            <button type="button" onClick={context.onRefreshCron}>{t('common.refresh', 'Refresh')}</button>
+            <button type="button" onClick={context.onAddCron}>{t('common.add', 'Add')}</button>
+          </div>
+        </Field>
+        {selectedCron && (
+          <div className="workflow-resource-hint">{selectedCron.line}</div>
+        )}
+        <Field label="Cron">
+          <input value={config.cron || ''} onChange={(event) => update('cron', event.target.value)} placeholder="0 2 * * *" />
+        </Field>
+        <Field label={t('workflow.config.command', 'Command')}>
+          <input value={config.command || ''} onChange={(event) => update('command', event.target.value)} placeholder="command" />
+        </Field>
+      </>
+    )
+  }
+
+  if (node.data.kind === 'dependency-check') {
+    return (
+      <>
+        {scopeField}
+        {policyField}
+        <Field label={t('workflow.config.requiredServices', 'Required services')}>
+          <textarea
+            value={config.services || ''}
+            onChange={(event) => update('services', event.target.value)}
+            placeholder="mysql.service&#10;redis.service&#10;nginx.service"
+          />
+          <small className="workflow-field-help">{t('workflow.config.serviceHelp', 'One service per line. The step fails if a required service is missing or inactive.')}</small>
+        </Field>
+        <Field label={t('workflow.config.statusRule', 'Status rule')}>
+          <select value={config.requireActive === false ? 'exists' : 'active'} onChange={(event) => update('requireActive', event.target.value === 'active')}>
+            <option value="active">{t('workflow.config.mustActive', 'Must be active')}</option>
+            <option value="exists">{t('workflow.config.requireExists', 'Only require service exists')}</option>
+          </select>
+        </Field>
+        <Field label={t('workflow.config.extraCheck', 'Extra check command')}>
+          <textarea
+            value={config.customCommand || ''}
+            onChange={(event) => update('customCommand', event.target.value)}
+            placeholder="curl -fsS http://127.0.0.1:8080/health"
+          />
+          <small className="workflow-field-help">{t('workflow.config.extraCheckHelp', 'Optional. Runs after service checks; non-zero exit code fails the node.')}</small>
+        </Field>
+      </>
+    )
+  }
+
+  if (node.data.kind === 'release-backup') {
+    return (
+      <>
+        {scopeField}
+        {policyField}
+        <Field label={t('workflow.config.releaseSourcePath', 'Current deployment path')}>
+          <input value={config.sourcePath || ''} onChange={(event) => update('sourcePath', event.target.value)} placeholder="/opt/apps/demo-api or {{APP_DIR}}" />
+        </Field>
+        <Field label={t('workflow.config.releaseServiceName', 'Service name')}>
+          <input value={config.serviceName || ''} onChange={(event) => update('serviceName', event.target.value)} placeholder="demo-api.service or {{SERVICE_NAME}}" />
+        </Field>
+        <details className="workflow-advanced-settings">
+          <summary>{t('workflow.config.advancedBackup', 'Advanced backup settings')}</summary>
+          <Field label={t('workflow.config.releaseAppName', 'Application name')}>
+            <input value={config.appName || ''} onChange={(event) => update('appName', event.target.value)} placeholder={t('workflow.config.autoFromPath', 'Automatic from deployment path')} />
+          </Field>
+          <Field label={t('workflow.config.releaseBackupDir', 'Backup base directory')}>
+            <input value={config.backupDir || ''} onChange={(event) => update('backupDir', event.target.value)} placeholder="/var/lib/ops-flow/backups" />
+          </Field>
+          <Field label={t('workflow.config.releaseRetention', 'Retained backups')}>
+            <input type="number" min="1" max="100" value={config.retentionCount || 5} onChange={(event) => update('retentionCount', event.target.value)} />
+          </Field>
+          <Field label={t('workflow.config.releaseBackupConsistency', 'Backup consistency')}>
+            <label className="workflow-inline-check">
+              <input type="checkbox" checked={Boolean(config.stopBeforeBackup)} onChange={(event) => update('stopBeforeBackup', event.target.checked)} />
+              {t('workflow.config.stopBeforeBackup', 'Stop an active service before creating the backup')}
+            </label>
+          </Field>
+        </details>
+        <small className="workflow-field-help">{t('workflow.config.releaseBackupHelp', 'The backup path contains this run release ID and is passed directly to Restore release backup. No latest-file lookup is used.')}</small>
+      </>
+    )
+  }
+
+  if (node.data.kind === 'release-restore') {
+    return (
+      <>
+        {scopeField}
+        {policyField}
+        <Field label={t('workflow.config.restoreVerifyCommand', 'Verification after restore')}>
+          <textarea
+            value={config.verifyCommand || ''}
+            onChange={(event) => update('verifyCommand', event.target.value)}
+            placeholder="curl -fsS http://127.0.0.1:8080/health"
+          />
+          <small className="workflow-field-help">{t('workflow.config.restoreVerifyHelp', 'Optional. If empty, an active service is verified with systemctl is-active after restoration.')}</small>
+        </Field>
+        <Field label={t('workflow.config.rollbackFailure', 'Rollback failure')}>
+          <select value={config.continueOnFailure ? 'continue' : 'fail'} onChange={(event) => update('continueOnFailure', event.target.value === 'continue')}>
+            <option value="fail">{t('workflow.config.rollbackStop', 'Stop rollback on failure')}</option>
+            <option value="continue">{t('workflow.config.rollbackContinue', 'Record failure and continue rollback')}</option>
+          </select>
+        </Field>
+        <small className="workflow-field-help">{t('workflow.config.releaseRestoreHelp', 'This node is skipped during normal execution. It restores only the backup recorded by the current server run.')}</small>
+      </>
+    )
+  }
+
+  if (node.data.kind === 'rollback') {
+    return (
+      <>
+        {scopeField}
+        {policyField}
+        <Field label={t('workflow.config.rollbackCommand', 'Rollback command')}>
+          <textarea
+            value={config.command || ''}
+            onChange={(event) => update('command', event.target.value)}
+            placeholder="systemctl stop demo.service&#10;rm -rf /opt/apps/demo&#10;cp -a /opt/backups/demo-last /opt/apps/demo&#10;systemctl start demo.service"
+          />
+          <small className="workflow-field-help">{t('workflow.config.rollbackHelp', 'Rollback nodes are skipped during normal execution and only run after a failed step when Auto rollback is enabled.')}</small>
+        </Field>
+        <Field label={t('workflow.config.rollbackFailure', 'Rollback failure')}>
+          <select value={config.continueOnFailure === false ? 'fail' : 'continue'} onChange={(event) => update('continueOnFailure', event.target.value !== 'fail')}>
+            <option value="continue">{t('workflow.config.rollbackContinue', 'Record failure and continue rollback')}</option>
+            <option value="fail">{t('workflow.config.rollbackStop', 'Stop rollback on failure')}</option>
+          </select>
+        </Field>
+      </>
+    )
+  }
+
+  return (
+    <>
+      {scopeField}
+      {policyField}
+      <Field label={t('workflow.config.note', 'Note')}>
+        <input value={config.note || ''} onChange={(event) => update('note', event.target.value)} placeholder="optional note" />
+      </Field>
+    </>
+  )
+}
+
+function renderWorkflowExecutionScopeConfig(config, update, t = (_key, fallback) => fallback) {
+  const selected = normalizeWorkflowScopes(config.targetScopes, ['all'])
+  const toggle = (scopeId) => {
+    if (scopeId === 'all') {
+      update('targetScopes', ['all'])
+      return
+    }
+    const next = new Set(selected.filter((item) => item !== 'all'))
+    if (next.has(scopeId)) next.delete(scopeId)
+    else next.add(scopeId)
+    update('targetScopes', next.size ? Array.from(next) : ['all'])
+  }
+  return (
+    <Field label={t('workflow.config.executionScope', 'Execution scope')}>
+      <div className="workflow-scope-picker">
+        <button type="button" className={selected.includes('all') ? 'selected' : ''} onClick={() => toggle('all')}>
+          {t('workflow.config.allServers', 'All servers')}
+        </button>
+        {workflowExecutionScopes.map((scope) => (
+          <button
+            key={scope.id}
+            type="button"
+            className={selected.includes(scope.id) ? 'selected' : ''}
+            onClick={() => toggle(scope.id)}
+          >
+            {scope.label}
+          </button>
+        ))}
+      </div>
+      <small className="workflow-field-help">{t('workflow.config.scopeHelp', 'Only servers with matching scopes run this node; others are marked skipped.')}</small>
+    </Field>
+  )
+}
+
+function renderWorkflowExecutionPolicyConfig(config, update, t = (_key, fallback) => fallback) {
+  const policy = config.executionPolicy || 'parallel'
+  return (
+    <Field label={t('workflow.config.executionPolicy', 'Execution policy')}>
+      <select value={policy} onChange={(event) => update('executionPolicy', event.target.value)}>
+        <option value="parallel">{t('workflow.config.parallelMatched', 'Parallel on matched servers')}</option>
+        <option value="rolling">{t('workflow.config.rolling', 'Rolling one by one')}</option>
+        <option value="batch">{t('workflow.config.batch', 'Batch release')}</option>
+      </select>
+      {policy === 'batch' && (
+        <input
+          value={config.batchPlan || '20,50,100'}
+          onChange={(event) => update('batchPlan', event.target.value)}
+          placeholder="20,50,100"
+        />
+      )}
+      <small className="workflow-field-help">{t('workflow.config.policyHelp', 'In cluster mode, this controls how matched servers execute this node. Batch values are cumulative percentages.')}</small>
+    </Field>
+  )
+}
+
+function makeWorkflowDefinition(name, description) {
+  const nodes = [
+    createWorkflowNode('start', 'start', 40, 120),
+    createWorkflowNode('end', 'end', 300, 120)
+  ]
+  return {
+    id: makeId('workflow'),
+    name,
+    description,
+    nodes,
+    edges: buildSequentialWorkflowEdges(nodes.map((node) => node.id)),
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  }
+}
+
+function cloneWorkflowTemplate(template) {
+  const copy = cloneWorkflow(template)
+  const idMap = Object.fromEntries((copy.nodes || []).map((node) => [node.id, makeId(node.data?.kind || 'node')]))
+  const nodes = (copy.nodes || []).map((node) => ({
+    ...node,
+    id: idMap[node.id] || makeId(node.data?.kind || 'node')
+  }))
+  return {
+    ...copy,
+    id: makeId('workflow'),
+    name: copy.name || 'New workflow',
+    description: copy.description || 'No description.',
+    nodes,
+    edges: buildSequentialWorkflowEdges(nodes.map((node) => node.id)),
+    updatedAt: Date.now()
+  }
+}
+
+function createWorkflowNode(id, kind, x, y, config = {}) {
+  const module = getWorkflowModule(kind)
+  return {
+    id,
+    position: { x, y },
+    data: {
+      label: module?.label || module?.name || kind,
+      kind,
+      config: {
+        ...defaultWorkflowNodeConfig(kind),
+        ...config
+      }
+    }
+  }
+}
+
+function defaultWorkflowRunConfig() {
+  return {
+    targetServerIds: [],
+    serverScopes: {},
+    orchestrationMode: 'byServer',
+    mode: 'parallel',
+    reuseRemoteFiles: false,
+    concurrency: 2,
+    failureStrategy: 'continue',
+    autoRollback: false,
+    rollbackOnCancel: true,
+    variablesText: '',
+    privilege: { mode: 'auto', password: '', passwordRequired: false, suggestedMode: 'sudo' },
+    note: ''
+  }
+}
+
+function defaultWorkflowNodeConfig(kind) {
+  const scope = { targetScopes: ['all'], executionPolicy: 'parallel', batchPlan: '20,50,100' }
+  if (kind === 'output-format') return { ...scope, format: 'excel', outputPath: '/tmp/export.xlsx' }
+  if (kind === 'file-upload') return { ...scope, localPath: '', remotePath: '/opt/uploads/package.tar.gz' }
+  if (kind === 'file-download') return { ...scope, localDir: '' }
+  if (kind === 'connector-database') return { ...scope, connectionId: '', table: '', tables: [], fields: '*', selectedFields: [], filter: '' }
+  if (kind === 'connector-redis') return { ...scope, connectionId: '', keyPattern: '*' }
+  if (kind === 'executor-command') return { ...scope, command: '' }
+  if (kind === 'executor-http') return { ...scope, method: 'GET', url: '' }
+  if (kind === 'executor-cron') return { ...scope, cron: '0 2 * * *', command: '' }
+  if (kind === 'dependency-check') return { ...scope, services: '', requireActive: true, customCommand: '' }
+  if (kind === 'release-backup') return {
+    ...scope,
+    appName: '',
+    sourcePath: '/opt/apps/demo-app',
+    backupDir: '',
+    serviceName: 'demo-app.service',
+    retentionCount: 5,
+    stopBeforeBackup: false
+  }
+  if (kind === 'release-restore') return { ...scope, verifyCommand: '', continueOnFailure: false }
+  if (kind === 'rollback') return { ...scope, command: '', continueOnFailure: true }
+  return scope
+}
+
+function getWorkflowModule(kind) {
+  return workflowModuleGroups.flatMap((group) => group.modules).find((module) => module.id === kind)
+}
+
+function isWorkflowRollbackNode(node) {
+  return ['rollback', 'release-restore'].includes(node?.data?.kind)
+}
+
+function buildSequentialWorkflowEdges(nodeIds = []) {
+  return nodeIds.slice(0, -1).map((source, index) => ({
+    id: `edge-${source}-${nodeIds[index + 1]}`,
+    source,
+    target: nodeIds[index + 1],
+    animated: true
+  }))
+}
+
+function cloneWorkflow(workflow) {
+  return JSON.parse(JSON.stringify(workflow))
+}
+
+function normalizeWorkflows(value) {
+  const source = Array.isArray(value) && value.length ? value : workflowTemplates
+  return source
+    .filter((workflow) => workflow?.id && workflow?.name)
+    .map((workflow) => {
+      const nodes = normalizeWorkflowNodes(Array.isArray(workflow.nodes) ? workflow.nodes : [])
+      const migratedNodes = migrateBuiltInAuditWorkflowNodes(workflow, nodes)
+      return {
+        ...workflow,
+        nodes: migratedNodes,
+        edges: migratedNodes !== nodes
+          ? buildSequentialWorkflowEdges(migratedNodes.map((node) => node.id))
+          : Array.isArray(workflow.edges) ? workflow.edges : buildSequentialWorkflowEdges(migratedNodes.map((node) => node.id))
+      }
+    })
+}
+
+function workflowStoreNeedsMigration(savedWorkflows, normalizedWorkflows) {
+  if (!Array.isArray(savedWorkflows) || !savedWorkflows.length) return false
+  return normalizedWorkflows.some((workflow) => {
+    const isLinuxAudit = /linux security inspection/i.test(workflow?.name || '') || /linux.*inspection/i.test(workflow?.id || '')
+    if (!isLinuxAudit) return false
+    const command = workflow.nodes?.find((node) => node.data?.kind === 'executor-command')
+    const saved = savedWorkflows.find((item) => item.id === workflow.id || item.name === workflow.name)
+    const savedCommand = saved?.nodes?.find((node) => node.data?.kind === 'executor-command')
+    return String(command?.data?.config?.command || '').includes('OPS_AUDIT_SCORE')
+      && !String(savedCommand?.data?.config?.command || '').includes('OPS_AUDIT_SCORE')
+  })
+}
+
+function migrateBuiltInAuditWorkflowNodes(workflow, nodes = []) {
+  const isLinuxAudit = /linux security inspection/i.test(workflow?.name || '') || /linux.*inspection/i.test(workflow?.id || '')
+  if (!isLinuxAudit) return nodes
+  const start = nodes.find((node) => node.data?.kind === 'start')
+  const command = nodes.find((node) => node.data?.kind === 'executor-command')
+  const output = nodes.find((node) => node.data?.kind === 'output-format')
+  const download = nodes.find((node) => node.data?.kind === 'file-download')
+  const end = nodes.find((node) => node.data?.kind === 'end')
+  if (!start || !command || !output || !download || !end) return nodes
+  const currentOrder = nodes.map((node) => node.id).join(',')
+  const coreIds = new Set([start.id, command.id, output.id, download.id, end.id])
+  const extraNodes = nodes.filter((node) => !coreIds.has(node.id))
+  const needsCommandMigration = !String(command.data?.config?.command || '').includes('OPS_AUDIT_SCORE')
+  const migratedCommand = needsCommandMigration
+    ? {
+        ...command,
+        data: {
+          ...command.data,
+          config: {
+            ...(command.data?.config || {}),
+            command: buildLinuxSecurityAuditCommand()
+          }
+        }
+      }
+    : command
+  const nextNodes = [start, migratedCommand, output, download, ...extraNodes, end]
+  const nextOrder = nextNodes.map((node) => node.id).join(',')
+  if (currentOrder === nextOrder && !needsCommandMigration) return nodes
+  return nextNodes.map((node, index) => ({
+    ...node,
+    position: { ...(node.position || {}), x: 20 + index * 220, y: node.position?.y ?? 110 }
+  }))
+}
+
+function normalizeWorkflowNodes(nodes = []) {
+  let lastOutputNodeId = ''
+  let pendingDownloadRemotePath = ''
+  const normalized = nodes.map((node) => {
+    const config = {
+      ...defaultWorkflowNodeConfig(node.data?.kind),
+      ...(node.data?.config || {})
+    }
+    config.targetScopes = normalizeWorkflowScopes(config.targetScopes, ['all'])
+    if (node.data?.kind === 'output-format') {
+      lastOutputNodeId = node.id
+      if (!config.outputPath && pendingDownloadRemotePath) config.outputPath = pendingDownloadRemotePath
+      config.outputPath = normalizeExcelOutputPath(config.format, config.outputPath)
+    }
+    if (node.data?.kind === 'file-download' && config.remotePath) {
+      pendingDownloadRemotePath = config.remotePath
+      delete config.remotePath
+    }
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        config
+      }
+    }
+  })
+  if (pendingDownloadRemotePath && lastOutputNodeId) {
+    return normalized.map((node) => (
+      node.id === lastOutputNodeId && !node.data.config.outputPath
+        ? { ...node, data: { ...node.data, config: { ...node.data.config, outputPath: pendingDownloadRemotePath } } }
+        : node
+    ))
+  }
+  return normalized
+}
+
+function validateWorkflowDefinition(workflow) {
+  const issues = []
+  const nodes = workflow?.nodes || []
+  if (!nodes.length) {
+    issues.push({ level: 'error', message: 'Workflow needs at least one node.' })
+    return issues
+  }
+
+  const releaseBackups = nodes.filter((node) => node.data?.kind === 'release-backup')
+  const releaseRestores = nodes.filter((node) => node.data?.kind === 'release-restore')
+  if (releaseBackups.length > 1) issues.push({ level: 'error', message: 'Use only one Create release backup node in a workflow.' })
+  if (releaseRestores.length > 1) issues.push({ level: 'error', message: 'Use only one Restore release backup node in a workflow.' })
+  if (releaseRestores.length && !releaseBackups.length) issues.push({ level: 'error', message: 'Restore release backup requires a Create release backup node.' })
+  if (releaseBackups.length && !releaseRestores.length) issues.push({ level: 'warning', message: 'Create release backup has no matching Restore release backup node.' })
+
+  nodes.forEach((node, index) => {
+    const config = node.data?.config || {}
+    const label = node.data?.label || `Step ${index + 1}`
+    const add = (message, level = 'error') => issues.push({ level, nodeId: node.id, message: `${label}: ${message}` })
+
+    if (node.data?.kind === 'file-upload' && !config.localPath?.trim()) add('local file or directory is required.')
+    if (node.data?.kind === 'file-upload' && !config.remotePath?.trim()) add('remote upload path is required.')
+    if (node.data?.kind === 'output-format' && !config.outputPath?.trim()) add('output path is required.')
+    if (node.data?.kind === 'file-download' && !config.localDir?.trim()) add('local save directory is required.')
+    if (node.data?.kind === 'connector-database' && !config.connectionId) add('select a database connection.')
+    if (node.data?.kind === 'connector-database' && !normalizeWorkflowSelectedTables(config).length) add('select at least one table.')
+    if (node.data?.kind === 'connector-redis' && !config.connectionId) add('select a Redis connection.')
+    if (node.data?.kind === 'executor-command' && !config.command?.trim()) add('command is required.')
+    if (node.data?.kind === 'executor-http' && !config.url?.trim()) add('URL is required.')
+    if (node.data?.kind === 'executor-cron' && !config.cronLine && (!config.cron?.trim() || !config.command?.trim())) add('select an existing cron task or enter schedule and command.')
+    if (node.data?.kind === 'dependency-check' && !config.services?.trim() && !config.customCommand?.trim()) add('enter services or an extra check command.')
+    if (node.data?.kind === 'release-backup' && !config.sourcePath?.trim()) add('source path is required.')
+    if (node.data?.kind === 'release-backup' && config.sourcePath?.trim() === '/') add('source path cannot be the server root directory.')
+    if (node.data?.kind === 'release-backup' && config.backupDir?.trim() === '/') add('backup directory cannot be the server root directory.')
+    if (node.data?.kind === 'rollback' && !config.command?.trim()) add('rollback command is required.', 'warning')
+  })
+
+  return issues
+}
+
+function formatWorkflowNodeSummary(node) {
+  const config = node.data.config || {}
+  if (node.data.kind === 'output-format') return `Output: ${String(config.format || 'excel').toUpperCase()} · ${config.outputPath || 'output path'}`
+  if (node.data.kind === 'file-upload') return `Upload ${config.localPath || 'local file'} to ${config.remotePath || 'remote path'}`
+  if (node.data.kind === 'file-download') return `Download workflow output to ${config.localDir || 'local directory'}`
+  if (node.data.kind === 'connector-database') return `${normalizeWorkflowSelectedTables(config).length || 0} table${normalizeWorkflowSelectedTables(config).length === 1 ? '' : 's'} · fields ${config.fields || '*'}`
+  if (node.data.kind === 'connector-redis') return `Keys ${config.keyPattern || '*'}`
+  if (node.data.kind === 'executor-command') return formatCommandStepSummary(config.command)
+  if (node.data.kind === 'executor-http') return config.url || 'Call HTTP API'
+  if (node.data.kind === 'executor-cron') return config.cron || 'Schedule or run cron task'
+  if (node.data.kind === 'dependency-check') return `${parseWorkflowLines(config.services).length} service${parseWorkflowLines(config.services).length === 1 ? '' : 's'} · ${config.requireActive === false ? 'exists' : 'active'}`
+  if (node.data.kind === 'release-backup') return `${config.sourcePath || 'application path'} → ${config.backupDir || '/var/lib/ops-flow/backups'} · keep ${config.retentionCount || 5}`
+  if (node.data.kind === 'release-restore') return 'Restores the backup created by this workflow run'
+  if (node.data.kind === 'rollback') return formatCommandStepSummary(config.command) || 'Runs only after failure'
+  return getWorkflowModule(node.data.kind)?.description || node.data.kind
+}
+
+function formatWorkflowStepLogs(runLogs, nodeId) {
+  if (!runLogs || !Object.keys(runLogs).length) {
+    return 'Run a workflow to see logs for each step here. Full run history is also kept in Transfers.'
+  }
+  const selected = runLogs[nodeId] || Object.values(runLogs)[0]
+  if (!selected) return 'Select a workflow step to inspect its logs.'
+  const body = selected.logs?.length ? selected.logs.join('\n') : 'No output for this step yet.'
+  return [`# ${selected.label} [${selected.status || 'pending'}]`, body].join('\n')
+}
+
+function parseWorkflowLines(value) {
+  return String(value || '')
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function createWorkflowReleaseId() {
+  const timestamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14)
+  return `${timestamp}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function parseWorkflowVariables(value) {
+  return String(value || '')
+    .split(/\r?\n/)
+    .reduce((variables, line) => {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) return variables
+      const separator = trimmed.indexOf('=')
+      if (separator <= 0) return variables
+      const key = trimmed.slice(0, separator).trim()
+      if (!/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(key)) return variables
+      variables[key] = trimmed.slice(separator + 1).trim()
+      return variables
+    }, {})
+}
+
+function createWorkflowRuntime(runId, runConfig = {}, server = {}, releaseId = '', workflow = null) {
+  const resolvedReleaseId = releaseId || createWorkflowReleaseId()
+  const runtime = {
+    runId,
+    releaseId: resolvedReleaseId,
+    outputPath: '',
+    outputFormat: '',
+    databaseResults: [],
+    artifacts: [],
+    releaseBackup: null,
+    releaseMutationStarted: false,
+    releaseRollbackStatus: '',
+    releaseVerifyCommand: '',
+    reuseRemoteFiles: Boolean(runConfig.reuseRemoteFiles),
+    variables: {
+      ...parseWorkflowVariables(runConfig.variablesText),
+      'release.id': resolvedReleaseId,
+      'run.id': runId,
+      'run.note': runConfig.note || '',
+      'server.id': server?.id || '',
+      'server.name': server?.name || '',
+      'server.host': server?.host || '',
+      'server.user': server?.username || ''
+    }
+  }
+  const restoreNode = workflow?.nodes?.find((node) => node.data?.kind === 'release-restore')
+  runtime.releaseVerifyCommand = String(resolveWorkflowConfigVariables(restoreNode?.data?.config?.verifyCommand || '', runtime)).trim()
+  return runtime
+}
+
+function buildWorkflowRecoveryRecord(runtime = {}, server = {}) {
+  if (!runtime.releaseBackup?.manifestPath) return null
+  return {
+    serverId: server.id || '',
+    serverName: server.name || '',
+    releaseId: runtime.releaseId || runtime.releaseBackup.releaseId || '',
+    manifestPath: runtime.releaseBackup.manifestPath,
+    backupPath: runtime.releaseBackup.path || ''
+  }
+}
+
+function resolveWorkflowConfigVariables(value, runtime) {
+  if (typeof value === 'string') {
+    return value.replace(/\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}/g, (match, key) => (
+      Object.prototype.hasOwnProperty.call(runtime?.variables || {}, key)
+        ? String(runtime.variables[key] ?? '')
+        : match
+    ))
+  }
+  if (Array.isArray(value)) return value.map((item) => resolveWorkflowConfigVariables(item, runtime))
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveWorkflowConfigVariables(item, runtime)]))
+  }
+  return value
+}
+
+function findUnresolvedWorkflowVariables(value) {
+  const matches = String(JSON.stringify(value) || '').matchAll(/\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}/g)
+  return [...new Set(Array.from(matches, (match) => match[1]))]
+}
+
+function sanitizeReleaseFileName(value) {
+  return String(value || 'application').trim().replace(/[^A-Za-z0-9._-]+/g, '-') || 'application'
+}
+
+
+function createReleaseBackupExecution(config = {}, runtime = {}) {
+  const sourcePath = String(config.sourcePath || '').trim()
+  const inferredName = sourcePath.split('/').filter(Boolean).pop() || 'application'
+  const appName = sanitizeReleaseFileName(config.appName || inferredName)
+  const backupBase = String(config.backupDir || '').replace(/\/+$/, '') || '/var/lib/ops-flow/backups'
+  const backupDir = `${backupBase}/${appName}`
+  const serviceName = String(config.serviceName || '').trim()
+  const retentionCount = Math.max(1, Math.min(100, Number(config.retentionCount) || 5))
+  const releaseId = runtime.releaseId || createWorkflowReleaseId()
+  const fileName = `${releaseId}.tar.gz`
+  const backupPath = `${backupDir}/${fileName}`
+  const manifestDir = `${backupBase}/.ops-flow/releases/${appName}/${releaseId}`
+  const manifestPath = `${manifestDir}/manifest.env`
+  const stopBeforeBackup = Boolean(config.stopBeforeBackup)
+  const verifyCommand = String(resolveWorkflowConfigVariables(runtime.releaseVerifyCommand || '', {
+    variables: {
+      ...(runtime.variables || {}),
+      'release.app': appName,
+      'release.source': sourcePath,
+      'release.service': serviceName,
+      'release.backupDir': backupBase
+    }
+  })).trim()
+  const lines = [
+    'set -Eeuo pipefail',
+    'umask 077',
+    `APP_NAME=${shellQuote(appName)}`,
+    `APP_SOURCE=${shellQuote(sourcePath)}`,
+    `BACKUP_BASE=${shellQuote(backupBase)}`,
+    `BACKUP_DIR=${shellQuote(backupDir)}`,
+    `BACKUP_PATH=${shellQuote(backupPath)}`,
+    `MANIFEST_DIR=${shellQuote(manifestDir)}`,
+    `MANIFEST_PATH=${shellQuote(manifestPath)}`,
+    `RELEASE_ID=${shellQuote(releaseId)}`,
+    `SERVICE_NAME=${shellQuote(serviceName)}`,
+    `VERIFY_COMMAND=${shellQuote(verifyCommand)}`,
+    `KEEP_COUNT=${retentionCount}`,
+    `STOP_BEFORE_BACKUP=${stopBeforeBackup ? '1' : '0'}`,
+    'PREVIOUS_STATUS="unknown"',
+    'BACKUP_CHECKSUM=""',
+    'BACKUP_OK=0',
+    'encode_manifest_value() { printf "%s" "$1" | base64 | tr -d "\\r\\n"; }',
+    'write_manifest() {',
+    '  manifest_status="$1"; manifest_temp="$MANIFEST_PATH.tmp.$$"',
+    '  {',
+    '    printf "FORMAT=1\\n"',
+    '    printf "STATUS=%s\\n" "$manifest_status"',
+    '    printf "UPDATED_AT=%s\\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"',
+    '    printf "RELEASE_ID=%s\\n" "$RELEASE_ID"',
+    '    printf "APP_NAME=%s\\n" "$APP_NAME"',
+    '    printf "APP_SOURCE_B64=%s\\n" "$(encode_manifest_value "$APP_SOURCE")"',
+    '    printf "BACKUP_BASE_B64=%s\\n" "$(encode_manifest_value "$BACKUP_BASE")"',
+    '    printf "BACKUP_PATH_B64=%s\\n" "$(encode_manifest_value "$BACKUP_PATH")"',
+    '    printf "BACKUP_CHECKSUM=%s\\n" "$BACKUP_CHECKSUM"',
+    '    printf "SERVICE_NAME_B64=%s\\n" "$(encode_manifest_value "$SERVICE_NAME")"',
+    '    printf "PREVIOUS_STATUS=%s\\n" "$PREVIOUS_STATUS"',
+    '    printf "VERIFY_COMMAND_B64=%s\\n" "$(encode_manifest_value "$VERIFY_COMMAND")"',
+    '  } > "$manifest_temp"',
+    '  chmod 600 "$manifest_temp"',
+    '  mv -f -- "$manifest_temp" "$MANIFEST_PATH"',
+    '}',
+    'if [ -n "$SERVICE_NAME" ]; then PREVIOUS_STATUS=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || true); [ -n "$PREVIOUS_STATUS" ] || PREVIOUS_STATUS="unknown"; fi',
+    'cleanup_backup_failure() {',
+    '  rc=$?',
+    '  rm -f -- "$BACKUP_PATH.partial.$$" 2>/dev/null || true',
+    '  if [ "$rc" -ne 0 ] && [ "$BACKUP_OK" -eq 0 ]; then',
+    '    write_manifest backup_failed 2>/dev/null || true',
+    '    if [ "$STOP_BEFORE_BACKUP" -eq 1 ] && [ "$PREVIOUS_STATUS" = "active" ]; then systemctl start "$SERVICE_NAME" >/dev/null 2>&1 || true; fi',
+    '  fi',
+    '  exit "$rc"',
+    '}',
+    'trap cleanup_backup_failure EXIT',
+    'printf "[backup 1/6] Checking source, tools and destination\\n"',
+    'for tool in tar sha256sum base64 awk sort sed find du df; do command -v "$tool" >/dev/null 2>&1 || { echo "Required command not found: $tool" >&2; exit 3; }; done',
+    '[ -e "$APP_SOURCE" ] || [ -L "$APP_SOURCE" ] || { echo "Source path does not exist: $APP_SOURCE" >&2; exit 3; }',
+    '[ "$APP_SOURCE" != "/" ] || { echo "Refusing to back up the server root directory" >&2; exit 3; }',
+    '[ "$BACKUP_BASE" != "/" ] || { echo "Refusing to use the server root as backup directory" >&2; exit 3; }',
+    'SOURCE_REAL=$(readlink -m "$APP_SOURCE"); BACKUP_REAL=$(readlink -m "$BACKUP_DIR")',
+    'if [ -d "$APP_SOURCE" ]; then case "$BACKUP_REAL/" in "$SOURCE_REAL/"*) echo "Backup directory cannot be inside the deployment directory" >&2; exit 3;; esac; fi',
+    'mkdir -p -- "$BACKUP_DIR" "$MANIFEST_DIR"',
+    'write_manifest preparing',
+    'SOURCE_KB=$(du -sk -- "$APP_SOURCE" | awk "{print \\$1}")',
+    'AVAILABLE_KB=$(df -Pk -- "$BACKUP_DIR" | awk "NR==2 {print \\$4}")',
+    '[ -n "$SOURCE_KB" ] && [ -n "$AVAILABLE_KB" ] || { echo "Unable to determine backup disk space" >&2; exit 3; }',
+    '[ "$AVAILABLE_KB" -gt "$SOURCE_KB" ] || { echo "Insufficient backup space: need at least ${SOURCE_KB} KB, available ${AVAILABLE_KB} KB" >&2; exit 3; }',
+    'printf "[backup 2/6] Capturing service state: %s\\n" "$PREVIOUS_STATUS"',
+    'if [ "$STOP_BEFORE_BACKUP" -eq 1 ] && [ "$PREVIOUS_STATUS" = "active" ]; then systemctl stop "$SERVICE_NAME"; fi',
+    'printf "[backup 3/6] Creating archive\\n"',
+    'tar -czpf "$BACKUP_PATH.partial.$$" -C "$(dirname "$APP_SOURCE")" "$(basename "$APP_SOURCE")"',
+    'printf "[backup 4/6] Verifying archive structure\\n"',
+    'tar -tzf "$BACKUP_PATH.partial.$$" >/dev/null',
+    'BACKUP_CHECKSUM=$(sha256sum "$BACKUP_PATH.partial.$$" | awk "{print \\$1}")',
+    'test -n "$BACKUP_CHECKSUM"',
+    'chmod 600 "$BACKUP_PATH.partial.$$"',
+    'mv -f -- "$BACKUP_PATH.partial.$$" "$BACKUP_PATH"',
+    'if [ "$STOP_BEFORE_BACKUP" -eq 1 ] && [ "$PREVIOUS_STATUS" = "active" ]; then systemctl start "$SERVICE_NAME"; fi',
+    'write_manifest prepared',
+    'BACKUP_OK=1',
+    'printf "[backup 5/6] Applying retention policy\\n"',
+    'set +e',
+    'count=0; while IFS= read -r old_backup; do count=$((count + 1)); if [ "$count" -gt "$KEEP_COUNT" ]; then old_release=$(basename "$old_backup" .tar.gz); rm -f -- "$old_backup"; rm -rf -- "$BACKUP_BASE/.ops-flow/releases/$APP_NAME/$old_release"; fi; done < <(find "$BACKUP_DIR" -maxdepth 1 -type f -name "*.tar.gz" -printf "%T@ %p\\n" | sort -rn | sed "s/^[^ ]* //")',
+    'RETENTION_STATUS=$?',
+    'set -e',
+    'if [ "$RETENTION_STATUS" -ne 0 ]; then printf "Warning: backup is valid but old backup cleanup was incomplete\\n" >&2; fi',
+    'printf "[backup 6/6] Backup ready\\n"',
+    'printf "__OPS_RELEASE_BACKUP_PATH__%s\\n" "$BACKUP_PATH"',
+    'printf "__OPS_RELEASE_BACKUP_CHECKSUM__%s\\n" "$BACKUP_CHECKSUM"',
+    'printf "__OPS_RELEASE_SERVICE_STATUS__%s\\n" "$PREVIOUS_STATUS"',
+    'printf "__OPS_RELEASE_MANIFEST_PATH__%s\\n" "$MANIFEST_PATH"',
+    'trap - EXIT'
+  ]
+  return {
+    command: lines.join('\n'),
+    metadata: { appName, sourcePath, backupBase, backupDir, serviceName, retentionCount, path: backupPath, fileName, releaseId, manifestPath }
+  }
+}
+
+function buildReleaseRestoreCommand(backup = {}, config = {}) {
+  return buildReleaseRestoreFromManifestCommand(backup.manifestPath, config.verifyCommand)
+}
+
+function buildReleaseManifestStatusCommand(manifestPath, status) {
+  return [
+    'set -Eeuo pipefail',
+    `MANIFEST_PATH=${shellQuote(manifestPath || '')}`,
+    `NEXT_STATUS=${shellQuote(status || 'unknown')}`,
+    '[ -f "$MANIFEST_PATH" ] || { echo "Release manifest not found: $MANIFEST_PATH" >&2; exit 4; }',
+    'manifest_temp="$MANIFEST_PATH.tmp.$$"',
+    'awk -v status="$NEXT_STATUS" -v updated="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \'BEGIN { seen_status=0; seen_updated=0 } /^STATUS=/ { print "STATUS=" status; seen_status=1; next } /^UPDATED_AT=/ { print "UPDATED_AT=" updated; seen_updated=1; next } { print } END { if (!seen_status) print "STATUS=" status; if (!seen_updated) print "UPDATED_AT=" updated }\' "$MANIFEST_PATH" > "$manifest_temp"',
+    'chmod 600 "$manifest_temp"',
+    'mv -f -- "$manifest_temp" "$MANIFEST_PATH"',
+    'printf "Release state: %s\\n" "$NEXT_STATUS"'
+  ].join('\n')
+}
+
+function buildReleaseRestoreFromManifestCommand(manifestPath, verifyOverride = '') {
+  const lines = [
+    'set -Eeuo pipefail',
+    'umask 077',
+    `MANIFEST_PATH=${shellQuote(manifestPath || '')}`,
+    `VERIFY_OVERRIDE=${shellQuote(String(verifyOverride || '').trim())}`,
+    '[ -f "$MANIFEST_PATH" ] || { echo "Release manifest not found: $MANIFEST_PATH" >&2; exit 4; }',
+    'manifest_value() { awk -F= -v key="$1" \'$1 == key { sub(/^[^=]*=/, ""); print; exit }\' "$MANIFEST_PATH"; }',
+    'decode_manifest_value() { value=$(manifest_value "$1"); [ -n "$value" ] && printf "%s" "$value" | base64 -d || true; }',
+    'manifest_set_status() {',
+    '  next_status="$1"; manifest_temp="$MANIFEST_PATH.tmp.$$"',
+    '  awk -v status="$next_status" -v updated="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \'BEGIN { seen_status=0; seen_updated=0 } /^STATUS=/ { print "STATUS=" status; seen_status=1; next } /^UPDATED_AT=/ { print "UPDATED_AT=" updated; seen_updated=1; next } { print } END { if (!seen_status) print "STATUS=" status; if (!seen_updated) print "UPDATED_AT=" updated }\' "$MANIFEST_PATH" > "$manifest_temp"',
+    '  chmod 600 "$manifest_temp"; mv -f -- "$manifest_temp" "$MANIFEST_PATH"',
+    '}',
+    'APP_NAME=$(manifest_value APP_NAME)',
+    'RELEASE_ID=$(manifest_value RELEASE_ID)',
+    'APP_SOURCE=$(decode_manifest_value APP_SOURCE_B64)',
+    'BACKUP_PATH=$(decode_manifest_value BACKUP_PATH_B64)',
+    'BACKUP_CHECKSUM=$(manifest_value BACKUP_CHECKSUM)',
+    'SERVICE_NAME=$(decode_manifest_value SERVICE_NAME_B64)',
+    'PREVIOUS_STATUS=$(manifest_value PREVIOUS_STATUS)',
+    'VERIFY_COMMAND=$(decode_manifest_value VERIFY_COMMAND_B64)',
+    'if [ -n "$VERIFY_OVERRIDE" ]; then VERIFY_COMMAND="$VERIFY_OVERRIDE"; fi',
+    '[ -n "$APP_SOURCE" ] && [ "$APP_SOURCE" != "/" ] || { echo "Unsafe restore target" >&2; exit 4; }',
+    '[ -f "$BACKUP_PATH" ] || { echo "Release backup not found: $BACKUP_PATH" >&2; exit 4; }',
+    'SOURCE_REAL=$(readlink -m "$APP_SOURCE"); BACKUP_REAL=$(readlink -f "$BACKUP_PATH")',
+    'case "$BACKUP_REAL" in "$SOURCE_REAL"/*) echo "Backup file is inside the restore target and would be deleted" >&2; exit 4;; esac',
+    'printf "[rollback 1/6] Verifying backup checksum and archive\\n"',
+    'if [ -n "$BACKUP_CHECKSUM" ]; then printf "%s  %s\\n" "$BACKUP_CHECKSUM" "$BACKUP_PATH" | sha256sum -c -; fi',
+    'tar -tzf "$BACKUP_PATH" >/dev/null',
+    'APP_PARENT=$(dirname "$APP_SOURCE")',
+    'APP_BASENAME=$(basename "$APP_SOURCE")',
+    'STAGE_ROOT="$APP_PARENT/.ops-flow-restore-$RELEASE_ID-$$"',
+    'STAGED_SOURCE="$STAGE_ROOT/$APP_BASENAME"',
+    'FAILED_PATH="$APP_SOURCE.ops-flow-failed-$RELEASE_ID-$$"',
+    'OLD_MOVED=0',
+    'SWITCHED=0',
+    'restore_cleanup() {',
+    '  rc=$?',
+    '  if [ "$rc" -ne 0 ]; then',
+    '    manifest_set_status rollback_failed 2>/dev/null || true',
+    '    if [ "$SWITCHED" -eq 0 ] && [ "$OLD_MOVED" -eq 1 ] && [ ! -e "$APP_SOURCE" ] && [ ! -L "$APP_SOURCE" ]; then mv -- "$FAILED_PATH" "$APP_SOURCE" 2>/dev/null || true; fi',
+    '  fi',
+    '  rm -rf -- "$STAGE_ROOT" 2>/dev/null || true',
+    '  exit "$rc"',
+    '}',
+    'trap restore_cleanup EXIT',
+    'manifest_set_status rollback_running',
+    'printf "[rollback 2/6] Extracting into staging directory\\n"',
+    'mkdir -p -- "$APP_PARENT"',
+    'rm -rf -- "$STAGE_ROOT"',
+    'mkdir -p -- "$STAGE_ROOT"',
+    'tar -xzpf "$BACKUP_PATH" -C "$STAGE_ROOT"',
+    '[ -e "$STAGED_SOURCE" ] || [ -L "$STAGED_SOURCE" ] || { echo "Backup does not contain expected target: $APP_BASENAME" >&2; exit 4; }',
+    'printf "[rollback 3/6] Stopping service and switching target\\n"',
+    'if [ -n "$SERVICE_NAME" ] && [ "$PREVIOUS_STATUS" != "unknown" ]; then systemctl stop "$SERVICE_NAME" >/dev/null 2>&1 || true; fi',
+    'if [ -e "$APP_SOURCE" ] || [ -L "$APP_SOURCE" ]; then mv -- "$APP_SOURCE" "$FAILED_PATH"; OLD_MOVED=1; fi',
+    'mv -- "$STAGED_SOURCE" "$APP_SOURCE"',
+    'SWITCHED=1',
+    'printf "[rollback 4/6] Restoring service state\\n"',
+    'if [ -n "$SERVICE_NAME" ]; then if [ "$PREVIOUS_STATUS" = "active" ]; then systemctl start "$SERVICE_NAME"; elif [ "$PREVIOUS_STATUS" != "unknown" ]; then systemctl stop "$SERVICE_NAME" >/dev/null 2>&1 || true; fi; fi',
+    'printf "[rollback 5/6] Running health verification\\n"',
+    'if [ -n "$VERIFY_COMMAND" ]; then bash -lc "$VERIFY_COMMAND"; elif [ -n "$SERVICE_NAME" ] && [ "$PREVIOUS_STATUS" = "active" ]; then systemctl is-active --quiet "$SERVICE_NAME"; fi',
+    'rm -rf -- "$FAILED_PATH"',
+    'manifest_set_status rolled_back',
+    'printf "[rollback 6/6] Rollback completed\\n"',
+    'printf "__OPS_RELEASE_RESTORED__%s\\n" "$BACKUP_PATH"',
+    'trap - EXIT',
+    'rm -rf -- "$STAGE_ROOT"'
+  ]
+  return lines.join('\n')
+}
+
+function readWorkflowMarker(output, marker) {
+  const line = String(output || '').split(/\r?\n/).map((item) => item.trim()).find((item) => item.startsWith(marker))
+  if (!line) return ''
+  return line.slice(line.indexOf(marker) + marker.length).trim().replace(/^['"]|['"]$/g, '')
+}
+
+function buildWorkflowDependencyCheckCommand(config = {}) {
+  const services = parseWorkflowLines(config.services)
+  const customCommand = String(config.customCommand || '').trim()
+  const requireActive = config.requireActive !== false
+  const lines = [
+    'set -u',
+    'failed=0',
+    'check_service() {',
+    '  svc="$1"',
+    '  if command -v systemctl >/dev/null 2>&1; then',
+    '    if ! systemctl list-unit-files --type=service --no-legend "$svc" 2>/dev/null | grep -q . && ! systemctl list-units --type=service --all --no-legend "$svc" 2>/dev/null | grep -q .; then echo "missing service: $svc"; failed=1; return; fi',
+    requireActive
+      ? '    state=$(systemctl is-active "$svc" 2>/dev/null || true); if [ "$state" != "active" ]; then echo "inactive service: $svc ($state)"; failed=1; else echo "active service: $svc"; fi'
+      : '    echo "service exists: $svc"',
+    '  else',
+    '    service "$svc" status >/dev/null 2>&1; rc=$?; if [ $rc -ne 0 ]; then echo "service check failed: $svc"; failed=1; else echo "service ok: $svc"; fi',
+    '  fi',
+    '}'
+  ]
+  services.forEach((service) => lines.push(`check_service ${shellQuote(service)}`))
+  if (customCommand) {
+    lines.push('echo "running extra dependency check"')
+    lines.push(`if ! (${customCommand}); then echo "extra dependency check failed"; failed=1; fi`)
+  }
+  lines.push('exit $failed')
+  return lines.join('\n')
+}
+
+function createWorkflowStepLogs(steps = []) {
+  return {
+    __connect__: {
+      nodeId: '__connect__',
+      label: 'Connect server',
+      status: 'pending',
+      logs: []
+    },
+    ...Object.fromEntries(steps.map((node) => [
+      node.id,
+      {
+        nodeId: node.id,
+        label: node.data.label,
+        status: 'pending',
+        logs: []
+      }
+    ]))
+  }
+}
+
+function getWorkflowExecutionPolicy(node) {
+  const policy = node.data?.config?.executionPolicy || 'parallel'
+  if (policy === 'rolling') return { mode: 'rolling', batches: [] }
+  if (policy === 'batch') return { mode: 'batch', batches: parseWorkflowBatchPlan(node.data?.config?.batchPlan) }
+  return { mode: 'parallel', batches: [] }
+}
+
+function parseWorkflowBatchPlan(value) {
+  const values = String(value || '20,50,100')
+    .split(',')
+    .map((item) => Number(String(item).trim().replace('%', '')))
+    .filter((item) => Number.isFinite(item) && item > 0)
+    .map((item) => Math.min(100, Math.max(1, Math.round(item))))
+    .sort((a, b) => a - b)
+  const unique = Array.from(new Set(values))
+  return unique.includes(100) ? unique : [...unique, 100]
+}
+
+async function runWorkflowTargetsWithPolicy(targets = [], policy = { mode: 'parallel' }, worker) {
+  if (!targets.length) return []
+  if (policy.mode === 'rolling') {
+    const results = []
+    for (const target of targets) {
+      results.push(await worker(target))
+    }
+    return results
+  }
+  if (policy.mode === 'batch') {
+    const results = []
+    let completed = 0
+    for (const percent of policy.batches || [100]) {
+      const targetCount = Math.max(1, Math.ceil((targets.length * percent) / 100))
+      const nextBatch = targets.slice(completed, targetCount)
+      if (nextBatch.length) {
+        results.push(...await Promise.all(nextBatch.map((target) => worker(target))))
+        completed = targetCount
+      }
+    }
+    return results
+  }
+  return Promise.all(targets.map((target) => worker(target)))
+}
+
+function getWorkflowRunSteps(workflow) {
+  return [
+    {
+      id: '__connect__',
+      label: 'Connect server',
+      summary: 'Check or open SSH before running workflow steps.'
+    },
+    ...(workflow?.nodes || []).map((node) => ({
+      id: node.id,
+      label: node.data.label,
+      summary: formatWorkflowNodeSummary(node)
+    }))
+  ]
+}
+
+function getSelectedWorkflowRunTarget(targets = [], selectedId = '') {
+  return targets.find((target) => target.runId === selectedId) || targets[0] || null
+}
+
+function summarizeWorkflowStep(targets = [], stepId = '') {
+  const counts = targets.reduce(
+    (acc, target) => {
+      const status = target.stepLogs?.[stepId]?.status || 'pending'
+      acc.total += 1
+      acc[status] = (acc[status] || 0) + 1
+      return acc
+    },
+    { total: 0, pending: 0, running: 0, cancelling: 0, cancelled: 0, done: 0, failed: 0, skipped: 0 }
+  )
+  const status = counts.failed
+    ? 'failed'
+    : counts.cancelling
+      ? 'cancelling'
+      : counts.running
+      ? 'running'
+        : counts.cancelled
+          ? 'cancelled'
+          : counts.total && (counts.done + counts.skipped) === counts.total
+            ? 'done'
+            : 'pending'
+  return { ...counts, status }
+}
+
+function formatWorkflowStepSummary(summary) {
+  if (!summary.total) return 'No servers selected yet.'
+  const parts = [`${summary.done}/${summary.total} done`]
+  if (summary.running) parts.push(`${summary.running} running`)
+  if (summary.cancelling) parts.push(`${summary.cancelling} cancelling`)
+  if (summary.cancelled) parts.push(`${summary.cancelled} cancelled`)
+  if (summary.failed) parts.push(`${summary.failed} failed`)
+  if (summary.skipped) parts.push(`${summary.skipped} skipped`)
+  if (summary.pending) parts.push(`${summary.pending} pending`)
+  return parts.join(', ')
+}
+
+function normalizeWorkflowScopes(scopes, fallback = ['all']) {
+  const allowed = new Set(['all', ...workflowExecutionScopes.map((scope) => scope.id)])
+  const values = (Array.isArray(scopes) ? scopes : String(scopes || '').split(','))
+    .map((scope) => String(scope || '').trim())
+    .filter((scope) => allowed.has(scope))
+  if (!values.length) return [...fallback]
+  if (values.includes('all')) return ['all']
+  return Array.from(new Set(values))
+}
+
+function shouldRunWorkflowNodeOnServer(node, serverScopes = []) {
+  const targetScopes = normalizeWorkflowScopes(node.data?.config?.targetScopes, ['all'])
+  if (targetScopes.includes('all')) return true
+  const serverScopeSet = new Set(normalizeWorkflowScopes(serverScopes, ['app']))
+  return targetScopes.some((scope) => serverScopeSet.has(scope))
+}
+
+function formatWorkflowScopes(scopes = []) {
+  const normalized = normalizeWorkflowScopes(scopes, ['all'])
+  if (normalized.includes('all')) return 'all'
+  const labels = Object.fromEntries(workflowExecutionScopes.map((scope) => [scope.id, scope.label]))
+  return normalized.map((scope) => labels[scope] || scope).join(', ')
+}
+
+function formatWorkflowServerLogs(target) {
+  if (!target) return 'Run a workflow to see each server progress here. Full run history is also kept in Transfers.'
+  const sections = Object.values(target.stepLogs || {}).map((step) => {
+    const logs = step.logs?.length ? step.logs.join('\n') : 'No output yet.'
+    return [`## ${step.label} [${step.status || 'pending'}]`, logs].join('\n')
+  })
+  return [
+    `# ${target.serverName} [${target.status || 'pending'}]`,
+    `Scopes: ${formatWorkflowScopes(target.scopes || ['app'])}`,
+    target.message || 'Queued',
+    '',
+    ...(sections.length ? sections : ['No step logs yet.'])
+  ].join('\n')
+}
+
+function summarizeAuditRun(targets = []) {
+  const summary = { score: null, rating: '', high: null, medium: null, low: null, passed: null }
+  const scores = []
+  targets.forEach((target) => {
+    const text = Object.values(target.stepLogs || {})
+      .flatMap((step) => step.logs || [])
+      .join('\n')
+    const score = readAuditMarker(text, 'SCORE')
+    if (score != null) scores.push(score)
+    summary.high = sumAuditMarker(summary.high, readAuditMarker(text, 'HIGH'))
+    summary.medium = sumAuditMarker(summary.medium, readAuditMarker(text, 'MEDIUM'))
+    summary.low = sumAuditMarker(summary.low, readAuditMarker(text, 'LOW'))
+    summary.passed = sumAuditMarker(summary.passed, readAuditMarker(text, 'PASS'))
+    const rating = readAuditTextMarker(text, 'RATING')
+    if (rating && !summary.rating) summary.rating = rating
+  })
+  if (scores.length) summary.score = Math.round(scores.reduce((total, value) => total + value, 0) / scores.length)
+  return summary
+}
+
+function collectAuditFindings(targets = []) {
+  const severityLabels = {
+    high: 'High',
+    medium: 'Warn',
+    low: 'Low'
+  }
+  return targets.flatMap((target) => {
+    const lines = Object.values(target.stepLogs || {})
+      .flatMap((step) => step.logs || [])
+      .join('\n')
+      .split(/\r?\n/)
+    return lines.map((line) => {
+      const match = String(line).match(/^\[(HIGH|WARN|LOW)\]\s+(.+)$/i)
+      if (!match) return null
+      const level = match[1].toLowerCase() === 'warn' ? 'medium' : match[1].toLowerCase()
+      return {
+        level,
+        label: severityLabels[level] || level,
+        message: match[2].trim(),
+        serverName: target.serverName || 'Server'
+      }
+    }).filter(Boolean)
+  })
+}
+
+function buildAuditRiskDonutStyle(summary = {}) {
+  const high = summary.high || 0
+  const medium = summary.medium || 0
+  const low = summary.low || 0
+  const total = high + medium + low
+  if (!total) return {}
+  const highEnd = (high / total) * 360
+  const mediumEnd = highEnd + (medium / total) * 360
+  return {
+    background: `conic-gradient(#ef4444 0deg ${highEnd}deg, #f59e0b ${highEnd}deg ${mediumEnd}deg, #22c55e ${mediumEnd}deg 360deg)`
+  }
+}
+
+function readAuditMarker(text = '', key = '') {
+  const match = String(text).match(new RegExp(`OPS_AUDIT_${key}=(-?\\d+)`))
+  return match ? Number(match[1]) : null
+}
+
+function readAuditTextMarker(text = '', key = '') {
+  const match = String(text).match(new RegExp(`OPS_AUDIT_${key}=([^\\s]+)`))
+  return match?.[1] || ''
+}
+
+function sumAuditMarker(current, value) {
+  if (value == null) return current
+  return (current || 0) + value
+}
+
+function formatWorkflowAggregateStepLogs(targets = [], stepId = '') {
+  if (!targets.length) return 'Run a workflow to see step progress across servers here.'
+  const parts = targets.map((target) => {
+    const step = target.stepLogs?.[stepId]
+    const label = step?.label || (stepId === '__connect__' ? 'Connect server' : 'Workflow step')
+    const logs = step?.logs?.length ? step.logs.join('\n') : 'No output yet.'
+    return [`## ${target.serverName} · ${label} [${step?.status || 'pending'}]`, logs].join('\n')
+  })
+  return parts.join('\n\n')
+}
+
+function formatCommandStepSummary(command = '') {
+  const lines = String(command)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  if (!lines.length) return 'Run shell commands'
+  return `${lines.length} command${lines.length === 1 ? '' : 's'} · ${lines[0]}`
+}
+
+function joinLocalDownloadPath(localDir = '', remotePath = '') {
+  const cleanDir = String(localDir || '').replace(/[\\/]+$/, '')
+  const name = String(remotePath || 'workflow-output').split(/[\\/]/).filter(Boolean).pop() || 'workflow-output'
+  const separator = cleanDir.includes('\\') ? '\\' : '/'
+  return cleanDir ? `${cleanDir}${separator}${name}` : name
+}
+
+function buildWorkflowDatabasePreviewSql(database, config = {}) {
+  const tables = normalizeWorkflowSelectedTables(config)
+  const targetTable = tables[0]
+  const fields = String(config.fields || '*').trim() || '*'
+  const filter = String(config.filter || '').trim()
+  if (!targetTable?.name) return database.engine === 'postgres' ? 'SELECT 1;' : 'SELECT 1;'
+  const fieldSql = fields === '*' ? '*' : fields.split(',').map((field) => quoteIdentifier(database, field.trim())).join(', ')
+  const tableSql = qualifiedTableName(database, targetTable)
+  const whereSql = filter ? ` WHERE ${filter}` : ''
+  return `SELECT ${fieldSql} FROM ${tableSql}${whereSql} LIMIT 20;`
+}
+
+function buildWorkflowDatabaseExportSql(database, config = {}, table = null, allowFieldAndFilter = true) {
+  const targetTable = table || normalizeWorkflowSelectedTables(config)[0]
+  const selectedFields = allowFieldAndFilter ? normalizeWorkflowSelectedFields(config) : []
+  const fieldSql = selectedFields.length
+    ? selectedFields.map((field) => quoteIdentifier(database, field)).join(', ')
+    : '*'
+  const filter = allowFieldAndFilter ? String(config.filter || '').trim() : ''
+  const whereSql = filter ? ` WHERE ${filter}` : ''
+  if (!targetTable?.name) return database.engine === 'postgres' ? 'SELECT 1;' : 'SELECT 1;'
+  return `SELECT ${fieldSql} FROM ${qualifiedTableName(database, targetTable)}${whereSql};`
+}
+
+function buildWorkflowOutputContent(runtime = {}) {
+  const format = String(runtime.outputFormat || 'csv').toLowerCase()
+  const results = Array.isArray(runtime.databaseResults) ? runtime.databaseResults : []
+  if (!results.length) {
+    return format === 'json'
+      ? JSON.stringify({ generatedAt: new Date().toISOString(), results: [] }, null, 2)
+      : ''
+  }
+  if (format === 'json') {
+    return JSON.stringify({ generatedAt: new Date().toISOString(), results }, null, 2)
+  }
+  if (format === 'sql') {
+    return results.map((result) => rowsToInsertSql(result)).filter(Boolean).join('\n\n')
+  }
+  const delimiter = format === 'txt' ? '\t' : ','
+  return results.map((result) => tableRowsToDelimited(result, delimiter, results.length > 1)).join('\n\n')
+}
+
+function normalizeExcelOutputPath(format = '', outputPath = '') {
+  return String(outputPath || '')
+}
+
+async function buildWorkflowXlsxBase64(runtime = {}) {
+  const results = Array.isArray(runtime.databaseResults) && runtime.databaseResults.length
+    ? runtime.databaseResults
+    : [{ table: 'Sheet1', rows: [] }]
+  const sheetNames = new Set()
+  const sheets = results.map((result, index) => {
+    const rows = Array.isArray(result.rows) ? result.rows : []
+    const headers = collectRowHeaders(rows)
+    const data = headers.length
+      ? [headers, ...rows.map((row) => headers.map((header) => normalizeExcelCellValue(row?.[header])))]
+      : [['No data']]
+    const sheetName = uniqueExcelSheetName(result.table || `Sheet${index + 1}`, sheetNames)
+    return { data, sheet: sheetName }
+  })
+  const blob = await writeXlsxFile(sheets).toBlob()
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize))
+  }
+  return window.btoa(binary)
+}
+
+function normalizeExcelCellValue(value) {
+  if (value === null || value === undefined) return ''
+  if (value instanceof Date) return value
+  if (typeof value === 'object') return JSON.stringify(value)
+  return value
+}
+
+function tableRowsToDelimited(result = {}, delimiter = ',', includeTableHeader = false) {
+  const rows = Array.isArray(result.rows) ? result.rows : []
+  const headers = collectRowHeaders(rows)
+  const lines = includeTableHeader ? [`# table: ${result.table || 'result'}`] : []
+  if (!headers.length) return [...lines, ''].join('\n')
+  lines.push(headers.map((header) => escapeDelimitedValue(header, delimiter)).join(delimiter))
+  rows.forEach((row) => {
+    lines.push(headers.map((header) => escapeDelimitedValue(row?.[header], delimiter)).join(delimiter))
+  })
+  return lines.join('\n')
+}
+
+function uniqueExcelSheetName(name, usedNames) {
+  const base = sanitizeExcelSheetName(name) || 'Sheet'
+  let candidate = base
+  let suffix = 2
+  while (usedNames.has(candidate.toLowerCase())) {
+    const tail = `_${suffix}`
+    candidate = `${base.slice(0, 31 - tail.length)}${tail}`
+    suffix += 1
+  }
+  usedNames.add(candidate.toLowerCase())
+  return candidate
+}
+
+function sanitizeExcelSheetName(name = '') {
+  return String(name || '')
+    .replace(/[:\\/?*[\]]/g, '_')
+    .slice(0, 31)
+}
+
+function collectRowHeaders(rows = []) {
+  const seen = new Set()
+  rows.forEach((row) => {
+    Object.keys(row || {}).forEach((key) => seen.add(key))
+  })
+  return Array.from(seen)
+}
+
+function escapeDelimitedValue(value, delimiter = ',') {
+  if (value === null || value === undefined) return ''
+  const text = typeof value === 'object' ? JSON.stringify(value) : String(value)
+  if (text.includes('"') || text.includes('\n') || text.includes('\r') || text.includes(delimiter)) {
+    return `"${text.replace(/"/g, '""')}"`
+  }
+  return text
+}
+
+function rowsToInsertSql(result = {}) {
+  const rows = Array.isArray(result.rows) ? result.rows : []
+  const headers = collectRowHeaders(rows)
+  if (!rows.length || !headers.length) return `-- ${result.table || 'result'}: no rows`
+  const tableName = result.table || 'export_result'
+  return rows.map((row) => {
+    const columns = headers.map((header) => `\`${String(header).replace(/`/g, '``')}\``).join(', ')
+    const values = headers.map((header) => quoteSqlValue(row?.[header])).join(', ')
+    return `INSERT INTO ${tableName} (${columns}) VALUES (${values});`
+  }).join('\n')
+}
+
+function quoteSqlValue(value) {
+  if (value === null || value === undefined) return 'NULL'
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  if (typeof value === 'boolean') return value ? '1' : '0'
+  const text = typeof value === 'object' ? JSON.stringify(value) : String(value)
+  return `'${text.replace(/'/g, "''")}'`
+}
+
+function remoteDirname(remotePath = '') {
+  const clean = String(remotePath || '').trim()
+  if (!clean || !clean.includes('/')) return '.'
+  const parts = clean.split('/').filter((part, index) => part || index === 0)
+  parts.pop()
+  const dir = parts.join('/') || '/'
+  return dir === '' ? '/' : dir
+}
+
+function remoteBasename(remotePath = '') {
+  return String(remotePath || '').split('/').filter(Boolean).pop() || ''
+}
+
+function normalizeWorkflowSelectedTables(config = {}) {
+  if (Array.isArray(config.tables) && config.tables.length) {
+    return config.tables
+      .map((table) => typeof table === 'string' ? parseWorkflowTableName(table) : table)
+      .filter((table) => table?.name)
+  }
+  return String(config.table || '')
+    .split(',')
+    .map((name) => parseWorkflowTableName(name.trim()))
+    .filter((table) => table?.name)
+}
+
+function normalizeWorkflowSelectedFields(config = {}) {
+  if (Array.isArray(config.selectedFields)) return config.selectedFields
+  const fields = String(config.fields || '').trim()
+  if (!fields || fields === '*') return []
+  return fields.split(',').map((field) => field.trim()).filter(Boolean)
+}
+
+function workflowTableKey(table = {}) {
+  return `${table.schema || ''}.${table.name || ''}`
+}
+
+function formatWorkflowTableName(table = {}) {
+  return table.schema && table.schema !== '-' ? `${table.schema}.${table.name}` : table.name || ''
+}
+
+function parseWorkflowTableName(value = '') {
+  const clean = String(value || '').trim()
+  if (!clean) return null
+  const parts = clean.split('.')
+  if (parts.length > 1) {
+    return { schema: parts.slice(0, -1).join('.'), name: parts[parts.length - 1] }
+  }
+  return { schema: '-', name: clean }
+}
+
+function makeId(prefix = 'id') {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+}
+
+function Panel({ title, icon, children }) {
+  return (
+    <section className="panel">
+      <div className="panel-title"><span>{icon}{title}</span></div>
+      {children}
+    </section>
+  )
+}
+
+function Metric({ icon, label, value, tone }) {
+  return (
+    <div className={`metric ${tone ? `metric-${tone}` : ''}`}>
+      <div>{icon}</div>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  )
+}
+
+function InfoGrid({ server, history, onCopy }) {
+  const { t } = useI18n()
+  const copyTimerRef = useRef(null)
+  const machineName = server.hostname && server.hostname !== '-' ? server.hostname : server.name
+  const items = [
+    [t('info.machine', 'Machine'), machineName],
+    [t('info.kernel', 'Kernel'), server.kernel],
+    [t('info.osArch', 'OS / Arch'), `${server.os} / ${server.arch}`],
+    [t('info.uptime', 'Uptime'), server.uptime]
+  ]
+  const copyOnSingleClick = (value) => {
+    window.clearTimeout(copyTimerRef.current)
+    copyTimerRef.current = window.setTimeout(() => onCopy(value), 180)
+  }
+  const cancelCopy = () => {
+    window.clearTimeout(copyTimerRef.current)
+  }
+
+  return (
+    <div className="server-overview">
+      <div className="machine-summary">
+        {items.map(([label, value]) => (
+          <button
+            key={label}
+            title={t('info.clickCopy', 'Click to copy: {value}', { value })}
+            onClick={() => copyOnSingleClick(value)}
+            onDoubleClick={cancelCopy}
+          >
+            <span>{label}</span>
+            <strong>{value}</strong>
+          </button>
+        ))}
+      </div>
+      <div className="usage-charts">
+        <UsageChart label="CPU" value={server.cpuUsage} points={history.cpu} color="#0f766e" />
+        <UsageChart label={t('metric.memory', 'Memory')} value={server.memoryUsage} points={history.memory} color="#2563eb" />
+      </div>
+    </div>
+  )
+}
+
+function UsageChart({ label, value, points, color }) {
+  const path = linePath(points)
+  const area = `${path} L 100 52 L 0 52 Z`
+  return (
+    <div className="usage-chart">
+      <div className="chart-head">
+        <span>{label}</span>
+        <strong>{formatPercent(value)}</strong>
+      </div>
+      <svg viewBox="0 0 100 56" preserveAspectRatio="none" aria-hidden="true">
+        <path d={area} fill={color} opacity="0.08" />
+        <path d={path} fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
+  )
+}
+
+function TransferPopover({ transfers, onClear, onCancelTask, onRetryRollback }) {
+  const { t } = useI18n()
+  return (
+    <div className="transfer-popover">
+      <div className="transfer-popover-title">
+        <div>
+          <strong>{t('topbar.transfers', 'Transfers')}</strong>
+          <span>{transfers.length ? t('transfer.history', '{count} history', { count: transfers.length }) : t('transfer.noActivity', 'No activity')}</span>
+        </div>
+        <button onClick={onClear} disabled={!transfers.length}>{t('transfer.clear', 'Clear')}</button>
+      </div>
+      <div className="transfer-list">
+        {transfers.length ? transfers.map((task) => (
+          <div className={`transfer-row ${task.status || 'running'}`} key={task.id}>
+            <div>
+              <strong title={task.name || task.remotePath}>
+                <small>{transferTypeLabel(task)}</small>
+                {task.name || task.remotePath}
+              </strong>
+              <span>{task.status === 'failed' ? task.message : transferPathLabel(task)}</span>
+            </div>
+            <div className="transfer-row-status">
+              <em>{transferStatusLabel(task)}</em>
+              {['sql-file', 'database-table-delete', 'upload', 'download', 'deploy', 'backup-restore'].includes(task.type) && task.status === 'running' && (
+                <button
+                  type="button"
+                  title={task.type === 'sql-file' ? t('database.stopRollback', 'Stop and rollback') : (task.type === 'database-table-delete' ? '停止批量删除' : (task.type === 'deploy' ? '停止远程命令' : t('transfer.cancel', 'Cancel transfer')))}
+                  aria-label={task.type === 'sql-file' ? t('database.stopRollback', 'Stop and rollback') : (task.type === 'database-table-delete' ? '停止批量删除' : (task.type === 'deploy' ? '停止远程命令' : t('transfer.cancel', 'Cancel transfer')))}
+                  onClick={() => onCancelTask?.(task)}
+                >
+                  <CircleStop size={13} />
+                </button>
+              )}
+              {task.type === 'workflow' && ['rollback_failed', 'rollback_available'].includes(task.rollbackStatus) && task.recovery?.manifestPath && (
+                <button
+                  type="button"
+                  className="transfer-retry-rollback"
+                  title={t('workflow.retryRollback', 'Retry rollback')}
+                  aria-label={t('workflow.retryRollback', 'Retry rollback')}
+                  onClick={() => onRetryRollback?.(task)}
+                >
+                  <RotateCcw size={13} />
+                </button>
+              )}
+            </div>
+            <div className={`transfer-progress ${task.status === 'running' && task.indeterminate ? 'indeterminate' : ''}`}><span style={{ width: `${formatTransferPercent(task)}%` }} /></div>
+          </div>
+        )) : (
+          <div className="transfer-empty">{t('transfer.empty', 'No transfers yet.')}</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function CommandSnippetToolbar({ serverId, snippets, onFill, onSave, onDelete }) {
+  const { t } = useI18n()
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [draft, setDraft] = useState(null)
+  const normalizedQuery = query.trim().toLocaleLowerCase()
+  const filtered = useMemo(() => {
+    if (!normalizedQuery) return snippets
+    return snippets.filter((snippet) => [
+      snippet.name,
+      snippet.command,
+      snippet.note,
+      ...(snippet.tags || [])
+    ].some((value) => String(value || '').toLocaleLowerCase().includes(normalizedQuery)))
+  }, [snippets, normalizedQuery])
+
+  useEffect(() => {
+    setOpen(false)
+    setQuery('')
+    setDraft(null)
+  }, [serverId])
+
+  const beginCreate = () => {
+    setDraft({
+      id: '',
+      name: '',
+      command: '',
+      tagsText: '',
+      note: '',
+      scope: serverId || 'all'
+    })
+  }
+
+  const beginEdit = (snippet) => {
+    setDraft({
+      ...snippet,
+      tagsText: (snippet.tags || []).join(', ')
+    })
+  }
+
+  const saveDraft = () => {
+    if (!draft) return
+    const saved = onSave?.({
+      ...draft,
+      tags: String(draft.tagsText || '')
+        .split(/[,，]/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    })
+    if (saved) setDraft(null)
+  }
+
+  return (
+    <div className="command-snippet-toolbar">
+      <div>
+        <strong>{t('command.savedTitle', 'Saved commands')}</strong>
+        <span>{t('command.savedDescription', 'Clicking only fills the editor and never runs automatically.')}</span>
+      </div>
+      <button
+        type="button"
+        className={open ? 'selected' : ''}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <History size={15} />
+        {t('command.manageSaved', 'Saved commands')}
+        <em>{snippets.length}</em>
+      </button>
+      {open && (
+        <div className="command-snippet-popover">
+          <div className="command-snippet-popover-head">
+            <div>
+              <strong>{t('command.savedTitle', 'Saved commands')}</strong>
+              <small>{t('command.savedDescription', 'Clicking only fills the editor and never runs automatically.')}</small>
+            </div>
+            <div>
+              {!draft && <button type="button" onClick={beginCreate}><Plus size={14} />{t('command.addSaved', 'Add command')}</button>}
+              <button type="button" className="icon-only" onClick={() => setOpen(false)}><X size={14} /></button>
+            </div>
+          </div>
+          {draft ? (
+            <div className="command-snippet-editor">
+              <label>
+                <span>{t('command.name', 'Name')}</span>
+                <input
+                  autoFocus
+                  value={draft.name}
+                  placeholder={t('command.namePlaceholder', 'For example: Restart admin service')}
+                  onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
+                />
+              </label>
+              <label className="wide">
+                <span>{t('command.command', 'Command')}</span>
+                <textarea
+                  value={draft.command}
+                  placeholder={t('command.commandPlaceholder', 'Enter a single-line or multiline command')}
+                  onChange={(event) => setDraft((current) => ({ ...current, command: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span>{t('command.tags', 'Tags')}</span>
+                <input
+                  value={draft.tagsText}
+                  placeholder={t('command.tagsPlaceholder', 'For example: Deploy, Nginx')}
+                  onChange={(event) => setDraft((current) => ({ ...current, tagsText: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span>{t('command.scope', 'Scope')}</span>
+                <select value={draft.scope} onChange={(event) => setDraft((current) => ({ ...current, scope: event.target.value }))}>
+                  <option value="all">{t('command.scopeAll', 'All servers')}</option>
+                  {serverId && <option value={serverId}>{t('command.scopeCurrent', 'Current server only')}</option>}
+                </select>
+              </label>
+              <label className="wide">
+                <span>{t('command.note', 'Note')}</span>
+                <textarea
+                  className="note"
+                  value={draft.note}
+                  placeholder={t('command.notePlaceholder', 'Record the purpose, environment and precautions')}
+                  onChange={(event) => setDraft((current) => ({ ...current, note: event.target.value }))}
+                />
+              </label>
+              <div className="command-snippet-editor-actions wide">
+                <button type="button" onClick={() => setDraft(null)}>{t('common.cancel', 'Cancel')}</button>
+                <button type="button" className="primary" onClick={saveDraft}><Save size={14} />{t('common.save', 'Save')}</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="command-snippet-search">
+                <Search size={14} />
+                <input
+                  value={query}
+                  placeholder={t('command.searchSaved', 'Search names, tags, notes or commands')}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+                {query && <button type="button" onClick={() => setQuery('')}><X size={13} /></button>}
+              </div>
+              <div className="command-snippet-list">
+                {filtered.length ? filtered.map((snippet) => (
+                  <article key={snippet.id}>
+                    <button
+                      type="button"
+                      className="command-snippet-fill"
+                      title={t('command.fill', 'Paste into terminal')}
+                      onClick={() => {
+                        if (onFill?.(snippet) !== false) setOpen(false)
+                      }}
+                    >
+                      <strong>{snippet.name}</strong>
+                      <code>{snippet.command}</code>
+                      {snippet.note && <span>{snippet.note}</span>}
+                      <small>
+                        {(snippet.tags || []).map((tag) => <em key={tag}>{tag}</em>)}
+                        <b>{snippet.scope === 'all' ? t('command.scopeAll', 'All servers') : t('command.scopeCurrent', 'Current server only')}</b>
+                      </small>
+                    </button>
+                    <div>
+                      <button type="button" title={t('common.edit', 'Edit')} onClick={() => beginEdit(snippet)}><SquarePen size={14} /></button>
+                      <button type="button" title={t('common.delete', 'Delete')} onClick={() => onDelete?.(snippet)}><Trash2 size={14} /></button>
+                    </div>
+                  </article>
+                )) : (
+                  <div className="command-snippet-empty">
+                    {normalizedQuery ? t('command.noMatches', 'No saved commands match the search.') : t('command.noSaved', 'No saved commands yet.')}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RemotePathList({ title, empty, paths, favorites, action, onOpen, onToggleFavorite }) {
+  return (
+    <section className="remote-path-list">
+      <div>
+        <strong>{title}</strong>
+        {action}
+      </div>
+      {paths.length ? paths.map((path) => {
+        const favorite = favorites.includes(path)
+        return (
+          <article key={path}>
+            <button type="button" title={path} onClick={() => onOpen(path)}>{path}</button>
+            <button type="button" className={favorite ? 'selected' : ''} onClick={() => onToggleFavorite?.(path)}>
+              <Star size={13} fill={favorite ? 'currentColor' : 'none'} />
+            </button>
+          </article>
+        )
+      }) : <p>{empty}</p>}
+    </section>
+  )
+}
+
+const remoteFileColumns = [
+  { key: 'name', label: 'Name', width: 260, minWidth: 140 },
+  { key: 'type', label: 'Type', width: 90, minWidth: 70 },
+  { key: 'size', label: 'Size', width: 110, minWidth: 80 },
+  { key: 'permissions', label: 'Permissions', width: 150, minWidth: 110 },
+  { key: 'owner', label: 'Owner', width: 120, minWidth: 90 },
+  { key: 'modified', label: 'Modified', width: 180, minWidth: 120 }
+]
+
+const defaultRemoteFileColumnWidths = remoteFileColumns.reduce((widths, column) => {
+  widths[column.key] = column.width
+  return widths
+}, {})
+
+function RemoteFilesPanel({ serverId, path, items, sort, scrollTop = 0, focusedItemName, selectedItem, loading, transferring, privilege, permissionError, pathHistory = { recent: [], favorites: [] }, onOpen, onOpenDirectory, onOpenPath, onCopyPath, onToggleFavorite, onClearRecentPaths, onSort, onFocusHandled, onScroll, onParent, onCreateFile, onCreateDirectory, onRename, onUpload, onDownload, onEditFile, onDelete, onRefresh, onGlobalSearch, onCancelGlobalSearch, onOpenPrivilege, onExitPrivilege }) {
+  const { t } = useI18n()
+  const breadcrumbs = buildRemoteBreadcrumbs(path)
+  const [isPathTextMode, setIsPathTextMode] = useState(false)
+  const [pathHistoryOpen, setPathHistoryOpen] = useState(false)
+  const [nameSearchOpen, setNameSearchOpen] = useState(false)
+  const [nameQuery, setNameQuery] = useState('')
+  const [checkedRemoteItems, setCheckedRemoteItems] = useState([])
+  const [globalSearch, setGlobalSearch] = useState({ active: false, loading: false, items: [], page: 1, error: '', permissionDeniedCount: 0, timedOut: false, truncated: false })
+  const [columnWidths, setColumnWidths] = useState(defaultRemoteFileColumnWidths)
+  const tableWrapRef = useRef(null)
+  const pathInputRef = useRef(null)
+  const focusedRowRef = useRef(null)
+  const breadcrumbClickTimerRef = useRef(null)
+  const itemCopyTimerRef = useRef(null)
+  const globalSearchExecutionRef = useRef('')
+  const normalizedNameQuery = nameQuery.trim().toLocaleLowerCase()
+  const allSortedItems = useMemo(() => {
+    const sourceItems = globalSearch.active ? globalSearch.items : items
+    const filteredItems = normalizedNameQuery && !globalSearch.active
+      ? items.filter((item) => String(item.name || '').toLocaleLowerCase().includes(normalizedNameQuery))
+      : sourceItems
+    return sortRemoteItems(filteredItems, sort)
+  }, [items, sort, normalizedNameQuery, globalSearch.active, globalSearch.items])
+  const globalPageCount = Math.max(1, Math.ceil(allSortedItems.length / 10))
+  const visibleItems = globalSearch.active
+    ? allSortedItems.slice((globalSearch.page - 1) * 10, globalSearch.page * 10)
+    : allSortedItems
+  const itemKey = (item) => item?.path || joinRemotePath(path, item?.name || '')
+  const checkedRemoteKeys = new Set(checkedRemoteItems.map(itemKey))
+  const checkedFiles = checkedRemoteItems.filter((item) => item.type === 'file')
+  const renameTarget = checkedRemoteItems.length === 1
+    ? checkedRemoteItems[0]
+    : checkedRemoteItems.length > 1
+      ? null
+      : selectedItem
+  const allVisibleItemsChecked = visibleItems.length > 0 && visibleItems.every((item) => checkedRemoteKeys.has(itemKey(item)))
+  const effectiveLoading = loading || globalSearch.loading
+
+  useEffect(() => {
+    if (!isPathTextMode) return
+    window.requestAnimationFrame(() => {
+      pathInputRef.current?.focus()
+      pathInputRef.current?.select()
+    })
+  }, [isPathTextMode, path])
+
+  useEffect(() => {
+    if (globalSearchExecutionRef.current) onCancelGlobalSearch?.(globalSearchExecutionRef.current)
+    globalSearchExecutionRef.current = ''
+    setNameQuery('')
+    setNameSearchOpen(false)
+    setPathHistoryOpen(false)
+    setCheckedRemoteItems([])
+    setGlobalSearch({ active: false, loading: false, items: [], page: 1, error: '', permissionDeniedCount: 0, timedOut: false, truncated: false })
+  }, [path, serverId])
+
+  useEffect(() => {
+    const availableItems = globalSearch.active ? globalSearch.items : items
+    const availableKeys = new Set(availableItems.map(itemKey))
+    setCheckedRemoteItems((current) => current.filter((item) => availableKeys.has(itemKey(item))))
+  }, [items, globalSearch.active, globalSearch.items])
+
+  useEffect(() => () => {
+    window.clearTimeout(breadcrumbClickTimerRef.current)
+    window.clearTimeout(itemCopyTimerRef.current)
+  }, [])
+
+  useEffect(() => {
+    if (!focusedItemName || loading) return
+    window.requestAnimationFrame(() => {
+      focusedRowRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      onFocusHandled?.()
+    })
+  }, [focusedItemName, effectiveLoading, visibleItems, onFocusHandled])
+
+  useEffect(() => {
+    if (focusedItemName || loading) return
+    const node = tableWrapRef.current
+    if (!node) return
+    window.requestAnimationFrame(() => {
+      if (Math.abs(node.scrollTop - scrollTop) > 2) {
+        node.scrollTop = scrollTop
+      }
+    })
+  }, [scrollTop, path, items.length, focusedItemName, loading])
+
+  const openBreadcrumbPath = (nextPath) => {
+    window.clearTimeout(breadcrumbClickTimerRef.current)
+    breadcrumbClickTimerRef.current = window.setTimeout(() => onOpenPath(nextPath), 180)
+  }
+
+  const enterPathTextMode = () => {
+    window.clearTimeout(breadcrumbClickTimerRef.current)
+    setIsPathTextMode(true)
+  }
+
+  const copyItemDisplayValue = (item) => {
+    window.clearTimeout(itemCopyTimerRef.current)
+    itemCopyTimerRef.current = window.setTimeout(() => {
+      onCopyPath(globalSearch.active ? (item.path || item.name) : item.name)
+    }, 220)
+  }
+
+  const cancelItemCopy = () => {
+    window.clearTimeout(itemCopyTimerRef.current)
+  }
+
+  const startColumnResize = (event, column) => {
+    if (!column) return
+    event.preventDefault()
+    event.stopPropagation()
+    const startX = event.clientX
+    const startWidth = columnWidths[column.key] || column.width
+    document.body.classList.add('is-resizing-column')
+
+    const handleMove = (moveEvent) => {
+      const nextWidth = Math.max(column.minWidth, startWidth + moveEvent.clientX - startX)
+      setColumnWidths((current) => ({ ...current, [column.key]: nextWidth }))
+    }
+
+    const handleUp = () => {
+      document.body.classList.remove('is-resizing-column')
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
+
+  const renderSortHead = (key, label) => {
+    const active = sort?.key === key
+    const direction = active ? sort.direction : ''
+    const column = remoteFileColumns.find((item) => item.key === key)
+    return (
+      <div className="remote-resizable-head">
+        {key === 'name' && (
+          <input
+            type="checkbox"
+            className="remote-download-checkbox"
+            aria-label={t('remote.selectVisibleFiles', 'Select visible files')}
+            checked={allVisibleItemsChecked}
+            disabled={!visibleItems.length || effectiveLoading || transferring}
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) => {
+              const visibleKeys = new Set(visibleItems.map(itemKey))
+              setCheckedRemoteItems((current) => {
+                if (!event.target.checked) return current.filter((item) => !visibleKeys.has(itemKey(item)))
+                const merged = new Map(current.map((item) => [itemKey(item), item]))
+                visibleItems.forEach((item) => merged.set(itemKey(item), item))
+                return [...merged.values()]
+              })
+            }}
+          />
+        )}
+        <button type="button" className={`remote-sort-button ${active ? 'active' : ''}`} onClick={() => onSort?.(key)}>
+          <span>{label}</span>
+          <em>{active ? (direction === 'asc' ? '▲' : '▼') : ''}</em>
+        </button>
+        {key === 'name' && (
+          <InlineSearch
+            value={nameQuery}
+            open={nameSearchOpen}
+            title={t('remote.searchName', 'Search file name')}
+            placeholder={t('remote.searchName', 'Search file name')}
+            onOpen={() => setNameSearchOpen(true)}
+            onChange={setNameQuery}
+            onSubmit={() => runGlobalFileSearch()}
+            onClose={() => {
+              setNameQuery('')
+              setNameSearchOpen(false)
+              closeGlobalFileSearch()
+            }}
+          />
+        )}
+        {key === 'name' && nameSearchOpen && (
+          <button
+            type="button"
+            className={`remote-global-search-button ${globalSearch.active ? 'selected' : ''}`}
+            title={t('remote.globalSearchHint', 'Enter at least 2 characters to search file names across the whole server.')}
+            disabled={loading || transferring || globalSearch.loading || normalizedNameQuery.length < 2}
+            onClick={(event) => {
+              event.stopPropagation()
+              runGlobalFileSearch()
+            }}
+          >
+            <Search size={12} />{t('remote.globalSearch', 'Global')}
+          </button>
+        )}
+        <span
+          className="remote-column-resizer"
+          title={t('remote.resizeColumn', 'Drag to resize column')}
+          onMouseDown={(event) => startColumnResize(event, column)}
+        />
+      </div>
+    )
+  }
+
+  const runGlobalFileSearch = async () => {
+    const query = nameQuery.trim()
+    if (query.length < 2 || !onGlobalSearch) return
+    const executionId = `remote-search-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    globalSearchExecutionRef.current = executionId
+    onOpen?.(null)
+    setCheckedRemoteItems([])
+    setGlobalSearch({ active: true, loading: true, items: [], page: 1, error: '', permissionDeniedCount: 0, timedOut: false, truncated: false })
+    try {
+      const result = await onGlobalSearch(query, executionId)
+      if (globalSearchExecutionRef.current !== executionId) return
+      globalSearchExecutionRef.current = ''
+      if (result?.canceled) {
+        setGlobalSearch({ active: false, loading: false, items: [], page: 1, error: '', permissionDeniedCount: 0, timedOut: false, truncated: false })
+        return
+      }
+      setGlobalSearch({
+        active: true,
+        loading: false,
+        items: result?.ok ? result.items || [] : [],
+        page: 1,
+        error: result?.ok ? '' : result?.message || 'Global search failed',
+        permissionDeniedCount: Number(result?.permissionDeniedCount || 0),
+        timedOut: Boolean(result?.timedOut),
+        truncated: Boolean(result?.truncated)
+      })
+    } catch (error) {
+      if (globalSearchExecutionRef.current !== executionId) return
+      globalSearchExecutionRef.current = ''
+      setGlobalSearch({ active: true, loading: false, items: [], page: 1, error: error?.message || 'Global search failed', permissionDeniedCount: 0, timedOut: false, truncated: false })
+    }
+  }
+
+  const closeGlobalFileSearch = () => {
+    if (globalSearchExecutionRef.current) onCancelGlobalSearch?.(globalSearchExecutionRef.current)
+    globalSearchExecutionRef.current = ''
+    onOpen?.(null)
+    setCheckedRemoteItems([])
+    setGlobalSearch({ active: false, loading: false, items: [], page: 1, error: '', permissionDeniedCount: 0, timedOut: false, truncated: false })
+  }
+
+  return (
+    <section className={`panel remote-panel ${permissionError && !privilege ? 'has-permission-error' : ''} ${globalSearch.active ? 'has-global-search' : ''}`}>
+      <div className="panel-title">
+        <span><Folder size={17} />{t('remote.title', 'Remote files')}</span>
+        <div className="icon-actions">
+          <button title={t('remote.newFolder', 'New folder')} onClick={onCreateDirectory} disabled={loading || transferring || globalSearch.active}><FolderPlus size={16} /></button>
+          <button title={t('remote.newFile', 'New file')} onClick={onCreateFile} disabled={loading || transferring || globalSearch.active}><FilePlus size={16} /></button>
+          <button
+            title={t('remote.rename', 'Rename')}
+            onClick={() => onRename?.(renameTarget)}
+            disabled={loading || transferring || globalSearch.active || !renameTarget}
+          ><SquarePen size={16} /></button>
+          <button title={t('remote.upload', 'Upload')} onClick={onUpload} disabled={loading || transferring}><Upload size={16} /></button>
+          <button
+            title={checkedFiles.length ? `${t('remote.download', 'Download')} (${checkedFiles.length})` : t('remote.download', 'Download')}
+            onClick={async () => {
+              const result = await onDownload?.(checkedFiles)
+              if (result?.ok || result?.partial) {
+                const downloadedKeys = new Set(checkedFiles.map(itemKey))
+                setCheckedRemoteItems((current) => current.filter((item) => !downloadedKeys.has(itemKey(item))))
+              }
+            }}
+            disabled={loading || transferring || (!checkedFiles.length && selectedItem?.type !== 'file')}
+          ><Download size={16} /></button>
+          <button
+            title={checkedRemoteItems.length ? `${t('remote.delete', 'Delete')} (${checkedRemoteItems.length})` : t('remote.delete', 'Delete')}
+            onClick={async () => {
+              const result = await onDelete?.(checkedRemoteItems)
+              if (result?.ok) setCheckedRemoteItems([])
+              else if (result?.failedItems) setCheckedRemoteItems(result.failedItems)
+            }}
+            disabled={loading || transferring || (!checkedRemoteItems.length && !selectedItem)}
+          ><Trash2 size={16} /></button>
+          <button
+            className={privilege ? 'selected privileged' : ''}
+            title={privilege ? t('remote.exitPrivilege', 'Exit privileged access') : t('remote.privilegedAccess', 'Privileged access')}
+            onClick={() => privilege ? onExitPrivilege?.() : onOpenPrivilege?.(permissionError?.path || path)}
+            disabled={loading || transferring}
+          >
+            <ShieldCheck size={16} />
+          </button>
+          <button title={t('remote.refresh', 'Refresh')} onClick={onRefresh} disabled={loading || transferring}><RefreshCw size={16} /></button>
+        </div>
+      </div>
+      <div className="remote-path">
+        <button title={t('remote.parent', 'Parent directory')} onClick={() => onParent()}>..</button>
+        <div className="remote-path-history">
+          <button
+            type="button"
+            className={pathHistoryOpen ? 'selected' : ''}
+            title={t('remote.pathHistoryHint', 'Open recent and favorite paths')}
+            onClick={() => setPathHistoryOpen((current) => !current)}
+          >
+            <History size={14} />
+          </button>
+          {pathHistoryOpen && (
+            <div className="remote-path-history-popover">
+              <div className="remote-path-history-head">
+                <strong>{t('remote.pathHistory', 'Path history')}</strong>
+                <button type="button" onClick={() => setPathHistoryOpen(false)}><X size={13} /></button>
+              </div>
+              <RemotePathList
+                title={t('remote.favoritePaths', 'Favorite paths')}
+                empty={t('remote.noFavoritePaths', 'No favorite paths')}
+                paths={pathHistory.favorites || []}
+                favorites={pathHistory.favorites || []}
+                onOpen={(nextPath) => {
+                  setPathHistoryOpen(false)
+                  onOpenPath(nextPath)
+                }}
+                onToggleFavorite={onToggleFavorite}
+              />
+              <RemotePathList
+                title={t('remote.recentPaths', 'Recent paths')}
+                empty={t('remote.noRecentPaths', 'No recent paths')}
+                paths={pathHistory.recent || []}
+                favorites={pathHistory.favorites || []}
+                onOpen={(nextPath) => {
+                  setPathHistoryOpen(false)
+                  onOpenPath(nextPath)
+                }}
+                onToggleFavorite={onToggleFavorite}
+                action={(pathHistory.recent || []).length ? (
+                  <button type="button" onClick={onClearRecentPaths}>
+                    {t('remote.clearRecentPaths', 'Clear recent')}
+                  </button>
+                ) : null}
+              />
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          className={`remote-favorite-current ${(pathHistory.favorites || []).includes(path) ? 'selected' : ''}`}
+          title={(pathHistory.favorites || []).includes(path)
+            ? t('remote.unfavoriteCurrent', 'Remove current path from favorites')
+            : t('remote.favoriteCurrent', 'Favorite current path')}
+          onClick={() => onToggleFavorite?.(path)}
+        >
+          <Star size={14} fill={(pathHistory.favorites || []).includes(path) ? 'currentColor' : 'none'} />
+        </button>
+        {isPathTextMode ? (
+          <input
+            ref={pathInputRef}
+            className="remote-path-input"
+            value={path}
+            readOnly
+            onBlur={() => setIsPathTextMode(false)}
+            onMouseLeave={() => setIsPathTextMode(false)}
+            onClick={(event) => event.currentTarget.select()}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' || event.key === 'Enter') {
+                setIsPathTextMode(false)
+              }
+            }}
+          />
+        ) : (
+          <div
+            className="remote-breadcrumbs"
+            title="Double-click to select full path"
+            onDoubleClick={enterPathTextMode}
+            onContextMenu={(event) => {
+              event.preventDefault()
+              onCopyPath(path)
+            }}
+          >
+            {breadcrumbs.map((part, index) => (
+              <React.Fragment key={part.path}>
+                {index > 0 && <span className="breadcrumb-separator">/</span>}
+                <button
+                  type="button"
+                  title={part.path}
+                  onClick={() => openBreadcrumbPath(part.path)}
+                  onDoubleClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    enterPathTextMode()
+                  }}
+                >
+                  {part.label}
+                </button>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
+        {privilege && (
+          <div className="remote-privilege-badge" title={`${t('remote.privilegedActive', 'Privileged access: root')} · ${privilege.mode}`}>
+            <ShieldCheck size={13} />
+            <span>{t('remote.privilegedActive', 'Privileged access: root')}</span>
+            <button type="button" onClick={onExitPrivilege} title={t('remote.exitPrivilege', 'Exit privileged access')}><X size={12} /></button>
+          </div>
+        )}
+      </div>
+      {permissionError && !privilege && (
+        <div className="remote-permission-banner">
+          <div>
+            <strong><ShieldCheck size={15} />{t('remote.permissionDeniedTitle', 'The current SSH user cannot access this path')}</strong>
+            <span title={permissionError.path}>{permissionError.path}</span>
+            <small>{permissionError.message}</small>
+          </div>
+          <button type="button" onClick={() => onOpenPrivilege?.(permissionError.path)}>
+            <ShieldCheck size={15} />{t('remote.openAsRoot', 'Open with administrator privileges')}
+          </button>
+        </div>
+      )}
+      {globalSearch.active && (
+        <div className={`remote-global-search-status ${globalSearch.error ? 'error' : ''}`}>
+          <div>
+            <strong>
+              {globalSearch.loading
+                ? t('remote.globalSearching', 'Searching the whole server...')
+                : t('remote.globalResults', 'Global results: {count}', { count: allSortedItems.length })}
+            </strong>
+            {globalSearch.error && <span>{globalSearch.error}</span>}
+            {!globalSearch.error && globalSearch.permissionDeniedCount > 0 && <span>{t('remote.partialSearchResults', 'Some directories could not be accessed; results may be incomplete.')}</span>}
+            {!globalSearch.error && globalSearch.timedOut && <span>{t('remote.searchTimedOut', 'The 25-second search limit was reached; showing results found so far.')}</span>}
+            {!globalSearch.error && globalSearch.truncated && <span>{t('remote.searchTruncated', 'More than 500 results were found; only the first 500 are retained.')}</span>}
+          </div>
+          <div className="remote-global-search-pager">
+            {!globalSearch.loading && !globalSearch.error && (
+              <>
+                <button
+                  type="button"
+                  disabled={globalSearch.page <= 1}
+                  onClick={() => {
+                    setGlobalSearch((current) => ({ ...current, page: Math.max(1, current.page - 1) }))
+                    if (tableWrapRef.current) tableWrapRef.current.scrollTop = 0
+                  }}
+                >{t('remote.previousPage', 'Previous')}</button>
+                <span>{t('remote.searchPage', 'Page {page}/{pages}', { page: globalSearch.page, pages: globalPageCount })}</span>
+                <button
+                  type="button"
+                  disabled={globalSearch.page >= globalPageCount}
+                  onClick={() => {
+                    setGlobalSearch((current) => ({ ...current, page: Math.min(globalPageCount, current.page + 1) }))
+                    if (tableWrapRef.current) tableWrapRef.current.scrollTop = 0
+                  }}
+                >{t('remote.nextPage', 'Next')}</button>
+              </>
+            )}
+            <button type="button" className="remote-global-search-close" onClick={closeGlobalFileSearch} title={t('common.close', 'Close')}><X size={14} /></button>
+          </div>
+        </div>
+      )}
+      <div
+        className="remote-table-wrap"
+        ref={tableWrapRef}
+        onScroll={(event) => onScroll?.(event.currentTarget.scrollTop)}
+      >
+        <table className="remote-table">
+          <colgroup>
+            {remoteFileColumns.map((column) => (
+              <col key={column.key} style={{ width: `${columnWidths[column.key] || column.width}px` }} />
+            ))}
+          </colgroup>
+          <thead>
+            <tr>
+              {remoteFileColumns.map((column) => (
+                <th key={column.key}>{renderSortHead(column.key, t(`remote.${column.key}`, column.label))}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {effectiveLoading ? (
+              <tr
+              >
+                <td className="remote-empty-row" colSpan="6">{globalSearch.loading ? t('remote.globalSearching', 'Searching the whole server...') : transferring ? t('remote.transferring', 'Transferring file...') : t('remote.loading', 'Loading remote directory...')}</td>
+              </tr>
+            ) : visibleItems.length ? (
+              visibleItems.map((item) => {
+                const itemPath = item.path || joinRemotePath(path, item.name)
+                const selected = selectedItem?.path
+                  ? selectedItem.path === item.path
+                  : selectedItem?.name === item.name && selectedItem?.type === item.type
+                const checked = checkedRemoteKeys.has(itemPath)
+                const focused = focusedItemName && item.name === focusedItemName
+                return (
+                <tr
+                  key={itemPath}
+                  ref={focused ? focusedRowRef : null}
+                  className={`${selected || checked ? 'selected' : ''} ${focused ? 'focused' : ''}`}
+                  onClick={() => onOpen(item)}
+                  onDoubleClick={() => {
+                    cancelItemCopy()
+                    item.type === 'file' ? onEditFile(item) : onOpenDirectory(item)
+                  }}
+                >
+                  <td>
+                    <input
+                      type="checkbox"
+                      className="remote-download-checkbox"
+                      aria-label={`${t('remote.select', 'Select')} ${item.name}`}
+                      checked={checked}
+                      disabled={effectiveLoading || transferring}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={(event) => {
+                        setCheckedRemoteItems((current) => event.target.checked
+                          ? [...current.filter((candidate) => itemKey(candidate) !== itemPath), { ...item, path: itemPath }]
+                          : current.filter((candidate) => itemKey(candidate) !== itemPath))
+                      }}
+                    />
+                    {item.type === 'dir' ? <Folder size={15} /> : <File size={15} />}
+                    <span
+                      title={`${itemPath} - ${t('remote.clickCopyValue', 'click to copy the displayed value')}`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onOpen(item)
+                        copyItemDisplayValue(item)
+                      }}
+                      onDoubleClick={(event) => {
+                        event.stopPropagation()
+                        cancelItemCopy()
+                        item.type === 'file' ? onEditFile(item) : onOpenDirectory(item)
+                      }}
+                    >
+                      {globalSearch.active ? itemPath : item.name}
+                    </span>
+                  </td>
+                  <td>{formatRemoteItemType(item)}</td>
+                  <td>{item.size}</td>
+                  <td>{item.permissions || '-'}</td>
+                  <td>{item.owner || '-'}</td>
+                  <td>{item.modified}</td>
+                </tr>
+                )
+              })
+            ) : (
+              <tr>
+                <td className="remote-empty-row" colSpan="6">
+                  {globalSearch.error
+                    ? globalSearch.error
+                    : normalizedNameQuery
+                    ? t('remote.noMatches', 'No matching files.')
+                    : t('remote.connectPrompt', 'Connect to a server to load files.')}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+function normalizeRemoteHistoryPath(value) {
+  const normalized = `/${String(value || '/').replace(/\\/g, '/').split('/').filter(Boolean).join('/')}`
+  return normalized || '/'
+}
+
+function normalizeRemotePathHistory(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const normalized = {}
+  Object.entries(value).forEach(([serverId, entry]) => {
+    if (!serverId || !entry || typeof entry !== 'object' || Array.isArray(entry)) return
+    const normalizePaths = (paths, limit) => [...new Set((Array.isArray(paths) ? paths : [])
+      .map(normalizeRemoteHistoryPath)
+      .filter((path) => path.startsWith('/')))]
+      .slice(0, limit)
+    normalized[serverId] = {
+      recent: normalizePaths(entry.recent, 20),
+      favorites: normalizePaths(entry.favorites, 30)
+    }
+  })
+  return normalized
+}
+
+function normalizeCommandSnippets(value) {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item) => normalizeCommandSnippet(item))
+    .filter(Boolean)
+    .slice(0, 200)
+}
+
+function normalizeCommandSnippet(value, currentServerId = '') {
+  if (!value || typeof value !== 'object') return null
+  const name = String(value.name || '').trim().slice(0, 80)
+  const command = String(value.command || '').trim().slice(0, 20000)
+  if (!name || !command) return null
+  const createdAt = Number(value.createdAt || Date.now())
+  return {
+    id: String(value.id || `command-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`),
+    name,
+    command,
+    note: String(value.note || '').trim().slice(0, 1000),
+    tags: [...new Set((Array.isArray(value.tags) ? value.tags : [])
+      .map((item) => String(item || '').trim().slice(0, 30))
+      .filter(Boolean))]
+      .slice(0, 10),
+    scope: value.scope === 'all' ? 'all' : String(value.scope || currentServerId || 'all'),
+    createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
+    updatedAt: Date.now()
+  }
+}
+
+function commandContainsPotentialSecret(command) {
+  const value = String(command || '')
+  return /(?:password|passwd|pwd|token|secret|api[_-]?key)\s*[:=]\s*['"]?[^\s'"]+/i.test(value)
+    || /--password(?:=|\s+)\S+/i.test(value)
+    || /\bmysql\b[^\r\n]*\s-p\S+/i.test(value)
+    || /authorization\s*:\s*(?:basic|bearer)\s+\S+/i.test(value)
+    || /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(value)
+}
+
+function buildRemoteBreadcrumbs(path = '/') {
+  const normalized = path.startsWith('/') ? path : `/${path}`
+  const parts = normalized.split('/').filter(Boolean)
+  const breadcrumbs = [{ label: '/', path: '/' }]
+  let current = ''
+  for (const part of parts) {
+    current = `${current}/${part}`
+    breadcrumbs.push({ label: part, path: current })
+  }
+  return breadcrumbs
+}
+
+function formatTransferPercent(task) {
+  if (task.status === 'done') return 100
+  if (task.indeterminate) return 35
+  if (!task.total) return 0
+  return Math.max(0, Math.min(99, Math.round((Number(task.transferred || 0) / Number(task.total)) * 100)))
+}
+
+function sortRemoteItems(items = [], sort = { key: 'name', direction: 'asc' }) {
+  const key = sort?.key || 'name'
+  const direction = sort?.direction === 'desc' ? -1 : 1
+  return [...items].sort((left, right) => compareRemoteItems(left, right, key) * direction)
+}
+
+function compareRemoteItems(left = {}, right = {}, key = 'name') {
+  const leftValue = normalizeRemoteSortValue(left, key)
+  const rightValue = normalizeRemoteSortValue(right, key)
+  if (typeof leftValue === 'number' && typeof rightValue === 'number') {
+    return leftValue - rightValue
+  }
+  return String(leftValue).localeCompare(String(rightValue), undefined, { numeric: true, sensitivity: 'base' })
+}
+
+function normalizeRemoteSortValue(item = {}, key = 'name') {
+  if (key === 'size') return parseRemoteSize(item.size)
+  if (key === 'modified') return item.modified || ''
+  if (key === 'type') return formatRemoteItemType(item)
+  return item[key] || ''
+}
+
+function formatRemoteItemType(item = {}) {
+  const semanticType = String(item.type || 'file').trim().toLowerCase()
+  if (semanticType !== 'file') return semanticType
+
+  const name = String(item.name || '').trim().toLowerCase()
+  const compoundExtensions = ['tar.gz', 'tar.bz2', 'tar.xz', 'tar.zst']
+  const compoundExtension = compoundExtensions.find((extension) => name.endsWith(`.${extension}`))
+  if (compoundExtension) return compoundExtension
+
+  const extensionIndex = name.lastIndexOf('.')
+  if (extensionIndex <= 0 || extensionIndex === name.length - 1) return 'file'
+  const extension = name.slice(extensionIndex + 1)
+  return /^[a-z0-9][a-z0-9+_-]{0,15}$/.test(extension) ? extension : 'file'
+}
+
+function parseRemoteSize(value) {
+  const text = String(value || '').trim()
+  if (!text || text === '-') return -1
+  const match = text.match(/^([\d.]+)\s*([KMGT]?B?)?$/i)
+  if (!match) return Number.parseFloat(text) || -1
+  const amount = Number.parseFloat(match[1])
+  const unit = (match[2] || 'B').toUpperCase()
+  const factor = unit.startsWith('T') ? 1024 ** 4 : unit.startsWith('G') ? 1024 ** 3 : unit.startsWith('M') ? 1024 ** 2 : unit.startsWith('K') ? 1024 : 1
+  return amount * factor
+}
+
+function normalizeStoredTransferTask(task) {
+  if (!task || typeof task !== 'object') return task
+  if (!['running', 'cancelling'].includes(task.status)) return task
+  return {
+    ...task,
+    status: 'failed',
+    message: 'Interrupted before completion',
+    rollbackStatus: task.recovery?.manifestPath ? 'rollback_available' : task.rollbackStatus
+  }
+}
+
+function transferTypeLabel(task) {
+  if (task.type === 'workflow') return task.action === 'rollback' ? 'Rollback' : 'Workflow'
+  if (task.type === 'deploy') return toTitle(task.action || 'Deploy')
+  if (task.type === 'download') return 'Download'
+  if (task.type === 'delete') return 'Delete'
+  if (task.type === 'export') return 'Export'
+  if (task.type === 'database-table-delete') return 'DB delete'
+  if (task.type === 'database-backup') return 'DB backup'
+  if (task.type === 'redis-backup') return 'Redis backup'
+  if (task.type === 'redis-restore') return 'Redis restore'
+  if (task.type === 'save') return 'Save'
+  if (task.type === 'copy') return 'Copy'
+  if (task.type === 'sql-file') return 'SQL file'
+  if (task.type === 'backup-restore') return 'Restore'
+  if (task.type === 'backup-verify') return 'Verify'
+  return 'Upload'
+}
+
+function transferPathLabel(task) {
+  if (task.type === 'workflow') return task.message || task.remotePath || 'Workflow run'
+  if (task.type === 'deploy') return task.message || task.remotePath || 'Remote command'
+  if (task.type === 'sql-file') return task.message || task.remotePath || task.localPath
+  if (task.type === 'database-table-delete') return task.message || task.remotePath || 'Database table deletion'
+  if (task.type === 'database-backup') return task.message || task.localPath || task.remotePath || 'Database backup'
+  if (task.type === 'redis-backup') return task.message || task.localPath || 'Redis backup'
+  if (task.type === 'redis-restore') return task.message || task.localPath || 'Redis restore'
+  if (task.type === 'backup-restore') return task.message || task.remotePath || 'Backup restore'
+  if (task.type === 'backup-verify') return task.message || task.remotePath || 'Backup verification'
+  if (task.type === 'download') return task.localPath
+  if (task.type === 'delete') return task.currentPath || task.remotePath
+  return task.remotePath || task.localPath
+}
+
+function formatDurationSeconds(value) {
+  const seconds = Number(value)
+  if (!Number.isFinite(seconds) || seconds < 0) return '0'
+  return seconds.toFixed(1).replace(/\.0$/, '')
+}
+
+function appendDurationLabel(message, seconds) {
+  const text = String(message || '')
+  if (!Number.isFinite(Number(seconds)) || /耗时\s*[\d.]+\s*秒/.test(text)) return text
+  return `${text} · 耗时 ${formatDurationSeconds(seconds)} 秒`
+}
+
+function transferStatusLabel(task) {
+  const elapsed = Number.isFinite(Number(task.elapsedSeconds))
+    ? ` · ${formatDurationSeconds(task.elapsedSeconds)}秒`
+    : ''
+  if (task.status === 'done') return `Done${elapsed}`
+  if (task.status === 'failed') return `Failed${elapsed}`
+  if (task.status === 'cancelled') return `Stopped${elapsed}`
+  if (task.indeterminate || !task.total) return `Running${elapsed}`
+  return `${formatTransferPercent(task)}%${elapsed}`
+}
+
+function findPreviewMatches(sourceText, queryText) {
+  const query = String(queryText || '').toLocaleLowerCase()
+  if (!query) return []
+  const source = String(sourceText || '').toLocaleLowerCase()
+  const matches = []
+  let offset = 0
+  while (offset <= source.length - query.length) {
+    const match = source.indexOf(query, offset)
+    if (match < 0) break
+    matches.push(match)
+    offset = match + Math.max(1, query.length)
+  }
+  return matches
+}
+
+function FilePreviewDialog({ file, content, saving, copying, onChange, onClose, onCopy, onSave }) {
+  const { t } = useI18n()
+  const editorRef = useRef(null)
+  const highlightRef = useRef(null)
+  const searchInputRef = useRef(null)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchIndex, setSearchIndex] = useState(0)
+  const [replaceValue, setReplaceValue] = useState('')
+  const [replaceSummary, setReplaceSummary] = useState('')
+  const searchMatches = useMemo(() => findPreviewMatches(content, searchQuery), [content, searchQuery])
+
+  const openSearch = () => {
+    setSearchOpen(true)
+    window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus()
+      searchInputRef.current?.select()
+    })
+  }
+
+  const closeSearch = () => {
+    setSearchOpen(false)
+    setSearchQuery('')
+    setSearchIndex(0)
+    setReplaceValue('')
+    setReplaceSummary('')
+    editorRef.current?.focus()
+  }
+
+  const moveSearch = (direction) => {
+    if (!searchMatches.length) return
+    setReplaceSummary('')
+    setSearchIndex((current) => (current + direction + searchMatches.length) % searchMatches.length)
+  }
+
+  const replaceCurrentMatch = () => {
+    if (!searchMatches.length || file.loading) return
+    const safeIndex = Math.min(searchIndex, searchMatches.length - 1)
+    const matchStart = searchMatches[safeIndex]
+    const matchEnd = matchStart + searchQuery.length
+    const nextContent = `${content.slice(0, matchStart)}${replaceValue}${content.slice(matchEnd)}`
+    const nextMatches = findPreviewMatches(nextContent, searchQuery)
+    const nextStart = matchStart + replaceValue.length
+    const nextIndex = nextMatches.findIndex((position) => position >= nextStart)
+    onChange(nextContent)
+    setSearchIndex(nextIndex >= 0 ? nextIndex : 0)
+    setReplaceSummary(t('common.replacedCount', 'Replaced {count}', { count: 1 }))
+  }
+
+  const replaceAllMatches = () => {
+    if (!searchMatches.length || file.loading) return
+    const parts = []
+    let cursor = 0
+    for (const matchStart of searchMatches) {
+      parts.push(content.slice(cursor, matchStart), replaceValue)
+      cursor = matchStart + searchQuery.length
+    }
+    parts.push(content.slice(cursor))
+    const replacedCount = searchMatches.length
+    onChange(parts.join(''))
+    setSearchIndex(0)
+    setReplaceSummary(t('common.replacedCount', 'Replaced {count}', { count: replacedCount }))
+  }
+
+  useEffect(() => {
+    const handleFindShortcut = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === 'f') {
+        event.preventDefault()
+        openSearch()
+      }
+    }
+    document.addEventListener('keydown', handleFindShortcut)
+    return () => document.removeEventListener('keydown', handleFindShortcut)
+  }, [])
+
+  useEffect(() => {
+    setSearchIndex(0)
+  }, [searchQuery])
+
+  useEffect(() => {
+    if (!searchMatches.length) return
+    const safeIndex = Math.min(searchIndex, searchMatches.length - 1)
+    if (safeIndex !== searchIndex) {
+      setSearchIndex(safeIndex)
+      return
+    }
+    const start = searchMatches[safeIndex]
+    const editor = editorRef.current
+    if (!editor) return
+    const lineNumber = content.slice(0, start).split('\n').length - 1
+    editor.scrollTop = Math.max(0, lineNumber * 21 - editor.clientHeight / 3)
+    if (highlightRef.current) {
+      highlightRef.current.scrollTop = editor.scrollTop
+      highlightRef.current.scrollLeft = editor.scrollLeft
+    }
+  }, [content, searchIndex, searchMatches, searchQuery])
+
+  const editorValue = file.loading ? t('remote.loadingFile', 'Loading remote file...') : content
+  const activeMatchStart = searchOpen && searchQuery && searchMatches.length
+    ? searchMatches[Math.min(searchIndex, searchMatches.length - 1)]
+    : -1
+
+  const syncPreviewScroll = (event) => {
+    if (!highlightRef.current) return
+    highlightRef.current.scrollTop = event.currentTarget.scrollTop
+    highlightRef.current.scrollLeft = event.currentTarget.scrollLeft
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <section className="file-preview-dialog">
+        <div className="dialog-title">
+          <div>
+            <strong>{file.name}</strong>
+            <span>{file.path}</span>
+          </div>
+          <div className="file-preview-title-actions">
+            <button type="button" onClick={openSearch} title={t('common.search', 'Search') + ' (Ctrl+F)'}><Search size={17} /></button>
+            <button type="button" onClick={onClose} title={t('common.close', 'Close')}><X size={18} /></button>
+          </div>
+        </div>
+        {searchOpen && (
+          <div className="preview-search-bar">
+            <div className="preview-search-row">
+              <Search size={16} />
+              <input
+                ref={searchInputRef}
+                value={searchQuery}
+                placeholder={t('common.search', 'Search')}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value)
+                  setReplaceSummary('')
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    moveSearch(event.shiftKey ? -1 : 1)
+                  } else if (event.key === 'Escape') {
+                    event.preventDefault()
+                    closeSearch()
+                  }
+                }}
+              />
+              <span className={`preview-search-count ${searchQuery && !searchMatches.length ? 'no-match' : ''}`}>
+                {searchMatches.length ? `${searchIndex + 1}/${searchMatches.length}` : '0/0'}
+              </span>
+              <button type="button" onClick={() => moveSearch(-1)} disabled={!searchMatches.length} title="Previous (Shift+Enter)"><ChevronUp size={17} /></button>
+              <button type="button" onClick={() => moveSearch(1)} disabled={!searchMatches.length} title="Next (Enter)"><ChevronDown size={17} /></button>
+              <button type="button" onClick={closeSearch} title={t('common.close', 'Close')}><X size={17} /></button>
+            </div>
+            <div className="preview-search-row preview-replace-row">
+              <SquarePen size={16} />
+              <input
+                value={replaceValue}
+                placeholder={t('common.replaceWith', 'Replace with')}
+                onChange={(event) => {
+                  setReplaceValue(event.target.value)
+                  setReplaceSummary('')
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    if (event.ctrlKey || event.metaKey) replaceAllMatches()
+                    else replaceCurrentMatch()
+                  } else if (event.key === 'Escape') {
+                    event.preventDefault()
+                    closeSearch()
+                  }
+                }}
+              />
+              <span className="preview-replace-summary">{replaceSummary}</span>
+              <button className="preview-replace-action" type="button" onClick={replaceCurrentMatch} disabled={!searchMatches.length || file.loading}>
+                {t('common.replaceCurrent', 'Replace')}
+              </button>
+              <button className="preview-replace-action" type="button" onClick={replaceAllMatches} disabled={!searchMatches.length || file.loading} title="Ctrl+Enter">
+                {t('common.replaceAll', 'Replace all')} ({searchMatches.length})
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="preview-editor-shell">
+          <pre ref={highlightRef} className="preview-editor-highlight" aria-hidden="true">
+            {activeMatchStart < 0 ? editorValue : (
+              <>
+                {editorValue.slice(0, activeMatchStart)}
+                <mark>{editorValue.slice(activeMatchStart, activeMatchStart + searchQuery.length)}</mark>
+                {editorValue.slice(activeMatchStart + searchQuery.length)}
+              </>
+            )}
+          </pre>
+          <textarea
+            ref={editorRef}
+            className="preview-editor"
+            value={editorValue}
+            onChange={(event) => onChange(event.target.value)}
+            onScroll={syncPreviewScroll}
+            disabled={file.loading}
+            spellCheck="false"
+          />
+        </div>
+        <div className="dialog-actions">
+          <button onClick={onClose} disabled={saving || copying}>{t('common.close', 'Close')}</button>
+          <button onClick={onCopy} disabled={copying || saving || file.loading}>
+            <Copy size={16} />{copying ? t('remote.copyingBackup', 'Copying') : t('remote.copyBackup', 'Copy backup')}
+          </button>
+          <button className="solid-button" onClick={onSave} disabled={saving || copying || file.loading}>
+            <Save size={16} />{file.loading ? t('common.loading', 'Loading') : saving ? t('common.saving', 'Saving') : t('common.save', 'Save')}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function RedisBrowser({ connections, selected, connectionAvailable, servers, databases, selectedDb, keys, pattern, selectedKey, detail, loading, backupRunning, onAdd, onEdit, onDelete, onSelect, onRefresh, onSelectDb, onPatternChange, onSearch, onOpenKey, onDeleteKey, onFlushDb, onBackup, onRestore }) {
+  const { t } = useI18n()
+  const [redisSplit, setRedisSplit] = useState(42)
+  const redisMainRef = useRef(null)
+  const startRedisResize = (event) => {
+    event.preventDefault()
+    const bounds = redisMainRef.current?.getBoundingClientRect()
+    if (!bounds?.width) return
+    const contentLeft = bounds.left + 160
+    const contentWidth = Math.max(1, bounds.width - 160)
+    document.body.classList.add('is-resizing-panel')
+
+    const handleMove = (moveEvent) => {
+      const nextPercent = ((moveEvent.clientX - contentLeft) / contentWidth) * 100
+      setRedisSplit(Math.min(70, Math.max(25, nextPercent)))
+    }
+
+    const handleUp = () => {
+      document.body.classList.remove('is-resizing-panel')
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
+
+  return (
+    <div className="redis-browser">
+      {selected && !connectionAvailable && <div className="module-disabled-banner">{resourceConnectionError(selected)}</div>}
+      <div className="redis-toolbar">
+        <select
+          value={selected?.id || ''}
+          onChange={(event) => {
+            const connection = connections.find((item) => item.id === event.target.value)
+            if (connection) onSelect(connection)
+          }}
+        >
+          {connections.map((item) => <option key={item.id} value={item.id}>{item.name} · {resourceConnectionLabel(item, servers, t)}</option>)}
+        </select>
+        <button onClick={onAdd}><Plus size={14} />{t('common.add', 'Add')}</button>
+        <button onClick={() => onEdit()} disabled={!selected}><SquarePen size={14} />{t('common.edit', 'Edit')}</button>
+        <button onClick={() => onDelete()} disabled={!selected}><Trash2 size={14} />{t('common.delete', 'Delete')}</button>
+        <button onClick={onBackup} disabled={!connectionAvailable || !selected || loading || backupRunning} title={`将当前逻辑库 db${selectedDb} 备份到本机（文件未加密）`}>
+          <Save size={14} />{backupRunning ? '备份中' : '备份'}
+        </button>
+        <button onClick={onRestore} disabled={!connectionAvailable || !selected || loading || backupRunning} title={`从 .opsredis 文件恢复到 db${selectedDb}`}>
+          <RotateCcw size={14} />恢复
+        </button>
+        <button className="solid-button" onClick={() => onRefresh()} disabled={!connectionAvailable || !selected || loading}><RefreshCw size={14} />{loading ? t('redis.loading', 'Loading') : t('redis.load', 'Load')}</button>
+      </div>
+      <div
+        className="redis-main"
+        ref={redisMainRef}
+        style={{ gridTemplateColumns: `160px minmax(180px, ${redisSplit}%) 10px minmax(240px, 1fr)` }}
+      >
+        <aside className="redis-sidebar">
+          <div className="redis-section-title">{t('redis.databases', 'Databases')}</div>
+          <div className="redis-db-list">
+            {(databases.length ? databases : Array.from({ length: 16 }, (_item, index) => ({ index, keys: 0 }))).map((db) => (
+              <button key={db.index} className={Number(selectedDb) === db.index ? 'selected' : ''} onClick={() => onSelectDb(db.index)} disabled={!connectionAvailable}>
+                <Database size={14} /><span>db{db.index}</span><em>{db.keys || 0}</em>
+              </button>
+            ))}
+          </div>
+        </aside>
+        <section className="redis-key-panel">
+          <div className="redis-section-title"><span>{t('redis.keys', 'Keys')}</span><button onClick={onFlushDb} disabled={!connectionAvailable || !selected || loading}><Trash2 size={14} />{t('redis.clearDb', 'Clear DB')}</button></div>
+          <div className="redis-search">
+            <input value={pattern} onChange={(event) => onPatternChange(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && onSearch()} placeholder={t('redis.patternPlaceholder', 'Pattern, e.g. user:*')} />
+            <button onClick={onSearch} disabled={!connectionAvailable || !selected || loading}>{t('redis.search', 'Search')}</button>
+          </div>
+          <div className="redis-key-list">
+            {keys.length ? keys.map((key) => (
+              <button key={key} className={selectedKey === key ? 'selected' : ''} onClick={() => onOpenKey(key)} disabled={!connectionAvailable}>
+                <ShieldCheck size={14} /><span title={key}>{key}</span>
+              </button>
+            )) : <div className="redis-empty">{loading ? t('redis.loadingKeys', 'Loading keys...') : t('redis.noKeysLoaded', 'No keys loaded.')}</div>}
+          </div>
+        </section>
+        <div
+          className="redis-splitter"
+          role="separator"
+          aria-orientation="vertical"
+          title={t('redis.resizeKeys', 'Drag to resize keys and value')}
+          onMouseDown={startRedisResize}
+        />
+        <section className="redis-value-panel">
+          <div className="redis-section-title"><span>{t('redis.value', 'Value')}</span><button onClick={onDeleteKey} disabled={!connectionAvailable || !selectedKey || loading}><Trash2 size={14} />{t('redis.deleteKey', 'Delete key')}</button></div>
+          {detail ? (
+            <>
+              <div className="redis-meta"><span>{t('redis.type', 'Type')}: {detail.type}</span><span>{t('redis.ttl', 'TTL')}: {formatRedisTtl(detail.ttl)}</span></div>
+              <textarea readOnly value={formatRedisValue(detail.value)} />
+            </>
+          ) : <div className="redis-empty">{t('redis.selectKey', 'Select a key to view its value.')}</div>}
+        </section>
+      </div>
+    </div>
+  )
+}
+
+function BackupRecoveryPanel({
+  serverConnected,
+  result,
+  loading,
+  loadingMessage,
+  selectedTaskId,
+  databases,
+  privilege,
+  onPrivilegeChange,
+  onForgetPrivilege,
+  onRefresh,
+  onSelectTask,
+  onScanArtifacts,
+  onConfigureTarget,
+  onVerify,
+  onViewContent,
+  onRestore,
+  onOpenDatabase
+}) {
+  const { t } = useI18n()
+  const tasks = result?.tasks || []
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) || tasks[0] || null
+  const counts = tasks.reduce((summary, task) => {
+    summary[task.type] = (summary[task.type] || 0) + 1
+    if (task.readiness !== 'ready') summary.pending += 1
+    return summary
+  }, { database: 0, service: 0, config: 0, resource: 0, unknown: 0, pending: 0 })
+
+  return (
+    <div className="backup-recovery-workspace">
+      {!serverConnected && <div className="module-disabled-banner">连接服务器后扫描备份任务。</div>}
+      <div className="backup-recovery-toolbar">
+        <div>
+          <strong>{t('backup.title', 'Backup & Recovery')}</strong>
+          <span>识别备份任务并恢复。</span>
+        </div>
+        <div className="inspector-toolbar-actions">
+          <label className="privilege-control">
+            <span>扫描权限</span>
+            <select
+              value={privilege?.mode || 'auto'}
+              onChange={(event) => onPrivilegeChange({ mode: event.target.value, suggestedMode: event.target.value, password: '', passwordRequired: false, cached: false })}
+              disabled={!serverConnected || loading}
+            >
+              <option value="auto">自动检测（推荐）</option>
+              <option value="normal">当前 SSH 用户</option>
+              <option value="sudo">sudo root</option>
+              <option value="su">su root</option>
+            </select>
+          </label>
+          {(['sudo', 'su'].includes(privilege?.mode) || privilege?.passwordRequired) && !privilege?.cached && (
+            <input
+              className="privilege-password"
+              type="password"
+              value={privilege?.password || ''}
+              onChange={(event) => onPrivilegeChange({ ...privilege, password: event.target.value })}
+              placeholder={`${privilege?.suggestedMode === 'su' || privilege?.mode === 'su' ? 'root' : 'sudo'} password`}
+              disabled={!serverConnected || loading}
+            />
+          )}
+          {privilege?.cached && <button className="privilege-session-button" onClick={onForgetPrivilege} disabled={loading}>已验证 · 忘记</button>}
+          <button className="solid-button" onClick={onRefresh} disabled={!serverConnected || loading}>
+            <RefreshCw size={15} />{loading ? '扫描中' : '扫描任务'}
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="backup-recovery-loading">
+          <RefreshCw size={24} />
+          <strong>正在识别备份任务</strong>
+          <span>{loadingMessage || '正在读取计划任务、脚本和备份路径…'}</span>
+        </div>
+      ) : result?.ok === false ? (
+        <div className="backup-recovery-empty">{result.message}</div>
+      ) : result ? (
+        <>
+          <div className="backup-recovery-summary">
+            <span><strong>{tasks.length}</strong>任务</span>
+            <span><strong>{counts.database}</strong>数据库</span>
+            <span><strong>{counts.service}</strong>业务服务</span>
+            <span><strong>{counts.config + counts.resource}</strong>文件资源</span>
+            <span className={counts.pending ? 'pending' : ''}><strong>{counts.pending}</strong>待补充</span>
+          </div>
+          <div className="backup-recovery-layout">
+            <aside className="backup-task-list">
+              {tasks.length ? tasks.map((task) => (
+                <button key={task.id} className={task.id === selectedTask?.id ? 'selected' : ''} onClick={() => onSelectTask(task.id)}>
+                  <span className={`backup-type-badge ${task.type}`}>{backupTaskTypeLabel(task.type)}</span>
+                  <strong title={task.name}>{task.name}</strong>
+                  <small title={task.schedule}>{task.schedule || '按系统计划运行'}</small>
+                  <em className={task.readiness}>{backupTaskReadinessLabel(task)}</em>
+                </button>
+              )) : <div className="backup-recovery-empty">没有识别到备份任务。</div>}
+            </aside>
+            <section className="backup-task-detail">
+              {selectedTask ? (
+                <>
+                  <div className="backup-task-head">
+                    <div>
+                      <span className={`backup-type-badge ${selectedTask.type}`}>{backupTaskTypeLabel(selectedTask.type)}</span>
+                      <strong>{selectedTask.name}</strong>
+                      <small>{selectedTask.source}</small>
+                    </div>
+                    <div className="backup-task-head-actions">
+                      <button onClick={() => onConfigureTarget(selectedTask)} disabled={loading}><SquarePen size={15} />配置目标</button>
+                      <button onClick={() => onScanArtifacts(selectedTask)} disabled={loading}><Search size={15} />扫描备份</button>
+                    </div>
+                  </div>
+                  <div className="backup-task-meta">
+                    <span><small>计划</small><strong>{selectedTask.schedule || '-'}</strong></span>
+                    <span><small>备份引擎</small><strong>{selectedTask.engine || backupTaskTypeLabel(selectedTask.type)}</strong></span>
+                    <span><small>恢复目标</small><strong title={selectedTask.targetPath || selectedTask.restoreRoot || selectedTask.matchedDatabaseName}>{selectedTask.type === 'database' ? (selectedTask.matchedDatabaseName || selectedTask.databaseNameHint || '待选择数据库连接') : selectedTask.restoreMode === 'archive-paths' ? `${selectedTask.restoreRoot || '/'}（按包内路径）` : (selectedTask.targetPath || '待补充')}</strong></span>
+                    <span><small>关联服务</small><strong>{selectedTask.serviceName || '-'}</strong></span>
+                  </div>
+                  {selectedTask.type === 'database' && selectedTask.readiness === 'needs-database' && (
+                    <div className="backup-task-warning">
+                      未匹配到数据库连接，恢复前需要选择已有连接。
+                      <button onClick={onOpenDatabase}>添加数据库连接</button>
+                    </div>
+                  )}
+                  {selectedTask.confidence === 'low' && (
+                    <div className="backup-task-warning">任务用途无法完全确认，恢复前必须核对目标路径和服务。</div>
+                  )}
+                  <details className="backup-task-command">
+                    <summary>查看任务命令</summary>
+                    <pre>{selectedTask.command}{selectedTask.scriptContent ? `\n\n# ${selectedTask.scriptPath}\n${selectedTask.scriptContent}` : ''}</pre>
+                  </details>
+                  <div className="backup-artifact-head">
+                    <strong>备份产物</strong>
+                    <span>{selectedTask.artifactsScanned ? `${selectedTask.artifacts?.length || 0} 个` : '点击扫描备份后显示'}</span>
+                  </div>
+                  <div className="backup-artifact-list">
+                    {selectedTask.artifacts?.length ? selectedTask.artifacts.map((artifact) => (
+                      <div key={artifact.path} className="backup-artifact-row">
+                        <File size={17} />
+                        <div className="backup-artifact-info">
+                          <strong title={artifact.path}>{artifact.name}</strong>
+                          <span title={artifact.path}>{artifact.path}</span>
+                        </div>
+                        <small title={(artifact.entries || []).join('\n')}>{formatBytes(artifact.size)} · {formatBackupArtifactTime(artifact.modifiedAt)}{artifact.verified ? ' · 已校验' : ''}{artifact.entryCount ? ` · ${artifact.entryCount} 项` : ''}</small>
+                        <div className="backup-artifact-actions">
+                          <button onClick={() => onVerify(selectedTask, artifact)}><ShieldCheck size={14} />校验</button>
+                          {!!artifact.entryCount && <button onClick={() => onViewContent(selectedTask, artifact)}><Eye size={14} />内容</button>}
+                          <button className="solid-button" onClick={() => onRestore(selectedTask, artifact)}><RotateCcw size={14} />恢复</button>
+                        </div>
+                      </div>
+                    )) : (
+                      <div className="backup-artifact-empty">{selectedTask.artifactsScanned ? '没有找到匹配的备份文件。' : '尚未扫描实际备份目录。'}</div>
+                    )}
+                  </div>
+                </>
+              ) : <div className="backup-recovery-empty">选择一个备份任务查看详情。</div>}
+            </section>
+          </div>
+        </>
+      ) : (
+        <div className="backup-recovery-empty">点击“扫描任务”读取 crontab、cron.d 和 systemd timer。</div>
+      )}
+    </div>
+  )
+}
+
+function BackupTargetDialog({ value, databases, onChange, onClose, onSave, onOpenDatabase }) {
+  const isDatabase = value.task.type === 'database'
+  const compatibleDatabases = databases.filter((database) => backupDatabaseEngineMatches(value.task.engine, database.engine))
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog backup-restore-dialog">
+        <div className="dialog-title">
+          <div><strong>配置恢复目标</strong><span>{value.task.name}</span></div>
+          <button onClick={onClose} disabled={value.saving}><X size={18} /></button>
+        </div>
+        <div className="server-form">
+          {isDatabase ? (
+            <Field label="数据库连接">
+              <select value={value.databaseId} onChange={(event) => onChange({ databaseId: event.target.value })}>
+                <option value="">选择当前服务器的数据库连接</option>
+                {compatibleDatabases.map((database) => <option key={database.id} value={database.id}>{database.name} · {database.engine} · {formatDatabaseEndpoint(database)}</option>)}
+              </select>
+            </Field>
+          ) : (
+            <>
+              <Field label="恢复方式">
+                <select value={value.restoreMode} onChange={(event) => onChange({ restoreMode: event.target.value })}>
+                  <option value="single">单文件或单目录</option>
+                  <option value="archive-paths">按压缩包内原路径</option>
+                </select>
+              </Field>
+              {value.restoreMode === 'archive-paths' ? (
+                <Field label="恢复根目录"><input value={value.restoreRoot} onChange={(event) => onChange({ restoreRoot: event.target.value })} placeholder="/" /></Field>
+              ) : (
+                <Field label="原始恢复目标"><input value={value.targetPath} onChange={(event) => onChange({ targetPath: event.target.value })} placeholder="/etc/nginx/nginx.conf 或 /opt/apps/demo" /></Field>
+              )}
+              <Field label="关联服务"><input value={value.serviceName} onChange={(event) => onChange({ serviceName: event.target.value })} placeholder="可选，例如 nginx.service" /></Field>
+            </>
+          )}
+        </div>
+        {isDatabase && !compatibleDatabases.length && <div className="backup-task-warning">当前服务器没有匹配的数据库连接。<button onClick={onOpenDatabase}>去添加</button></div>}
+        {value.notice && <div className="form-notice error">{value.notice}</div>}
+        <div className="dialog-actions">
+          <button onClick={onClose} disabled={value.saving}>取消</button>
+          <button className="solid-button" onClick={onSave} disabled={value.saving}>{value.saving ? '保存中…' : '保存目标'}</button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function BackupRestoreDialog({ value, databases, onChange, onClose, onRestore, onOpenDatabase }) {
+  const isDatabase = value.task.type === 'database'
+  const compatibleDatabases = databases.filter((database) => backupDatabaseEngineMatches(value.task.engine, database.engine))
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog backup-restore-dialog">
+        <div className="dialog-title">
+          <div><strong>恢复备份</strong><span>{value.task.name} · {value.artifact.name}</span></div>
+          <button onClick={onClose} disabled={value.running}><X size={18} /></button>
+        </div>
+        <div className="backup-restore-warning">恢复会修改服务器现有数据。文件类恢复会先生成恢复前快照；数据库恢复依赖数据库自身事务和备份格式。</div>
+        <div className="server-form">
+          <Field label="备份文件"><input readOnly value={value.artifact.path} /></Field>
+          {isDatabase ? (
+            <Field label="数据库连接">
+              <select value={value.databaseId} onChange={(event) => onChange({ databaseId: event.target.value })}>
+                <option value="">选择当前服务器的数据库连接</option>
+                {compatibleDatabases.map((database) => <option key={database.id} value={database.id}>{database.name} · {database.engine} · {formatDatabaseEndpoint(database)}</option>)}
+              </select>
+            </Field>
+          ) : (
+            <>
+              <Field label="恢复方式">
+                <select value={value.restoreMode} onChange={(event) => onChange({ restoreMode: event.target.value })}>
+                  <option value="single">单文件或单目录</option>
+                  <option value="archive-paths">按压缩包内原路径</option>
+                </select>
+              </Field>
+              {value.restoreMode === 'archive-paths' ? (
+                <Field label="恢复根目录"><input value={value.restoreRoot} onChange={(event) => onChange({ restoreRoot: event.target.value })} placeholder="/" /></Field>
+              ) : (
+                <Field label="原始恢复目标"><input value={value.targetPath} onChange={(event) => onChange({ targetPath: event.target.value })} placeholder="/etc/nginx/nginx.conf 或 /opt/apps/demo" /></Field>
+              )}
+              <Field label="关联服务"><input value={value.serviceName} onChange={(event) => onChange({ serviceName: event.target.value })} placeholder="可选，例如 nginx.service" /></Field>
+            </>
+          )}
+          <Field label="确认恢复"><input value={value.confirmation} onChange={(event) => onChange({ confirmation: event.target.value })} placeholder="输入 RESTORE" /></Field>
+        </div>
+        {isDatabase && !compatibleDatabases.length && <div className="backup-task-warning">当前服务器没有匹配的数据库连接。<button onClick={onOpenDatabase}>去添加</button></div>}
+        {value.notice && <div className="form-notice error">{value.notice}</div>}
+        <div className="dialog-actions">
+          <button onClick={onClose} disabled={value.running}>取消</button>
+          <button className="solid-button" onClick={onRestore} disabled={value.running}>{value.running ? '恢复中…' : '开始恢复'}</button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function BackupContentDialog({ value, onClose }) {
+  const entries = value.artifact.entries || []
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog backup-content-dialog">
+        <div className="dialog-title">
+          <div><strong>备份内容</strong><span>{value.artifact.name} · {value.artifact.entryCount || entries.length} 项</span></div>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="backup-content-list">
+          {entries.map((entry, index) => <div key={`${entry}-${index}`} title={entry}>{entry}</div>)}
+          {value.artifact.entriesTruncated && <div className="backup-content-more">仅显示前 {entries.length} 项</div>}
+        </div>
+        <div className="dialog-actions"><button className="solid-button" onClick={onClose}>关闭</button></div>
+      </section>
+    </div>
+  )
+}
+
+function SystemInspectorPanel({
+  serverConnected,
+  result,
+  loading,
+  loadingMessage,
+  busyKey,
+  privilege,
+  serviceSearch,
+  servicesScrollTop,
+  onRefresh,
+  onServiceAction,
+  onPrivilegeChange,
+  onServiceSearchChange,
+  onForgetPrivilege,
+  onServicesScroll,
+  onAddCron,
+  onEditCron,
+  onDeleteCron,
+  sshPort,
+  onAddFirewallPort,
+  onDeleteFirewallRule,
+  onToggleFirewall,
+  onCancel
+}) {
+  const { t } = useI18n()
+  return (
+    <div className="system-inspector">
+      {!serverConnected && <div className="module-disabled-banner">{t('inspector.connectFirst', 'Connect server first to inspect system information.')}</div>}
+      <div className="inspector-toolbar">
+        <div>
+          <strong>{t('inspector.title', 'Host Management')}</strong>
+          <span>{t('inspector.description', 'Inspect runtime and manage system services, user crontab entries, and firewall ports.')}</span>
+        </div>
+        <div className="inspector-toolbar-actions">
+          <label className="privilege-control">
+            <span>{t('inspector.servicePrivilege', 'Service privilege')}</span>
+            <select
+              value={privilege?.mode || 'auto'}
+              onChange={(event) => onPrivilegeChange({ mode: event.target.value, suggestedMode: event.target.value, password: '', passwordRequired: false, cached: false })}
+              disabled={!serverConnected || loading}
+            >
+              <option value="auto">{t('workflow.privilegeAuto', 'Auto detect (recommended)')}</option>
+              <option value="normal">{t('workflow.privilegeCurrent', 'Current SSH user')}</option>
+              <option value="sudo">sudo root</option>
+              <option value="su">su root</option>
+            </select>
+          </label>
+          {(['sudo', 'su'].includes(privilege?.mode) || privilege?.passwordRequired) && !privilege?.cached && (
+            <input
+              className="privilege-password"
+              type="password"
+              value={privilege?.password || ''}
+              onChange={(event) => onPrivilegeChange({ ...privilege, password: event.target.value })}
+              placeholder={`${privilege?.suggestedMode === 'su' || privilege?.mode === 'su' ? 'root' : 'sudo'} password`}
+              disabled={!serverConnected || loading}
+            />
+          )}
+          {privilege?.cached && (
+            <button type="button" className="privilege-session-button" onClick={onForgetPrivilege} disabled={!serverConnected || loading}>
+              已验证 · 忘记
+            </button>
+          )}
+          <button
+            className={loading ? 'danger-button inspector-cancel-button' : 'solid-button'}
+            onClick={loading ? onCancel : onRefresh}
+            disabled={!serverConnected}
+          >
+            {loading ? <CircleStop size={15} /> : <RefreshCw size={15} />}
+            {loading ? t('inspector.cancel', 'Cancel inspection') : t('inspector.inspect', 'Inspect')}
+          </button>
+        </div>
+      </div>
+      {loading ? (
+        <div className="inspector-empty inspector-loading-state">
+          <RefreshCw className="inspector-loading-icon" size={22} />
+          <strong>{t('inspector.loading', 'Inspecting server')}</strong>
+          <span>{loadingMessage || t('inspector.loadingHint', 'Reading system inventory. This will stop automatically after 60 seconds.')}</span>
+        </div>
+      ) : result?.ok === false ? (
+        <div className="inspector-empty">{result.message}</div>
+      ) : result ? (
+        <>
+          <div className="inspector-summary">
+            <InspectorSummary label="OS" value={result.osName || '-'} />
+            <InspectorSummary label="Kernel" value={result.kernel || '-'} />
+            <InspectorSummary label={t('inspector.services', 'Services')} value={String(result.serviceCount || 0)} />
+            <InspectorSummary label="Packages" value={result.packageSummary || '-'} />
+          </div>
+          <div className="inspector-grid">
+            <RuntimeSection runtimes={result.runtimes} />
+            <ServicesSection
+              services={result.services}
+              busyKey={busyKey}
+              searchOpen={Boolean(serviceSearch?.open)}
+              searchQuery={serviceSearch?.query || ''}
+              scrollTop={servicesScrollTop}
+              onSearchChange={onServiceSearchChange}
+              onScroll={onServicesScroll}
+              onAction={onServiceAction}
+            />
+            <CronSection crons={result.cronEntries} busy={busyKey === 'cron:save'} onAdd={onAddCron} onEdit={onEditCron} onDelete={onDeleteCron} />
+            <FirewallSection
+              firewall={result.firewall}
+              busyKey={busyKey}
+              sshPort={sshPort}
+              onAdd={onAddFirewallPort}
+              onDelete={onDeleteFirewallRule}
+              onToggle={onToggleFirewall}
+            />
+          </div>
+        </>
+      ) : (
+        <div className="inspector-empty">{t('inspector.clickInspect', 'Click Inspect to load server inventory.')}</div>
+      )}
+    </div>
+  )
+}
+
+function RuntimeSection({ runtimes = [] }) {
+  const { t } = useI18n()
+  return (
+    <section className="runtime-section">
+      <strong>{t('inspector.runtime', 'Runtime')}</strong>
+      <div className="runtime-list">
+        {runtimes.length ? runtimes.map((runtime) => (
+          <div key={runtime.name} className={runtime.timedOut ? 'runtime-item timed-out' : runtime.installed ? 'runtime-item installed' : 'runtime-item'}>
+            <span>{runtime.name}</span>
+            <strong title={runtime.version}>{runtime.timedOut ? t('inspector.detectionTimedOut', 'Detection timed out') : runtime.version}</strong>
+          </div>
+        )) : <div className="inspector-inline-empty">{t('inspector.noRuntimeData', 'No runtime data')}</div>}
+      </div>
+    </section>
+  )
+}
+
+function serviceNameMatchesQuery(serviceName, query) {
+  const source = String(serviceName || '').toLocaleLowerCase()
+  const terms = String(query || '').trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
+  return !terms.length || terms.every((term) => source.includes(term))
+}
+
+function ServicesSection({ services = [], busyKey, searchOpen = false, searchQuery = '', scrollTop = 0, onSearchChange, onScroll, onAction }) {
+  const { t } = useI18n()
+  const scrollRef = useRef(null)
+  const normalizedSearchQuery = searchQuery.trim()
+  const availableServices = useMemo(
+    () => services.filter((service) => !isFirewallServiceName(service.name)),
+    [services]
+  )
+  const visibleServices = useMemo(() => {
+    if (!normalizedSearchQuery) return availableServices
+    return availableServices.filter((service) => serviceNameMatchesQuery(service.name, normalizedSearchQuery))
+  }, [availableServices, normalizedSearchQuery])
+
+  useEffect(() => {
+    const node = scrollRef.current
+    if (!node) return
+    if (normalizedSearchQuery) {
+      node.scrollTop = 0
+      return
+    }
+    if (Math.abs(node.scrollTop - scrollTop) > 2) {
+      node.scrollTop = scrollTop
+    }
+  }, [normalizedSearchQuery, scrollTop, visibleServices.length])
+
+  return (
+    <section className="services-section">
+      <div className="inspector-section-head services-section-head">
+        <strong>{t('inspector.services', 'Services')}</strong>
+        <div className="services-search-control">
+          {normalizedSearchQuery && (
+            <span>{t('inspector.serviceMatches', '{matched}/{total} services', { matched: visibleServices.length, total: availableServices.length })}</span>
+          )}
+          <InlineSearch
+            value={searchQuery}
+            open={searchOpen}
+            title={t('inspector.searchServices', 'Search service name')}
+            placeholder={t('inspector.searchServices', 'Search service name')}
+            onOpen={() => onSearchChange?.({ open: true, query: searchQuery })}
+            onChange={(query) => onSearchChange?.({ open: true, query })}
+            onClose={() => onSearchChange?.({ open: false, query: '' })}
+          />
+        </div>
+      </div>
+      <div
+        className="inspector-table-wrap"
+        ref={scrollRef}
+        onScroll={(event) => {
+          if (!normalizedSearchQuery) onScroll?.(event.currentTarget.scrollTop)
+        }}
+      >
+        <table className="inspector-table">
+          <thead>
+            <tr>
+              <th>{t('inspector.service', 'Service')}</th>
+              <th>{t('inspector.status', 'Status')}</th>
+              <th>{t('inspector.descriptionColumn', 'Description')}</th>
+              <th>{t('inspector.action', 'Action')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleServices.length ? visibleServices.map((service) => {
+              const active = service.active === 'active' || service.sub === 'running'
+              const controllable = isSafeServiceName(service.name)
+              const rowBusy = Boolean(busyKey?.startsWith('service:') && busyKey.endsWith(`:${service.name}`))
+              return (
+                <tr key={service.name}>
+                  <td title={service.name}>{service.name}</td>
+                  <td><span className={active ? 'status-pill online' : 'status-pill offline'}>{service.active || service.sub || '-'}</span></td>
+                  <td title={service.description}>{service.description || '-'}</td>
+                  <td>
+                    <div className="row-actions compact">
+                      <button title={controllable ? t('inspector.start', 'Start') : t('inspector.systemdOnly', 'Systemd service only')} disabled={!controllable || rowBusy || active} onClick={() => onAction(service.name, 'start')}><CirclePlay size={14} /></button>
+                      <button title={controllable ? t('inspector.stop', 'Stop') : t('inspector.systemdOnly', 'Systemd service only')} disabled={!controllable || rowBusy || !active} onClick={() => onAction(service.name, 'stop')}><PowerOff size={14} /></button>
+                      <button title={controllable ? t('inspector.restart', 'Restart') : t('inspector.systemdOnly', 'Systemd service only')} disabled={!controllable || rowBusy} onClick={() => onAction(service.name, 'restart')}><RefreshCw className={busyKey === `service:restart:${service.name}` ? 'spin' : ''} size={14} /></button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            }) : (
+              <tr><td colSpan="4">{normalizedSearchQuery ? t('inspector.noServiceMatches', 'No matching services.') : t('inspector.noServices', 'No services loaded.')}</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+function CronSection({ crons = [], busy, onAdd, onEdit, onDelete }) {
+  const { t } = useI18n()
+  return (
+    <section className="cron-section">
+      <div className="inspector-section-head">
+        <strong>{t('inspector.cron', 'Cron')}</strong>
+        <button onClick={onAdd} disabled={busy}><Plus size={14} />{t('common.add', 'Add')}</button>
+      </div>
+      <div className="cron-list">
+        {crons.length ? crons.map((cron) => (
+          <div key={cron.index} className={cron.enabled ? 'cron-row' : 'cron-row disabled'}>
+            <code title={cron.line}>{cron.line}</code>
+            <div className="row-actions compact">
+              <button title={t('common.edit', 'Edit')} disabled={busy} onClick={() => onEdit(cron)}><SquarePen size={14} /></button>
+              <button title={t('common.delete', 'Delete')} disabled={busy} onClick={() => onDelete(cron)}><Trash2 size={14} /></button>
+            </div>
+          </div>
+        )) : <div className="inspector-inline-empty">{t('inspector.noCron', 'No user crontab entries.')}</div>}
+      </div>
+    </section>
+  )
+}
+
+function InspectorSummary({ label, value }) {
+  return (
+    <div>
+      <span>{label}</span>
+      <strong title={value}>{value}</strong>
+    </div>
+  )
+}
+
+function FirewallSection({ firewall = {}, busyKey, sshPort, onAdd, onDelete, onToggle }) {
+  const { t } = useI18n()
+  const rules = firewall.rules || []
+  const listening = firewall.listening || []
+  const active = firewall.state === 'active'
+  const stateValue = firewall.state || 'unknown'
+  const persistenceValue = firewall.persistence || 'unknown'
+  const stateFallbacks = {
+    active: 'Active',
+    inactive: 'Inactive',
+    'rules-present': 'Rules present',
+    'permission-required': 'Permission required',
+    unknown: 'Unknown'
+  }
+  const persistenceFallbacks = {
+    supported: 'Supported',
+    managed: 'Managed by UFW',
+    configured: 'Configured',
+    'not-configured': 'Not configured',
+    unknown: 'Unknown'
+  }
+  const canToggle = ['firewalld', 'ufw'].includes(firewall.backend) && !firewall.conflict && firewall.root === 'yes'
+  const manageable = canManageFirewall(firewall)
+
+  return (
+    <section className="firewall-section">
+      <div className="inspector-section-head firewall-section-head">
+        <strong>{t('firewall.title', 'Firewall & Ports')}</strong>
+        <div className="firewall-head-actions">
+          <button onClick={onAdd} disabled={!manageable || busyKey?.startsWith('firewall:')}><Plus size={14} />{t('firewall.addPort', 'Add port')}</button>
+          {canToggle && (
+            <button
+              className={active ? 'danger-action' : ''}
+              onClick={() => onToggle(!active)}
+              disabled={busyKey?.startsWith('firewall:')}
+              title={active ? t('firewall.disable', 'Disable firewall') : t('firewall.enable', 'Enable firewall')}
+            >
+              {active ? <PowerOff size={14} /> : <Power size={14} />}
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="firewall-overview">
+        <span>{t('firewall.backend', 'Backend')}<strong>{['none', 'unknown'].includes(firewall.backend) ? t('firewall.unknown', 'Unknown') : firewall.backend}</strong></span>
+        <span>{t('firewall.state', 'State')}<strong className={active ? 'online' : 'offline'}>{t(`firewall.state.${stateValue}`, stateFallbacks[stateValue] || stateValue)}</strong></span>
+        <span>{t('firewall.zone', 'Zone')}<strong>{firewall.zone || '-'}</strong></span>
+        <span>{t('firewall.persistence', 'Persistence')}<strong>{t(`firewall.persistence.${persistenceValue}`, persistenceFallbacks[persistenceValue] || persistenceValue)}</strong></span>
+      </div>
+      {firewall.conflict && (
+        <div className="firewall-warning">{t('firewall.conflict', 'Multiple firewall controllers are active. Changes are disabled until the conflict is resolved.')}</div>
+      )}
+      {!firewall.conflict && firewall.permissionRequired && (
+        <div className="firewall-warning">{t('firewall.permissionRequired', 'Root permission is required to read firewall rules. Select sudo or su, enter the correct password, and inspect again.')}</div>
+      )}
+      {!firewall.conflict && firewall.warning === 'inspection-timeout' && (
+        <div className="firewall-warning">{t('firewall.inspectTimeout', 'Firewall inspection timed out and was skipped; other inspection results are still available.')}</div>
+      )}
+      {!firewall.conflict && !firewall.permissionRequired && !firewall.warning && ['none', 'unknown'].includes(firewall.backend) && (
+        <div className="firewall-warning">{t('firewall.notDetected', 'No supported firewall controller was detected.')}</div>
+      )}
+      <div className="firewall-lists">
+        <div className="firewall-rule-list">
+          <div className="firewall-list-title"><strong>{t('firewall.allowedPorts', 'Allowed ports')}</strong><span>{rules.length}</span></div>
+          <div className="firewall-scroll-list">
+            {rules.length ? rules.map((rule) => {
+              const protectedRule = firewallRuleCoversPort(rule, sshPort)
+              return (
+                <div className="firewall-rule-row" key={rule.id}>
+                  <div>
+                    <strong>{rule.port}/{rule.protocol}</strong>
+                    <span>{rule.source && rule.source !== 'any' ? `${rule.source} · ` : ''}{rule.zone || rule.family || t('firewall.anywhere', 'Anywhere')} · {rule.persistent ? t('firewall.permanent', 'permanent') : t('firewall.runtimeOnly', 'runtime')}</span>
+                  </div>
+                  {protectedRule && <em>{t('firewall.sshProtected', 'SSH protected')}</em>}
+                  <button
+                    title={protectedRule ? t('firewall.protectSsh', 'The rule for the current SSH port cannot be deleted.') : rule.deletable ? t('common.delete', 'Delete') : t('firewall.readOnly', 'Read-only')}
+                    disabled={protectedRule || !rule.deletable || busyKey?.startsWith('firewall:')}
+                    onClick={() => onDelete(rule)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              )
+            }) : <div className="inspector-inline-empty">{t('firewall.noAllowedPorts', 'No simple allowed-port rules were detected.')}</div>}
+          </div>
+        </div>
+        <div className="firewall-listening-list">
+          <div className="firewall-list-title"><strong>{t('firewall.listeningPorts', 'Listening ports')}</strong><span>{listening.length}</span></div>
+          <div className="firewall-scroll-list">
+            {listening.length ? listening.map((item) => (
+              <div className="firewall-listen-row" key={`${item.protocol}-${item.address}-${item.port}`}>
+                <strong>{item.port}/{item.protocol}</strong>
+                <span title={item.address}>{item.address}</span>
+                <em title={item.process}>{item.process || '-'}</em>
+              </div>
+            )) : <div className="inspector-inline-empty">{t('firewall.noListeningPorts', 'No listening TCP or UDP ports were detected.')}</div>}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function FirewallPortDialog({ firewall, value, saving, onChange, onClose, onSave }) {
+  const { t } = useI18n()
+  const update = (key, nextValue) => onChange((current) => ({ ...current, [key]: nextValue }))
+  const persistenceFixed = firewall.backend === 'ufw'
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog firewall-port-dialog">
+        <div className="dialog-title">
+          <div>
+            <strong>{t('firewall.addPortTitle', 'Add allowed port')}</strong>
+            <span>{t('firewall.addPortDescription', 'The rule is applied to the active firewall backend. Persistent changes survive reboot.')}</span>
+          </div>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="server-form">
+          <Field label={t('firewall.port', 'Port')}>
+            <input type="number" min="1" max="65535" value={value.port} onChange={(event) => update('port', event.target.value)} placeholder="8080" />
+          </Field>
+          <Field label={t('firewall.protocol', 'Protocol')}>
+            <select value={value.protocol} onChange={(event) => update('protocol', event.target.value)}>
+              <option value="tcp">TCP</option>
+              <option value="udp">UDP</option>
+            </select>
+          </Field>
+          {firewall.backend === 'firewalld' && (
+            <Field label={t('firewall.zone', 'Zone')}>
+              <input value={value.zone} onChange={(event) => update('zone', event.target.value)} placeholder={firewall.defaultZone || 'public'} />
+            </Field>
+          )}
+          <label className="field checkbox-field">
+            <span>{t('firewall.persistent', 'Persist after reboot')}</span>
+            <input type="checkbox" checked={persistenceFixed || Boolean(value.persistent)} disabled={persistenceFixed} onChange={(event) => update('persistent', event.target.checked)} />
+          </label>
+        </div>
+        <div className="firewall-dialog-note">
+          {t('firewall.backendNote', 'Detected backend: {backend}', { backend: firewall.backend || 'none' })}
+        </div>
+        <div className="dialog-actions">
+          <button onClick={onClose}>{t('common.cancel', 'Cancel')}</button>
+          <button className="solid-button" onClick={onSave} disabled={saving}>{saving ? t('common.saving', 'Saving') : t('firewall.addPort', 'Add port')}</button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function CronDialog({ mode, value, saving, onChange, onClose, onSave }) {
+  const { t } = useI18n()
+  const expression = buildCronExpression(value)
+  const preview = buildCronLineFromForm(value)
+
+  const update = (key, nextValue) => {
+    onChange({ ...value, [key]: nextValue })
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog cron-dialog">
+        <div className="dialog-title">
+          <div>
+            <strong>{mode === 'edit' ? t('cron.editTitle', 'Edit cron') : t('cron.addTitle', 'Add cron')}</strong>
+            <span>{t('cron.description', 'Select a schedule and enter the command or script path to run.')}</span>
+          </div>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="server-form">
+          <Field label={t('cron.schedule', 'Schedule')}>
+            <select value={value.scheduleType} onChange={(event) => update('scheduleType', event.target.value)}>
+              <option value="every-minute">{t('cron.everyMinute', 'Every minute')}</option>
+              <option value="every-n-minutes">{t('cron.everyNMinutes', 'Every N minutes')}</option>
+              <option value="hourly">{t('cron.hourly', 'Hourly')}</option>
+              <option value="daily">{t('cron.daily', 'Daily')}</option>
+              <option value="weekly">{t('cron.weekly', 'Weekly')}</option>
+              <option value="monthly">{t('cron.monthly', 'Monthly')}</option>
+              <option value="advanced">{t('cron.advancedExpression', 'Advanced expression')}</option>
+            </select>
+          </Field>
+
+          {value.scheduleType === 'every-n-minutes' && (
+            <Field label={t('cron.interval', 'Interval')}>
+              <select value={value.everyMinutes} onChange={(event) => update('everyMinutes', event.target.value)}>
+                {[5, 10, 15, 20, 30].map((item) => <option key={item} value={String(item)}>{t('cron.everyMinutes', 'Every {count} minutes', { count: item })}</option>)}
+              </select>
+            </Field>
+          )}
+
+          {['hourly', 'daily', 'weekly', 'monthly'].includes(value.scheduleType) && (
+            <div className="cron-time-grid">
+              <Field label={t('cron.minute', 'Minute')}>
+                <select value={value.minute} onChange={(event) => update('minute', event.target.value)}>
+                  {minuteOptions().map((item) => <option key={item} value={item}>{padCronNumber(item)}</option>)}
+                </select>
+              </Field>
+              {['daily', 'weekly', 'monthly'].includes(value.scheduleType) && (
+                <Field label={t('cron.hour', 'Hour')}>
+                  <select value={value.hour} onChange={(event) => update('hour', event.target.value)}>
+                    {hourOptions().map((item) => <option key={item} value={item}>{padCronNumber(item)}</option>)}
+                  </select>
+                </Field>
+              )}
+              {value.scheduleType === 'weekly' && (
+                <Field label={t('cron.weekday', 'Weekday')}>
+                  <select value={value.weekday} onChange={(event) => update('weekday', event.target.value)}>
+                    {weekdayOptions().map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                  </select>
+                </Field>
+              )}
+              {value.scheduleType === 'monthly' && (
+                <Field label={t('cron.day', 'Day')}>
+                  <select value={value.dayOfMonth} onChange={(event) => update('dayOfMonth', event.target.value)}>
+                    {dayOptions().map((item) => <option key={item} value={item}>{item}</option>)}
+                  </select>
+                </Field>
+              )}
+            </div>
+          )}
+
+          {value.scheduleType === 'advanced' && (
+            <Field label={t('cron.expression', 'Expression')}>
+              <input value={value.expression} onChange={(event) => update('expression', event.target.value)} placeholder="0 2 * * *" />
+            </Field>
+          )}
+
+          <Field label={t('cron.command', 'Command')}>
+            <input value={value.command} onChange={(event) => update('command', event.target.value)} placeholder="/opt/app/scripts/backup.sh or systemctl restart demo.service" />
+          </Field>
+          <div className="cron-preview">
+            <span>{t('cron.preview', 'Preview')}</span>
+            <code>{preview || `${expression} ${t('cron.commandPlaceholder', '<command>')}`}</code>
+          </div>
+        </div>
+        <div className="dialog-actions">
+          <button onClick={onClose}>{t('common.cancel', 'Cancel')}</button>
+          <button className="primary" onClick={onSave} disabled={saving}>{saving ? t('common.saving', 'Saving') : t('common.save', 'Save')}</button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function RedisDialog({ form, servers, mode, isTesting, notice, onChange, onClose, onSave, onTest }) {
+  const { t } = useI18n()
+  const isEdit = mode === 'edit'
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog">
+        <div className="dialog-title">
+          <div><strong>{isEdit ? t('redis.dialog.editTitle', 'Edit Redis') : t('redis.dialog.addTitle', 'Add Redis')}</strong><span>{t('redis.dialog.description', 'Save Redis connection information locally.')}</span></div>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="server-form">
+          <Field label={t('redis.field.name', 'Name')}><input value={form.name} onChange={(event) => onChange('name', event.target.value)} placeholder="local-redis" /></Field>
+          <Field label={t('redis.field.connectionMethod', 'Connection method')}>
+            <select value={form.connectionMode} onChange={(event) => onChange('connectionMode', event.target.value)}>
+              <option value="direct">{t('redis.connection.direct', 'Direct connection')}</option>
+              <option value="ssh">{t('redis.connection.ssh', 'Via a saved SSH server')}</option>
+            </select>
+          </Field>
+          {form.connectionMode === 'ssh' && (
+            <Field label={t('redis.field.sshServer', 'SSH jump server')}>
+              <select value={form.sshServerId || ''} onChange={(event) => onChange('sshServerId', event.target.value)}>
+                <option value="">{t('common.selectServer', 'Select a server')}</option>
+                {servers.map((server) => <option key={server.id} value={server.id}>{server.name} · {server.host}:{server.port}</option>)}
+              </select>
+            </Field>
+          )}
+          <Field label={t('redis.field.host', 'Host')}><input value={form.host} onChange={(event) => onChange('host', event.target.value)} placeholder="127.0.0.1" /></Field>
+          <Field label={t('redis.field.port', 'Port')}><input type="number" value={form.port} onChange={(event) => onChange('port', event.target.value)} /></Field>
+          <Field label={t('redis.field.database', 'Database')}><input type="number" value={form.database} onChange={(event) => onChange('database', event.target.value)} /></Field>
+          <Field label={t('redis.field.password', 'Password')}><input type="password" value={form.password} onChange={(event) => onChange('password', event.target.value)} /></Field>
+          <label className="field checkbox-field"><span>{t('redis.field.tls', 'TLS')}</span><input type="checkbox" checked={Boolean(form.tls)} onChange={(event) => onChange('tls', event.target.checked)} /></label>
+        </div>
+        {notice && <div className={`dialog-notice ${notice.type}`}>{notice.text}</div>}
+        <div className="dialog-actions">
+          <button onClick={onTest} disabled={isTesting}><CheckCircle2 size={16} />{isTesting ? t('common.testing', 'Testing') : t('common.testConnection', 'Test connection')}</button>
+          <button className="solid-button" onClick={onSave} disabled={isTesting}>{isEdit ? t('common.saveChanges', 'Save changes') : t('redis.saveRedis', 'Save Redis')}</button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function DatabaseDialog({ form, servers, mode, isTesting, notice, onChange, onClose, onSave, onTest }) {
+  const { t } = useI18n()
+  const isEdit = mode === 'edit'
+  const isMySqlSsh = form.engine === 'mysql' && form.connectionMode === 'ssh'
+  const useUnixSocket = isMySqlSsh && form.sshTransport === 'socket'
+  const changeEngine = (engine) => {
+    onChange('engine', engine)
+    onChange('port', defaultDatabasePort(engine))
+    if (engine !== 'mysql') onChange('sshTransport', 'tcp')
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog">
+        <div className="dialog-title">
+          <div>
+            <strong>{isEdit ? t('database.dialog.editTitle', 'Edit database') : t('database.dialog.addTitle', 'Add database')}</strong>
+            <span>{isEdit ? t('database.dialog.editDescription', 'Update connection information.') : t('database.dialog.addDescription', 'Save connection information. Load tables after saving.')}</span>
+          </div>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="server-form">
+          <Field label={t('database.field.name', 'Name')}>
+            <input value={form.name} onChange={(event) => onChange('name', event.target.value)} placeholder="prod-mysql" />
+          </Field>
+          <Field label={t('database.field.engine', 'Engine')}>
+            <select value={form.engine} onChange={(event) => changeEngine(event.target.value)}>
+              <option value="mysql">MySQL</option>
+              <option value="postgres">PostgreSQL</option>
+              <option value="sqlserver">SQL Server</option>
+              <option value="oracle">Oracle</option>
+              <option value="dm">Dameng</option>
+            </select>
+          </Field>
+          <Field label={t('database.field.connectionMethod', 'Connection method')}>
+            <select value={form.connectionMode} onChange={(event) => onChange('connectionMode', event.target.value)}>
+              <option value="direct">{t('database.connection.direct', 'Direct connection')}</option>
+              <option value="ssh">{t('database.connection.ssh', 'Via a saved SSH server')}</option>
+            </select>
+          </Field>
+          {form.connectionMode === 'ssh' && (
+            <Field label={t('database.field.sshServer', 'SSH jump server')}>
+              <select value={form.sshServerId || ''} onChange={(event) => onChange('sshServerId', event.target.value)}>
+                <option value="">{t('common.selectServer', 'Select a server')}</option>
+                {servers.map((server) => <option key={server.id} value={server.id}>{server.name} · {server.host}:{server.port}</option>)}
+              </select>
+            </Field>
+          )}
+          {isMySqlSsh && (
+            <Field label={t('database.field.sshTransport', 'Database connection inside SSH')}>
+              <select value={form.sshTransport || 'tcp'} onChange={(event) => onChange('sshTransport', event.target.value)}>
+                <option value="tcp">{t('database.connection.tcp', 'TCP (remote host and port)')}</option>
+                <option value="socket">{t('database.connection.socket', 'Unix Socket (MySQL)')}</option>
+              </select>
+            </Field>
+          )}
+          {!useUnixSocket && (
+            <>
+              <Field label={t('database.field.host', 'Host')}>
+                <input value={form.host} onChange={(event) => onChange('host', event.target.value)} placeholder="127.0.0.1" />
+              </Field>
+              <Field label={t('database.field.port', 'Port')}>
+                <input type="number" value={form.port} onChange={(event) => onChange('port', event.target.value)} />
+              </Field>
+            </>
+          )}
+          {useUnixSocket && (
+            <Field className="database-socket-field" label={t('database.field.socketPath', 'Unix Socket path')}>
+              <input value={form.socketPath || ''} onChange={(event) => onChange('socketPath', event.target.value)} placeholder="/path/to/mysql.sock" />
+            </Field>
+          )}
+          <Field label={t('database.field.database', 'Database')}>
+            <input value={form.database} onChange={(event) => onChange('database', event.target.value)} placeholder="app" />
+          </Field>
+          <Field label={t('database.field.username', 'Username')}>
+            <input value={form.username} onChange={(event) => onChange('username', event.target.value)} placeholder="root" />
+          </Field>
+          <Field label={t('database.field.password', 'Password')}>
+            <input type="password" value={form.password} onChange={(event) => onChange('password', event.target.value)} />
+          </Field>
+        </div>
+        {notice && (
+          <div className={`dialog-notice ${notice.type}`}>
+            {notice.text}
+          </div>
+        )}
+        <div className="dialog-actions">
+          <button onClick={onTest} disabled={isTesting}>
+            <CheckCircle2 size={16} />{isTesting ? t('common.testing', 'Testing') : t('common.testConnection', 'Test connection')}
+          </button>
+          <button className="solid-button" onClick={onSave}>
+            {isEdit ? t('common.saveChanges', 'Save changes') : t('database.saveConfig', 'Save config')}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function DatabaseCreateDialog({ value, databases, servers, onChange, onChangeSource, onLoadOptions, onPrepare, onCreate, onClose }) {
+  const supportedDatabases = databases.filter((database) => supportsDatabaseCreateEngine(database.engine))
+  const sourceDatabase = supportedDatabases.find((database) => database.id === value.sourceDatabaseId)
+  const selectedCharset = value.charsets.find((item) => item.name === value.charset)
+  const availableCollations = value.charset
+    ? value.collations.filter((item) => item.charset === value.charset)
+    : value.collations
+  const charsetOptions = [
+    { value: '', label: '服务器默认', searchText: 'default 默认' },
+    ...value.charsets.map((item) => ({
+      value: item.name,
+      label: item.name,
+      description: item.description || '',
+      searchText: `${item.name} ${item.description || ''}`
+    }))
+  ]
+  const collationOptions = [
+    {
+      value: '',
+      label: value.charset ? selectedCharset?.defaultCollation || '字符集默认' : '随字符集默认',
+      searchText: 'default 默认'
+    },
+    ...availableCollations.map((item) => ({
+      value: item.name,
+      label: item.name,
+      description: item.isDefault ? '默认排序规则' : '',
+      searchText: `${item.name} ${item.charset || ''}`
+    }))
+  ]
+  const useSocket = value.sourceMode === 'manual'
+    && value.engine === 'mysql'
+    && value.connectionMode === 'ssh'
+    && value.sshTransport === 'socket'
+  const endpoint = value.sourceMode === 'existing'
+    ? databaseCreateEndpoint(sourceDatabase)
+    : useSocket
+      ? value.socketPath || '-'
+      : `${value.host || '-'}:${value.port || defaultDatabasePort(value.engine)}`
+  const route = value.sourceMode === 'existing'
+    ? resourceConnectionLabel(sourceDatabase, servers, (_key, fallback, params) => params?.name ? fallback.replace('{name}', params.name) : fallback)
+    : value.connectionMode === 'ssh'
+      ? `SSH 跳板：${servers.find((server) => server.id === value.sshServerId)?.name || '未选择'}`
+      : '直接连接'
+  const sqlPreview = buildDatabaseCreateSqlPreview(value)
+  const changeEngine = (engine) => {
+    onChange({
+      engine,
+      port: defaultDatabasePort(engine),
+      sshTransport: 'tcp',
+      maintenanceDatabase: engine === 'postgres' ? 'postgres' : engine === 'sqlserver' ? 'master' : '',
+      charset: '',
+      collation: '',
+      charsets: [],
+      collations: [],
+      optionsLoaded: false
+    })
+  }
+  const changeCharset = (charset) => {
+    const charsetInfo = value.charsets.find((item) => item.name === charset)
+    onChange({
+      charset,
+      collation: charset ? charsetInfo?.defaultCollation || '' : ''
+    })
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog database-create-dialog">
+        <div className="dialog-title">
+          <div>
+            <strong>{value.step === 'confirm' ? '确认创建数据库' : '创建数据库'}</strong>
+            <span>使用数据库管理员账号连接实例；不要求先连接服务器终端。</span>
+          </div>
+          <button onClick={onClose} disabled={value.running}><X size={18} /></button>
+        </div>
+
+        {value.step === 'form' ? (
+          <div className="database-create-body">
+            <div className="database-create-source-tabs" role="tablist">
+              <button
+                type="button"
+                className={value.sourceMode === 'existing' ? 'selected' : ''}
+                onClick={() => onChangeSource('existing', sourceDatabase?.id || supportedDatabases[0]?.id || '')}
+                disabled={!supportedDatabases.length}
+              >
+                使用现有连接
+              </button>
+              <button
+                type="button"
+                className={value.sourceMode === 'manual' ? 'selected' : ''}
+                onClick={() => onChangeSource('manual')}
+              >
+                手动连接实例
+              </button>
+            </div>
+
+            {value.sourceMode === 'existing' ? (
+              <div className="server-form database-create-source-form">
+                <Field className="database-create-wide-field" label="数据库连接">
+                  <select
+                    value={value.sourceDatabaseId}
+                    onChange={(event) => onChangeSource('existing', event.target.value)}
+                  >
+                    <option value="">请选择连接</option>
+                    {supportedDatabases.map((database) => (
+                      <option key={database.id} value={database.id}>
+                        {database.name} / {database.engine} / {database.database || '-'} · {resourceConnectionLabel(database, servers, (_key, fallback, params) => params?.name ? fallback.replace('{name}', params.name) : fallback)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <div className="database-create-source-summary">
+                  <span><small>实例</small><strong>{databaseCreateEndpoint(sourceDatabase)}</strong></span>
+                  <span><small>创建账号</small><strong>{sourceDatabase?.username || '-'}</strong></span>
+                </div>
+              </div>
+            ) : (
+              <div className="server-form database-create-source-form">
+                <Field label="数据库类型">
+                  <select value={value.engine} onChange={(event) => changeEngine(event.target.value)}>
+                    <option value="mysql">MySQL</option>
+                    <option value="postgres">PostgreSQL</option>
+                    <option value="sqlserver">SQL Server</option>
+                  </select>
+                </Field>
+                <Field label="连接方式">
+                  <select value={value.connectionMode} onChange={(event) => onChange({ connectionMode: event.target.value, sshServerId: '' })}>
+                    <option value="direct">直接连接数据库实例</option>
+                    <option value="ssh">通过已保存的 SSH 跳板</option>
+                  </select>
+                </Field>
+                {value.connectionMode === 'ssh' && (
+                  <Field label="SSH 跳板服务器">
+                    <select value={value.sshServerId} onChange={(event) => onChange({ sshServerId: event.target.value })}>
+                      <option value="">请选择服务器</option>
+                      {servers.map((server) => <option key={server.id} value={server.id}>{server.name} · {server.host}:{server.port}</option>)}
+                    </select>
+                  </Field>
+                )}
+                {value.connectionMode === 'ssh' && value.engine === 'mysql' && (
+                  <Field label="SSH 内数据库连接">
+                    <select value={value.sshTransport} onChange={(event) => onChange({ sshTransport: event.target.value })}>
+                      <option value="tcp">TCP（主机和端口）</option>
+                      <option value="socket">Unix Socket</option>
+                    </select>
+                  </Field>
+                )}
+                {!useSocket ? (
+                  <>
+                    <Field label="数据库实例主机">
+                      <input value={value.host} onChange={(event) => onChange({ host: event.target.value })} placeholder="127.0.0.1 或数据库服务器 IP" />
+                    </Field>
+                    <Field label="端口">
+                      <input type="number" value={value.port} onChange={(event) => onChange({ port: event.target.value })} />
+                    </Field>
+                  </>
+                ) : (
+                  <Field className="database-create-wide-field" label="Unix Socket 路径">
+                    <input value={value.socketPath} onChange={(event) => onChange({ socketPath: event.target.value })} placeholder="/tmp/mysql.sock" />
+                  </Field>
+                )}
+                {value.engine !== 'sqlserver' && (
+                  <Field label={value.engine === 'postgres' ? '维护数据库' : '已有数据库（可选）'}>
+                    <input
+                      value={value.maintenanceDatabase}
+                      onChange={(event) => onChange({ maintenanceDatabase: event.target.value })}
+                      placeholder={value.engine === 'postgres' ? 'postgres' : '可留空'}
+                    />
+                  </Field>
+                )}
+                <Field label="数据库管理员用户名">
+                  <input value={value.username} onChange={(event) => onChange({ username: event.target.value })} placeholder={value.engine === 'postgres' ? 'postgres' : value.engine === 'sqlserver' ? 'sa' : 'root'} />
+                </Field>
+                <Field label="数据库管理员密码">
+                  <input type="password" value={value.password} onChange={(event) => onChange({ password: event.target.value })} />
+                </Field>
+              </div>
+            )}
+
+            <div className="database-create-target">
+              <div className="server-form">
+                <Field label="数据库名">
+                  <input value={value.databaseName} onChange={(event) => onChange({ databaseName: event.target.value })} autoFocus placeholder="new_database" />
+                </Field>
+                {value.engine === 'mysql' && (
+                  <>
+                    <Field label="字符集">
+                      <SearchableSelect
+                        value={value.charset}
+                        options={charsetOptions}
+                        placeholder={value.loadingOptions ? '正在读取字符集…' : '输入关键字搜索字符集'}
+                        disabled={value.loadingOptions || !value.optionsLoaded}
+                        onChange={changeCharset}
+                      />
+                    </Field>
+                    <Field label="排序规则">
+                      <SearchableSelect
+                        value={value.collation}
+                        options={collationOptions}
+                        placeholder={value.loadingOptions ? '正在读取排序规则…' : '输入关键字搜索排序规则'}
+                        disabled={!value.charset || value.loadingOptions || !value.optionsLoaded}
+                        onChange={(collation) => onChange({ collation })}
+                      />
+                    </Field>
+                    <div className="database-create-options-action">
+                      <button type="button" onClick={onLoadOptions} disabled={value.loadingOptions}>
+                        <RefreshCw size={15} className={value.loadingOptions ? 'spin' : ''} />
+                        {value.loadingOptions ? '正在读取' : value.optionsLoaded ? '重新读取字符集' : '读取实例字符集'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+              <label className="database-create-save-option">
+                <input type="checkbox" checked={value.saveConnection} onChange={(event) => onChange({ saveConnection: event.target.checked })} />
+                <span><strong>创建后保存为数据库连接</strong><small>以后可直接浏览表、执行 SQL 和备份。</small></span>
+              </label>
+            </div>
+
+            {value.notice && <div className={`dialog-notice ${value.notice.type}`}>{value.notice.text}</div>}
+          </div>
+        ) : (
+          <div className="database-create-confirm">
+            <div className="database-create-confirm-grid">
+              <span><small>数据库类型</small><strong>{databaseCreateEngineLabel(value.engine)}</strong></span>
+              <span><small>连接方式</small><strong>{route}</strong></span>
+              <span><small>数据库实例</small><strong>{endpoint}</strong></span>
+              <span><small>数据库名称</small><strong>{value.databaseName}</strong></span>
+              {value.engine === 'mysql' && <span><small>字符集</small><strong>{value.charset || '服务器默认'}</strong></span>}
+              {value.engine === 'mysql' && <span><small>排序规则</small><strong>{value.collation || '字符集默认'}</strong></span>}
+            </div>
+            <div className="database-create-sql-preview">
+              <strong>SQL 预览</strong>
+              <code>{sqlPreview}</code>
+            </div>
+            <div className="database-create-warning">
+              将在目标实例上创建数据库“{value.databaseName}”。该操作使用数据库管理员凭据，不使用 Linux/SSH 登录账号。
+            </div>
+            {value.notice && <div className={`dialog-notice ${value.notice.type}`}>{value.notice.text}</div>}
+          </div>
+        )}
+
+        <div className="dialog-actions">
+          {value.step === 'confirm' ? (
+            <>
+              <button onClick={() => onChange({ step: 'form' })} disabled={value.running}>返回修改</button>
+              <button className="solid-button" onClick={onCreate} disabled={value.running}>
+                {value.running ? '正在创建…' : '确认创建'}
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={onClose}>取消</button>
+              <button className="solid-button" onClick={onPrepare} disabled={value.loadingOptions}>下一步</button>
+            </>
+          )}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function DatabaseBackupDialog({ value, onChange, onClose, onStart, onCancel }) {
+  const progress = value.progress
+  const percent = databaseBackupProgressPercent(progress)
+  const scopeDescription = value.scope === 'selected'
+    ? `已选择 ${value.selectedTables.length} 张表`
+    : value.scope === 'schema'
+      ? `模式 ${value.schema || '-'}`
+      : '当前数据库中全部可访问的业务表'
+  const contentDescription = value.content === 'structure'
+    ? '保存表、索引、约束、视图、触发器和存储程序'
+    : value.content === 'data'
+      ? '只保存 INSERT 数据'
+      : '保存完整结构对象和全部数据'
+
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog database-backup-dialog">
+        <div className="dialog-title">
+          <div>
+            <strong>数据库逻辑备份</strong>
+            <span>{value.databaseName} · {value.engine}</span>
+          </div>
+          <button onClick={onClose} disabled={value.running}><X size={18} /></button>
+        </div>
+
+        <div className="database-backup-options">
+          <Field label="备份范围">
+            <select
+              value={value.scope}
+              disabled={value.running}
+              onChange={(event) => onChange({ scope: event.target.value })}
+            >
+              <option value="schema">指定模式</option>
+              <option value="database">全部可访问表</option>
+              <option value="selected" disabled={!value.selectedTables.length}>已勾选的数据表（{value.selectedTables.length}）</option>
+            </select>
+          </Field>
+          {value.scope === 'schema' && (
+            <Field label="模式">
+              {value.schemas.length ? (
+                <select value={value.schema} disabled={value.running} onChange={(event) => onChange({ schema: event.target.value })}>
+                  {value.schemas.map((schema) => <option key={schema} value={schema}>{schema}</option>)}
+                </select>
+              ) : (
+                <input value={value.schema} disabled={value.running} onChange={(event) => onChange({ schema: event.target.value })} />
+              )}
+            </Field>
+          )}
+          <Field label="备份内容">
+            <select
+              value={value.content}
+              disabled={value.running}
+              onChange={(event) => onChange({ content: event.target.value })}
+            >
+              <option value="structure-data">完整结构对象和数据</option>
+              <option value="structure">仅完整结构对象</option>
+              <option value="data">仅数据</option>
+            </select>
+          </Field>
+          <Field label="输出格式">
+            <select
+              value={value.format || 'sql'}
+              disabled={value.running}
+              onChange={(event) => onChange({ format: event.target.value })}
+            >
+              <option value="sql">SQL</option>
+              <option value="sql-gzip">压缩 SQL（GZIP）</option>
+            </select>
+          </Field>
+        </div>
+
+        <div className="database-backup-summary">
+          <span><small>范围</small><strong>{scopeDescription}</strong></span>
+          <span><small>内容</small><strong>{contentDescription}</strong></span>
+        </div>
+
+        {progress && (
+          <div className={`database-backup-progress ${progress.status || 'running'}`}>
+            <div>
+              <strong>{progress.message || '正在准备备份…'}</strong>
+              <span>{percent}%</span>
+            </div>
+            <progress max="100" value={percent} />
+            <small>
+              {progress.tableCount ? `表 ${progress.tableIndex || 0}/${progress.tableCount}` : '等待选择保存位置'}
+              {' · '}{Number(progress.rows || 0).toLocaleString()} 行
+              {' · '}{formatBytes(progress.bytes || 0)}
+              {' · '}耗时 {formatDurationSeconds(progress.elapsedSeconds)} 秒
+            </small>
+            {progress.warning && <em>{progress.warning}</em>}
+            {progress.path && <code title={progress.path}>{progress.path}</code>}
+            {progress.checksum && <code title={progress.checksum}>SHA-256: {progress.checksum}</code>}
+          </div>
+        )}
+
+        <div className="dialog-actions">
+          <button onClick={onClose} disabled={value.running}>关闭</button>
+          {value.running ? (
+            <button className="danger-button" onClick={onCancel}><CircleStop size={16} />停止备份</button>
+          ) : (
+            <button className="solid-button" onClick={onStart}><Save size={16} />选择位置并开始</button>
+          )}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function RedisRestoreDialog({ value, targetDb, onChange, onClose, onStart, onCancel }) {
+  const progress = value.progress
+  const total = Math.max(1, Number(progress?.totalKeys || value.file.keys || 0))
+  const percent = progress?.status === 'done'
+    ? 100
+    : Math.min(99, Math.round((Number(progress?.keys || 0) / total) * 100))
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog database-backup-dialog redis-restore-dialog">
+        <div className="dialog-title">
+          <div>
+            <strong>恢复 Redis 逻辑备份</strong>
+            <span>{value.file.name} → db{targetDb}</span>
+          </div>
+          <button onClick={onClose} disabled={value.running}><X size={18} /></button>
+        </div>
+        <div className="database-backup-options">
+          <Field label="备份文件"><input readOnly value={value.file.path} /></Field>
+          <Field label="目标逻辑库"><input readOnly value={`db${targetDb}`} /></Field>
+          <Field label="同名键处理">
+            <select value={value.conflict} disabled={value.running} onChange={(event) => onChange({ conflict: event.target.value })}>
+              <option value="skip">跳过已有键（推荐）</option>
+              <option value="replace">覆盖已有键</option>
+              <option value="error">遇到已有键立即停止</option>
+            </select>
+          </Field>
+          <Field label="确认恢复">
+            <input
+              value={value.confirmation}
+              disabled={value.running}
+              onChange={(event) => onChange({ confirmation: event.target.value })}
+              placeholder="输入 RESTORE"
+            />
+          </Field>
+        </div>
+        <div className="database-backup-summary">
+          <span><small>备份来源</small><strong>db{value.file.header?.database ?? '-'}</strong></span>
+          <span><small>键数量</small><strong>{Number(value.file.keys || 0).toLocaleString()}</strong></span>
+          <span><small>校验</small><strong>{value.file.checksumStatus === 'verified' ? 'SHA-256 已验证' : '未提供校验文件'}</strong></span>
+        </div>
+        {progress && (
+          <div className={`database-backup-progress ${progress.status || 'running'}`}>
+            <div><strong>{progress.message || '正在恢复…'}</strong><span>{percent}%</span></div>
+            <progress max="100" value={percent} />
+            <small>
+              处理 {Number(progress.keys || 0).toLocaleString()}/{Number(progress.totalKeys || value.file.keys || 0).toLocaleString()}
+              {' · '}写入 {Number(progress.restored || 0).toLocaleString()}
+              {' · '}跳过 {Number(progress.skipped || 0).toLocaleString()}
+              {' · '}已过期 {Number(progress.expired || 0).toLocaleString()}
+            </small>
+          </div>
+        )}
+        {value.notice && <div className="dialog-notice error">{value.notice}</div>}
+        <div className="dialog-actions">
+          <button onClick={onClose} disabled={value.running}>关闭</button>
+          {value.running ? (
+            <button className="danger-button" onClick={onCancel}><CircleStop size={16} />停止恢复</button>
+          ) : (
+            <button className="solid-button" onClick={onStart}><RotateCcw size={16} />开始恢复</button>
+          )}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function DangerConfirmDialog({ value, onClose, onConfirm }) {
+  const { t } = useI18n()
+  return (
+    <div className="modal-backdrop">
+      <section
+        className="server-dialog danger-confirm-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="danger-confirm-title"
+        aria-describedby="danger-confirm-warning"
+      >
+        <div className="dialog-title">
+          <div>
+            <strong id="danger-confirm-title">{value.title}</strong>
+          </div>
+          <button type="button" onClick={onClose} aria-label={t('common.close', 'Close')}><X size={18} /></button>
+        </div>
+        <div className="danger-confirm-body">
+          <div className="danger-confirm-target">
+            <span>{t('confirm.target', 'Target')}{value.targetCount > 1 ? ` (${value.targetCount})` : ''}</span>
+            <strong title={value.target}>{value.target}</strong>
+          </div>
+          <div className="danger-confirm-warning" id="danger-confirm-warning">
+            <Trash2 size={18} />
+            <span>{value.warning}</span>
+          </div>
+        </div>
+        <div className="dialog-actions">
+          <button type="button" onClick={onClose}>{t('common.cancel', 'Cancel')}</button>
+          <button type="button" className="danger-confirm-button" onClick={onConfirm}>
+            <Trash2 size={16} />
+            {value.confirmLabel}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function ColumnDialog({ mode, form, notice = null, onChange, onClose, onSave }) {
+  const { t } = useI18n()
+  const isEdit = mode === 'edit'
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog column-dialog">
+        <div className="dialog-title">
+          <div>
+            <strong>{isEdit ? t('database.column.editTitle', 'Edit column') : t('database.column.addTitle', 'Add column')}</strong>
+            <span>{isEdit ? t('database.column.editDescription', 'Update name, type, nullability and default value.') : t('database.column.addDescription', 'Create a new field on the selected table.')}</span>
+          </div>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="server-form">
+          {isEdit ? (
+            <>
+              <Field label={t('database.column.currentName', 'Current name')}>
+                <input value={form.name} disabled />
+              </Field>
+              <Field label={t('database.column.newName', 'New name')}>
+                <input value={form.newName} onChange={(event) => onChange('newName', event.target.value)} placeholder="new_column_name" />
+              </Field>
+              <Field label={t('database.column.type', 'Type')}>
+                <input value={form.type} onChange={(event) => onChange('type', event.target.value)} placeholder="varchar(255)" />
+              </Field>
+              <Field label={t('database.column.nullable', 'Nullable')}>
+                <select value={form.nullable ? 'yes' : 'no'} onChange={(event) => onChange('nullable', event.target.value === 'yes')}>
+                  <option value="yes">{t('database.column.yes', 'Yes')}</option>
+                  <option value="no">{t('database.column.no', 'No')}</option>
+                </select>
+              </Field>
+              <Field label={t('database.column.default', 'Default')}>
+                <input value={form.defaultValue} onChange={(event) => onChange('defaultValue', event.target.value)} placeholder="optional SQL expression" />
+              </Field>
+            </>
+          ) : (
+            <>
+              <Field label={t('database.column.name', 'Name')}>
+                <input value={form.name} onChange={(event) => onChange('name', event.target.value)} placeholder="new_column" />
+              </Field>
+              <Field label={t('database.column.type', 'Type')}>
+                <input value={form.type} onChange={(event) => onChange('type', event.target.value)} placeholder="varchar(255)" />
+              </Field>
+              <Field label={t('database.column.nullable', 'Nullable')}>
+                <select value={form.nullable ? 'yes' : 'no'} onChange={(event) => onChange('nullable', event.target.value === 'yes')}>
+                  <option value="yes">{t('database.column.yes', 'Yes')}</option>
+                  <option value="no">{t('database.column.no', 'No')}</option>
+                </select>
+              </Field>
+              <Field label={t('database.column.default', 'Default')}>
+                <input value={form.defaultValue} onChange={(event) => onChange('defaultValue', event.target.value)} placeholder="optional SQL expression" />
+              </Field>
+            </>
+          )}
+        </div>
+        {notice && (
+          <div className={`dialog-notice ${notice.type}`}>
+            {notice.text}
+          </div>
+        )}
+        <div className="dialog-actions">
+          <button onClick={onClose}>{t('common.cancel', 'Cancel')}</button>
+          <button className="solid-button" onClick={onSave}>{isEdit ? t('common.saveChanges', 'Save changes') : t('database.column.addTitle', 'Add column')}</button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function TableDialog({ mode, form, onChange, onClose, onSave }) {
+  const { t } = useI18n()
+  const isEdit = mode === 'edit'
+  const update = (patch) => onChange((current) => ({ ...current, ...patch }))
+  const updateColumn = (id, patch) => {
+    onChange((current) => ({
+      ...current,
+      columns: current.columns.map((column) => (column.id === id ? { ...column, ...patch } : column))
+    }))
+  }
+  const addColumnRow = () => {
+    onChange((current) => ({
+      ...current,
+      columns: [
+        ...current.columns,
+        { id: `column-${Date.now()}`, name: '', type: 'varchar(255)', nullable: true, defaultValue: '' }
+      ]
+    }))
+  }
+  const removeColumnRow = (id) => {
+    onChange((current) => ({
+      ...current,
+      columns: current.columns.length > 1 ? current.columns.filter((column) => column.id !== id) : current.columns
+    }))
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <section className="server-dialog table-dialog">
+        <div className="dialog-title">
+          <div>
+            <strong>{isEdit ? t('database.table.renameTitle', 'Rename table') : t('database.table.addTitle', 'Add table')}</strong>
+            <span>{isEdit ? t('database.table.renameDescription', 'Only table rename is handled here. Edit fields in the Fields area.') : t('database.table.addDescription', 'Create a table with initial fields.')}</span>
+          </div>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="server-form">
+          {isEdit ? (
+            <>
+              <Field label={t('database.table.currentName', 'Current name')}>
+                <input value={form.name} disabled />
+              </Field>
+              <Field label={t('database.table.newName', 'New name')}>
+                <input value={form.newName} onChange={(event) => update({ newName: event.target.value })} placeholder="new_table_name" />
+              </Field>
+            </>
+          ) : (
+            <Field label={t('database.table.tableName', 'Table name')}>
+              <input value={form.name} onChange={(event) => update({ name: event.target.value })} placeholder="new_table" />
+            </Field>
+          )}
+        </div>
+        {!isEdit && (
+          <div className="table-column-editor">
+            <div className="database-head">
+              <strong>{t('database.table.initialFields', 'Initial fields')}</strong>
+              <button onClick={addColumnRow}><Plus size={14} />{t('database.table.addField', 'Add field')}</button>
+            </div>
+            <div className="table-column-rows">
+              {form.columns.map((column) => (
+                <div key={column.id} className="table-column-row">
+                  <input value={column.name} onChange={(event) => updateColumn(column.id, { name: event.target.value })} placeholder="field_name" />
+                  <input value={column.type} onChange={(event) => updateColumn(column.id, { type: event.target.value })} placeholder="varchar(255)" />
+                  <select value={column.nullable ? 'yes' : 'no'} onChange={(event) => updateColumn(column.id, { nullable: event.target.value === 'yes' })}>
+                    <option value="yes">{t('database.table.nullable', 'Nullable')}</option>
+                    <option value="no">{t('database.table.notNull', 'Not null')}</option>
+                  </select>
+                  <input value={column.defaultValue} onChange={(event) => updateColumn(column.id, { defaultValue: event.target.value })} placeholder="default" />
+                  <button title={t('database.table.removeField', 'Remove field')} onClick={() => removeColumnRow(column.id)} disabled={form.columns.length <= 1}><Trash2 size={14} /></button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="dialog-actions">
+          <button onClick={onClose}>{t('common.cancel', 'Cancel')}</button>
+          <button className="solid-button" onClick={onSave}>{isEdit ? t('common.rename', 'Rename') : t('database.table.createTable', 'Create table')}</button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, servers, selectedTable, selectedColumn, privileges, columns, loading, privilegeLoading, sqlScript, sqlFileInfo, sqlRunning, sqlExecutionTaskId, sqlResult, onAdd, onCreateDatabase, onSelectDatabase, onSelectColumn, onEdit, onDuplicate, onDelete, onRefreshTables, onCheckPrivileges, onOpenTable, onExportTables, onOpenBackup, onSqlChange, onSelectSqlFile, onClearSqlFile, onRunSql, onCancelSql, onSqlFileOptionChange, onCopy, onAddTable, onEditTable, onDeleteTable, onAddColumn, onEditColumn, onDeleteColumn }) {
+  const { t } = useI18n()
+  const tables = selectedDatabase?.tables || []
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const [checkedTables, setCheckedTables] = useState([])
+  const [tableSearchOpen, setTableSearchOpen] = useState(false)
+  const [tableQuery, setTableQuery] = useState('')
+  const [columnSearchOpen, setColumnSearchOpen] = useState(false)
+  const [columnQuery, setColumnQuery] = useState('')
+  const canCreate = hasPrivilege(privileges, 'create')
+  const canAlter = hasPrivilege(privileges, 'alter')
+  const canDrop = hasPrivilege(privileges, 'drop')
+  const ddlRollbackLimited = ['mysql', 'mariadb', 'oracle', 'dm'].includes(selectedDatabase?.engine)
+  const [schemaSplit, setSchemaSplit] = useState(50)
+  const [sqlPanelHeight, setSqlPanelHeight] = useState(170)
+  const schemaBrowserRef = useRef(null)
+  const copyTimerRef = useRef(null)
+  const addMenuRef = useRef(null)
+  const copyOnSingleClick = (value) => {
+    window.clearTimeout(copyTimerRef.current)
+    copyTimerRef.current = window.setTimeout(() => onCopy(value), 180)
+  }
+  const cancelCopy = () => {
+    window.clearTimeout(copyTimerRef.current)
+  }
+  const normalizedTableQuery = tableQuery.trim().toLocaleLowerCase()
+  const normalizedColumnQuery = columnQuery.trim().toLocaleLowerCase()
+  const visibleTables = useMemo(() => (
+    normalizedTableQuery
+      ? tables.filter((table) => `${table.schema || ''}.${table.name || ''}`.toLocaleLowerCase().includes(normalizedTableQuery))
+      : tables
+  ), [tables, normalizedTableQuery])
+  const visibleColumns = useMemo(() => (
+    normalizedColumnQuery
+      ? columns.filter((column) => String(column.name || '').toLocaleLowerCase().includes(normalizedColumnQuery))
+      : columns
+  ), [columns, normalizedColumnQuery])
+
+  useEffect(() => {
+    setCheckedTables([])
+    setTableQuery('')
+    setTableSearchOpen(false)
+    setColumnQuery('')
+    setColumnSearchOpen(false)
+  }, [selectedDatabase?.id])
+
+  useEffect(() => {
+    setColumnQuery('')
+    setColumnSearchOpen(false)
+  }, [selectedTable?.schema, selectedTable?.name])
+
+  useEffect(() => {
+    if (!addMenuOpen) return undefined
+    const closeMenu = (event) => {
+      if (!addMenuRef.current?.contains(event.target)) setAddMenuOpen(false)
+    }
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setAddMenuOpen(false)
+    }
+    document.addEventListener('mousedown', closeMenu)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', closeMenu)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [addMenuOpen])
+
+  useEffect(() => {
+    const available = new Set(tables.map((table) => `${table.schema}.${table.name}`))
+    setCheckedTables((current) => current.filter((id) => available.has(id)))
+  }, [tables])
+  const selectedExportTables = tables.filter((table) => checkedTables.includes(`${table.schema}.${table.name}`))
+  const visibleTableIds = visibleTables.map((table) => `${table.schema}.${table.name}`)
+  const allVisibleTablesChecked = Boolean(visibleTableIds.length) && visibleTableIds.every((id) => checkedTables.includes(id))
+  const toggleTableCheck = (table) => {
+    const id = `${table.schema}.${table.name}`
+    setCheckedTables((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+  }
+  const toggleAllVisibleTables = () => {
+    setCheckedTables((current) => {
+      const next = new Set(current)
+      if (allVisibleTablesChecked) visibleTableIds.forEach((id) => next.delete(id))
+      else visibleTableIds.forEach((id) => next.add(id))
+      return [...next]
+    })
+  }
+  const startSchemaResize = (event) => {
+    event.preventDefault()
+    const bounds = schemaBrowserRef.current?.getBoundingClientRect()
+    if (!bounds?.width) return
+    document.body.classList.add('is-resizing-panel')
+
+    const handleMove = (moveEvent) => {
+      const nextPercent = ((moveEvent.clientX - bounds.left) / bounds.width) * 100
+      setSchemaSplit(Math.min(75, Math.max(25, nextPercent)))
+    }
+
+    const handleUp = () => {
+      document.body.classList.remove('is-resizing-panel')
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
+  const startSqlResultResize = (event) => {
+    event.preventDefault()
+    const startY = event.clientY
+    const startHeight = sqlPanelHeight
+    document.body.classList.add('is-resizing-row')
+
+    const handleMove = (moveEvent) => {
+      const nextHeight = Math.min(360, Math.max(92, startHeight + moveEvent.clientY - startY))
+      setSqlPanelHeight(nextHeight)
+    }
+
+    const handleUp = () => {
+      document.body.classList.remove('is-resizing-row')
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
+
+  return (
+    <div
+      className="database-browser"
+      style={{ gridTemplateRows: `54px 30px minmax(180px, 2fr) ${sqlPanelHeight}px 10px minmax(110px, 1fr)` }}
+    >
+      {selectedDatabase && !connectionAvailable && <div className="module-disabled-banner">{resourceConnectionError(selectedDatabase)}</div>}
+      <div className="database-toolbar">
+        <div className="database-picker">
+          <span>{t('database.connection', 'Connection')}</span>
+          <select
+            value={selectedDatabase?.id || ''}
+            onChange={(event) => {
+              const database = databases.find((item) => item.id === event.target.value)
+              if (database) onSelectDatabase(database)
+            }}
+          >
+            {!databases.length && <option value="">暂无数据库连接</option>}
+            {databases.map((database) => (
+              <option key={database.id} value={database.id}>
+                {database.name} / {database.engine} / {database.database} · {resourceConnectionLabel(database, servers, t)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="db-actions">
+          <div
+            className="db-action-menu"
+            ref={addMenuRef}
+            onMouseEnter={() => setAddMenuOpen(true)}
+            onMouseLeave={() => setAddMenuOpen(false)}
+          >
+            <button
+              type="button"
+              className={addMenuOpen ? 'selected' : ''}
+              title={t('database.addConnection', 'Add connection')}
+              aria-haspopup="menu"
+              aria-expanded={addMenuOpen}
+              onClick={() => setAddMenuOpen((current) => !current)}
+            >
+              <Plus size={15} />{t('common.add', 'Add')}<ChevronDown size={13} />
+            </button>
+            {addMenuOpen && (
+              <div className="db-action-menu-popover" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setAddMenuOpen(false)
+                    onAdd()
+                  }}
+                >
+                  <Cable size={16} />
+                  <span><strong>添加连接</strong><small>保存已有数据库的连接信息</small></span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setAddMenuOpen(false)
+                    onCreateDatabase()
+                  }}
+                >
+                  <Database size={16} />
+                  <span><strong>创建数据库</strong><small>连接实例并新建数据库</small></span>
+                </button>
+              </div>
+            )}
+          </div>
+          <button title={t('database.editConnection', 'Edit connection')} onClick={() => onEdit(selectedDatabase)} disabled={!selectedDatabase}><SquarePen size={15} />{t('common.edit', 'Edit')}</button>
+          <button title={t('database.duplicateConnection', 'Copy connection')} onClick={() => onDuplicate(selectedDatabase)} disabled={!selectedDatabase}><Copy size={15} />{t('common.copy', 'Copy')}</button>
+          <button title={t('database.deleteConnection', 'Delete connection')} onClick={() => onDelete(selectedDatabase)} disabled={!selectedDatabase}><Trash2 size={15} />{t('database.deleteConnectionShort', 'Delete connection')}</button>
+          <button title={t('database.refreshTables', 'Refresh tables')} onClick={() => onRefreshTables(selectedDatabase)} disabled={!connectionAvailable || !selectedDatabase || loading}><RefreshCw size={15} />{t('common.refresh', 'Refresh')}</button>
+          <button title="内置逻辑备份" onClick={() => onOpenBackup(selectedExportTables)} disabled={!connectionAvailable || !selectedDatabase || loading}><Save size={15} />备份</button>
+          <button title={t('database.checkPrivileges', 'Check privileges')} onClick={() => onCheckPrivileges(selectedDatabase)} disabled={!connectionAvailable || !selectedDatabase || privilegeLoading}><ShieldCheck size={15} />{privilegeLoading ? t('database.checking', 'Checking') : t('database.privileges', 'Privileges')}</button>
+        </div>
+      </div>
+      <div className={`privilege-strip ${privileges?.ok === false ? 'error' : privileges ? '' : 'empty'}`}>
+        {privilegeLoading ? (
+          <span>{t('database.checkingPrivileges', 'Checking privileges...')}</span>
+        ) : privileges?.ok === false ? (
+          <span>{privileges.message}</span>
+        ) : privileges ? (
+          <>
+          <span title={privileges.user}>{privileges.user}</span>
+          {['select', 'insert', 'update', 'delete', 'create', 'alter', 'drop'].map((name) => (
+            <em key={name} className={privilegeClass(privileges.privileges?.[name])}>{name}</em>
+          ))}
+          </>
+        ) : (
+          <span>{t('database.privilegesNotChecked', 'Privileges not checked')}</span>
+        )}
+      </div>
+
+      <div
+        className="schema-browser"
+        ref={schemaBrowserRef}
+        style={{ gridTemplateColumns: `minmax(220px, ${schemaSplit}%) 10px minmax(220px, 1fr)` }}
+      >
+        <div className="table-list">
+          <div className="database-head">
+            <strong>{t('database.tables', 'Tables')}</strong>
+            <div className="column-actions table-actions">
+              <span className="count-badge">{normalizedTableQuery ? `${visibleTables.length}/${tables.length}` : tables.length}</span>
+              <InlineSearch
+                value={tableQuery}
+                open={tableSearchOpen}
+                title={t('database.searchTable', 'Search table name')}
+                placeholder={t('database.searchTable', 'Search table name')}
+                onOpen={() => setTableSearchOpen(true)}
+                onChange={setTableQuery}
+                onClose={() => {
+                  setTableQuery('')
+                  setTableSearchOpen(false)
+                }}
+              />
+              <button
+                type="button"
+                className={allVisibleTablesChecked ? 'selected' : ''}
+                title={normalizedTableQuery ? '全选/取消当前搜索结果' : '全选/取消全部数据表'}
+                onClick={toggleAllVisibleTables}
+                disabled={!visibleTableIds.length}
+              >
+                {allVisibleTablesChecked ? '取消' : '全选'}
+              </button>
+              <button title={t('database.exportSql', 'Export SQL')} onClick={() => onExportTables(selectedExportTables, 'sql')} disabled={!connectionAvailable || !selectedExportTables.length || loading}>SQL</button>
+              <button title={t('database.exportCsv', 'Export CSV')} onClick={() => onExportTables(selectedExportTables, 'csv')} disabled={!connectionAvailable || !selectedExportTables.length || loading}>CSV</button>
+              <button onClick={onAddTable} disabled={!connectionAvailable || !selectedDatabase || loading || !canCreate} title={!canCreate ? t('database.noCreatePermission', 'No CREATE permission') : t('database.addTable', 'Add table')}><Plus size={14} /><span>{t('common.add', 'Add')}</span></button>
+              <button onClick={onEditTable} disabled={!connectionAvailable || !selectedTable || loading || !canAlter} title={!canAlter ? t('database.noAlterPermission', 'No ALTER permission') : t('database.renameTable', 'Rename table')}><SquarePen size={14} /><span>{t('common.edit', 'Edit')}</span></button>
+              <button onClick={() => onDeleteTable(selectedExportTables)} disabled={!connectionAvailable || (!selectedExportTables.length && !selectedTable) || loading || !canDrop} title={!canDrop ? t('database.noDropPermission', 'No DROP permission') : t('database.deleteTable', 'Delete table')}><Trash2 size={14} /><span>{t('common.delete', 'Delete')}</span></button>
+            </div>
+          </div>
+          <div className="table-items">
+            {visibleTables.length ? (
+              visibleTables.map((table) => (
+                <div
+                  key={`${table.schema}.${table.name}`}
+                  className={`table-item ${selectedTable?.schema === table.schema && selectedTable?.name === table.name ? 'selected' : ''}`}
+                  title={`${table.schema}.${table.name}`}
+                  onDoubleClick={() => {
+                    cancelCopy()
+                    onOpenTable(table)
+                  }}
+                  onClick={() => copyOnSingleClick(table.name)}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checkedTables.includes(`${table.schema}.${table.name}`)}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={() => toggleTableCheck(table)}
+                  />
+                  <Database size={15} />
+                  <span
+                    className="copyable-name"
+                    title={t('database.clickCopy', 'Click to copy: {value}', { value: table.name })}
+                  >
+                    {table.name}
+                  </span>
+                </div>
+              ))
+            ) : normalizedTableQuery ? (
+              <div className="table-empty">
+                <span>{t('database.noMatchingTables', 'No matching tables.')}</span>
+              </div>
+            ) : (
+              <div className="table-empty">
+                <span>{t('database.noTablesLoaded', 'No tables loaded.')}</span>
+                <button onClick={() => onRefreshTables(selectedDatabase)} disabled={!selectedDatabase || loading}>
+                  <RefreshCw size={15} />{loading ? t('database.loading', 'Loading') : t('database.loadTables', 'Load tables')}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+        <div
+          className="schema-splitter"
+          role="separator"
+          aria-orientation="vertical"
+          title={t('database.resizeSchema', 'Drag to resize tables and fields')}
+          onMouseDown={startSchemaResize}
+        />
+        <div className="column-panel">
+          <div className="database-head">
+            <strong>{t('database.fields', 'Fields')}</strong>
+            <div className="column-actions field-actions">
+              <span className="count-badge">{loading ? '...' : normalizedColumnQuery ? `${visibleColumns.length}/${columns.length}` : columns.length}</span>
+              <InlineSearch
+                value={columnQuery}
+                open={columnSearchOpen}
+                title={t('database.searchColumn', 'Search column name')}
+                placeholder={t('database.searchColumn', 'Search column name')}
+                onOpen={() => setColumnSearchOpen(true)}
+                onChange={setColumnQuery}
+                onClose={() => {
+                  setColumnQuery('')
+                  setColumnSearchOpen(false)
+                }}
+              />
+              <button onClick={onAddColumn} disabled={!connectionAvailable || !selectedTable || loading || !canAlter} title={!canAlter ? t('database.noAlterPermission', 'No ALTER permission') : t('database.addField', 'Add field')}><Plus size={14} /><span>{t('common.add', 'Add')}</span></button>
+              <button onClick={onEditColumn} disabled={!connectionAvailable || !selectedColumn || loading || !canAlter} title={!canAlter ? t('database.noAlterPermission', 'No ALTER permission') : t('database.editField', 'Edit field')}><SquarePen size={14} /><span>{t('common.edit', 'Edit')}</span></button>
+              <button onClick={onDeleteColumn} disabled={!connectionAvailable || !selectedColumn || loading || !canAlter} title={!canAlter ? t('database.noAlterPermission', 'No ALTER permission') : t('database.deleteField', 'Delete field')}><Trash2 size={14} /><span>{t('common.delete', 'Delete')}</span></button>
+            </div>
+          </div>
+          <div className="columns-table-wrap">
+            <table className="columns-table">
+              <colgroup>
+                <col className="field-name-col" />
+                <col className="field-type-col" />
+                <col className="field-null-col" />
+                <col className="field-default-col" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>{t('database.header.name', 'Name')}</th>
+                  <th>{t('database.header.type', 'Type')}</th>
+                  <th>{t('database.header.nullable', 'Nullable')}</th>
+                  <th>{t('database.header.default', 'Default')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleColumns.length ? (
+                  visibleColumns.map((column) => (
+                    <tr
+                      key={column.name}
+                      className={selectedColumn?.name === column.name ? 'selected' : ''}
+                      onClick={() => onSelectColumn(column)}
+                    >
+                      <td
+                        className="copyable-field"
+                        title={t('database.clickCopy', 'Click to copy: {value}', { value: column.name })}
+                        onClick={() => copyOnSingleClick(column.name)}
+                        onDoubleClick={cancelCopy}
+                      >
+                        {column.name}
+                      </td>
+                      <td title={column.type}>{column.type}</td>
+                      <td>{column.nullable}</td>
+                      <td title={column.defaultValue}>{column.defaultValue}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="4" className="db-empty-row">
+                      {normalizedColumnQuery
+                        ? t('database.noMatchingColumns', 'No matching columns.')
+                        : t('database.doubleClickTable', 'Double-click a table to view fields.')}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div className="sql-editor-panel">
+        <div className="database-head">
+          <strong>SQL</strong>
+          <div className="sql-editor-actions">
+            {sqlFileInfo ? (
+              <span
+                className="sql-file-source"
+                title={t('database.sqlFileSource', 'Source: {name} · {size} · {encoding}', { name: sqlFileInfo.name, size: sqlFileInfo.sizeLabel, encoding: sqlFileInfo.encoding })}
+              >
+                <File size={13} />
+                <em>{sqlFileInfo.name}</em>
+                <small>{sqlFileInfo.sizeLabel} · {sqlFileInfo.encoding}{sqlFileInfo.checksumStatus === 'verified' ? ' · SHA-256 已验证' : ' · 无校验文件（可执行）'}{sqlFileInfo.modified ? ` · ${t('database.sqlFileModified', 'modified')}` : ''}</small>
+                <button type="button" onClick={onClearSqlFile} disabled={sqlRunning} title={t('common.close', 'Close')}><X size={12} /></button>
+              </span>
+            ) : (
+              <span>{t('database.ctrlEnter', 'Ctrl+Enter to run')}</span>
+            )}
+            {sqlFileInfo && (
+              <label
+                className="sql-rollback-toggle"
+                title={ddlRollbackLimited ? '异常或停止时回滚数据变更；当前数据库的 DDL 对象变更无法完整回滚' : t('database.rollbackOnStop', 'Rollback on error/stop')}
+              >
+                <input
+                  type="checkbox"
+                  checked={sqlFileInfo.rollbackOnError !== false}
+                  disabled={sqlRunning}
+                  onChange={(event) => onSqlFileOptionChange({ rollbackOnError: event.target.checked })}
+                />
+                <span>{ddlRollbackLimited ? '数据回滚（DDL除外）' : t('database.rollbackOnStop', 'Rollback on error/stop')}</span>
+              </label>
+            )}
+            <button type="button" onClick={onSelectSqlFile} disabled={sqlRunning} title={t('database.selectSqlFile', 'Select SQL or compressed SQL script')}><File size={15} />{t('database.runFile', 'Run script')}</button>
+            {sqlRunning && sqlExecutionTaskId ? (
+              <button className="danger-button" onClick={() => onCancelSql(sqlExecutionTaskId)}><CircleStop size={15} />{t('database.stopRollback', 'Stop and rollback')}</button>
+            ) : (
+              <button className="solid-button" onClick={onRunSql} disabled={!connectionAvailable || sqlRunning || (!sqlScript.trim() && !sqlFileInfo?.directExecution)}><CirclePlay size={15} />{sqlRunning ? t('database.sqlRunning', 'Running') : t('database.run', 'Run')}</button>
+            )}
+          </div>
+        </div>
+        <textarea
+          value={sqlScript}
+          readOnly={Boolean(sqlFileInfo?.directExecution)}
+          onChange={(event) => onSqlChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (connectionAvailable && !sqlRunning && event.ctrlKey && event.key === 'Enter') {
+              event.preventDefault()
+              onRunSql()
+            }
+          }}
+        />
+      </div>
+
+      <div
+        className="vertical-panel-splitter"
+        role="separator"
+        aria-orientation="horizontal"
+        title={t('database.resizeSql', 'Drag to resize SQL and result')}
+        onMouseDown={startSqlResultResize}
+      />
+
+      <div className="sql-result-panel">
+        <div className="database-head">
+          <strong>{t('database.result', 'Result')}</strong>
+          <span>{resultSummary(sqlResult)}</span>
+        </div>
+        <SqlResultView result={sqlResult} />
+      </div>
+    </div>
+  )
+}
+
+function SqlResultView({ result }) {
+  const { t } = useI18n()
+  if (!result) return <pre>{t('database.emptySqlResult', 'Run SQL to show result here.')}</pre>
+  if (typeof result === 'string') return <pre>{result}</pre>
+  if (!result.ok) return <pre>{result.message}</pre>
+  if (!Array.isArray(result.rows)) return <pre>{result.message}</pre>
+  if (!result.rows.length) return <pre>{result.message}</pre>
+
+  const columns = Array.from(result.rows.reduce((set, row) => {
+    Object.keys(row || {}).forEach((key) => set.add(key))
+    return set
+  }, new Set()))
+
+  return (
+    <div className="result-table-wrap">
+      <table className="result-table">
+        <thead>
+          <tr>
+            {columns.map((column) => <th key={column}>{column}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {result.rows.map((row, index) => (
+            <tr key={index}>
+              {columns.map((column) => (
+                <td key={column}>{formatCellValue(row?.[column])}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function MaintenanceModule({ empty, title, actionLabel, onAdd, children }) {
+  const { t } = useI18n()
+  if (empty) {
+    return (
+      <div className="empty-module">
+        <strong>{title}</strong>
+        <span>{t('maintenance.description', 'Configure it only when this server needs that maintenance capability.')}</span>
+        <button className="solid-button" onClick={onAdd}><Plus size={16} />{actionLabel}</button>
+      </div>
+    )
+  }
+  return <div className="maintenance-content">{children}</div>
+}
+
+function PackageDeployerPanel({ server, inspectorResult, statusLoading, privilege, onPrivilegeChange, onPreparePrivilege, onForgetPrivilege, onRefreshStatus, onToast, onTaskUpdate }) {
+  const { t } = useI18n()
+  const serverConnected = server.status === 'connected'
+  const [selectedId, setSelectedId] = useState(deployPackageCatalog[0].id)
+  const selected = deployPackageCatalog.find((item) => item.id === selectedId) || deployPackageCatalog[0]
+  const [form, setForm] = useState(() => buildDeployForm(deployPackageCatalog[0]))
+  const [busyAction, setBusyAction] = useState('')
+  const [confirmed, setConfirmed] = useState(false)
+  const [actionMode, setActionMode] = useState('install')
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [commandDraft, setCommandDraft] = useState(() => buildPackageCommand('install', deployPackageCatalog[0], buildDeployForm(deployPackageCatalog[0]), { mode: 'normal', password: '' }))
+  const [logs, setLogs] = useState(['Select a component, choose source, then download or install.'])
+  const [savedDeployConfigs, setSavedDeployConfigs] = useState({})
+  const [deployConfigsLoaded, setDeployConfigsLoaded] = useState(false)
+  const [componentVerification, setComponentVerification] = useState({})
+  const [statusOverrides, setStatusOverrides] = useState({})
+  const [remoteDeployStatuses, setRemoteDeployStatuses] = useState({})
+  const [deployStatusLoading, setDeployStatusLoading] = useState(false)
+  const [showDeployPassword, setShowDeployPassword] = useState(false)
+  const [packageTarget, setPackageTarget] = useState(null)
+  const [packageTargetLoading, setPackageTargetLoading] = useState(false)
+  const [detectedInstallation, setDetectedInstallation] = useState(null)
+  const [installationPathLoading, setInstallationPathLoading] = useState(false)
+  const [deployerSplit, setDeployerSplit] = useState(34)
+  const deployerLayoutRef = useRef(null)
+  const deployLogRef = useRef(null)
+  const deployLogsRef = useRef(logs)
+  const serverIdRef = useRef(server.id)
+  const packageTargetRef = useRef(null)
+  const detectedInstallationRef = useRef(null)
+  const formEditRevisionRef = useRef(0)
+  const detectedStatuses = buildDeployStatuses(deployPackageCatalog, inspectorResult)
+  const statuses = Object.fromEntries(deployPackageCatalog.map((item) => [
+    item.id,
+    statusOverrides[item.id] || mergeDeployDetectionStatus(detectedStatuses[item.id], remoteDeployStatuses[item.id])
+  ]))
+  const selectedStatus = statuses[selected.id]
+  const mysqlInstances = selected.id === 'mysql' && Array.isArray(detectedInstallation?.instances) ? detectedInstallation.instances : []
+  const resolvedDetectedInstallation = resolveDetectedInstallation(detectedInstallation, form)
+  const selectedVerification = componentVerification[getDeployVerificationKey(server, selected, form)]
+  const mysqlNeedsConfiguration = selected.id === 'mysql' && selectedStatus?.detectedBy === 'service' && selectedVerification !== 'verified'
+  const primaryInstallAction = mysqlNeedsConfiguration ? 'configure' : 'install'
+  const generatedCommand = buildPackageCommand(actionMode, selected, form, { mode: 'normal', password: '' })
+  const fields = new Set(selected.fields || [])
+  const versionLockedToPackage = !(form.source === 'online' && ['dotnet', 'java'].includes(selected.id))
+  const savedConfigKey = getDeployConfigKey(server, selected)
+  const hasSavedConfig = Boolean(savedDeployConfigs[savedConfigKey])
+
+  const refreshDeployStatuses = async ({ includeInspector = true, silent = false } = {}) => {
+    if (!serverConnected || deployStatusLoading) return
+    const requestServerId = server.id
+    setDeployStatusLoading(true)
+    if (includeInspector) Promise.resolve(onRefreshStatus?.()).catch(() => null)
+    try {
+      const detected = await detectRemoteDeployComponentStatuses(server, deployPackageCatalog, savedDeployConfigs)
+      if (serverIdRef.current !== requestServerId) return
+      setRemoteDeployStatuses(detected)
+      setStatusOverrides({})
+    } catch (error) {
+      if (!silent && serverIdRef.current === requestServerId) onToast?.('error', error?.message || 'Unable to detect installed components.')
+    } finally {
+      if (serverIdRef.current === requestServerId) setDeployStatusLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    serverIdRef.current = server.id
+    setDeployConfigsLoaded(false)
+    setRemoteDeployStatuses({})
+  }, [server.id])
+
+  useEffect(() => {
+    setStatusOverrides({})
+  }, [server.id, inspectorResult])
+
+  useEffect(() => {
+    if (!serverConnected || !deployConfigsLoaded) return
+    refreshDeployStatuses({ includeInspector: false, silent: true })
+  }, [server.id, server.status, deployConfigsLoaded])
+
+  useEffect(() => {
+    deployLogsRef.current = logs
+    if (!busyAction) return
+    window.requestAnimationFrame(() => {
+      const target = deployLogRef.current
+      if (target) target.scrollTop = target.scrollHeight
+    })
+  }, [logs, busyAction])
+
+  useEffect(() => {
+    packageTargetRef.current = packageTarget
+  }, [packageTarget])
+
+  useEffect(() => {
+    let canceled = false
+    const editRevision = formEditRevisionRef.current
+    detectedInstallationRef.current = null
+    setDetectedInstallation(null)
+    if (!serverConnected || !deployConfigsLoaded || !selected.fields?.includes('installDir')) {
+      setInstallationPathLoading(false)
+      return () => {}
+    }
+    setInstallationPathLoading(true)
+    detectRemoteComponentInstallation(server, selected, savedDeployConfigs[getDeployConfigKey(server, selected)]).then((detected) => {
+      if (canceled) return
+      setDetectedInstallation(detected)
+      if (formEditRevisionRef.current !== editRevision) return
+      setForm((current) => {
+        const resolved = resolveDetectedInstallation(detected, current)
+        detectedInstallationRef.current = resolved || detected
+        return mergeDetectedInstallation(current, resolved)
+      })
+    }).catch((error) => {
+      if (!canceled) setDetectedInstallation({ ok: false, message: error?.message || 'Unable to detect installation path.' })
+    }).finally(() => {
+      if (!canceled) setInstallationPathLoading(false)
+    })
+    return () => {
+      canceled = true
+    }
+  }, [server.id, server.status, selected.id, selectedStatus?.installed, selectedStatus?.version, deployConfigsLoaded])
+
+  useEffect(() => {
+    let canceled = false
+    if (!serverConnected) {
+      packageTargetRef.current = null
+      setPackageTarget(null)
+      setPackageTargetLoading(false)
+      return () => {}
+    }
+    setPackageTargetLoading(true)
+    detectRemotePackageTarget(server).then((target) => {
+      if (canceled) return
+      packageTargetRef.current = target
+      setPackageTarget((current) => {
+        if (!current || current.signature !== target.signature) setConfirmed(false)
+        return target
+      })
+    }).catch((error) => {
+      if (!canceled) {
+        setPackageTarget(null)
+        onToast?.('error', error?.message || 'Unable to detect target system architecture.')
+      }
+    }).finally(() => {
+      if (!canceled) setPackageTargetLoading(false)
+    })
+    return () => {
+      canceled = true
+    }
+  }, [server.id, server.status])
+
+  useEffect(() => {
+    if (!packageTarget) return
+    setForm((current) => resolvePackageFormForTarget(selected, current, packageTarget))
+  }, [selected.id, packageTarget?.signature])
+
+  useEffect(() => {
+    let canceled = false
+    window.opsFlow.getStore('deployConfigs').then((stored) => {
+      if (canceled) return
+      const configs = normalizeDeployConfigs(stored)
+      setSavedDeployConfigs(configs)
+      setDeployConfigsLoaded(true)
+      const saved = configs[getDeployConfigKey(server, selected)]
+      const merged = resolvePackageFormForTarget(selected, mergeDeployForm(selected, saved, getDeploySessionSecret(server, selected, saved)), packageTargetRef.current)
+      const detected = detectedInstallationRef.current
+      const resolved = resolveDetectedInstallation(detected, merged)
+      setForm(resolved ? mergeDetectedInstallation(merged, resolved) : (detected?.instances?.length ? mergeDetectedInstallation(merged, null) : merged))
+      formEditRevisionRef.current = 0
+      setActionMode('install')
+      setAdvancedOpen(false)
+      setConfirmed(false)
+      setShowDeployPassword(false)
+      setLogs(['Select a component, choose source, then download or install.'])
+    }).catch(() => {
+      if (!canceled) setDeployConfigsLoaded(true)
+    })
+    return () => {
+      canceled = true
+    }
+  }, [server.id, selected.id])
+
+  useEffect(() => {
+    setCommandDraft(generatedCommand)
+  }, [selected.id, form.source, form.version, form.installDir, form.serviceName, form.port, form.consolePort, form.runUser, form.adminUser, form.password, form.passwordConfirm, form.packageUrl, form.offlinePath, form.checksum, form.targetSignature, form.detectedService, form.detectedSocket, form.detectedConfigPath, actionMode])
+
+  const changeSelected = (item) => {
+    formEditRevisionRef.current = 0
+    setSelectedId(item.id)
+    const saved = savedDeployConfigs[getDeployConfigKey(server, item)]
+    setForm(resolvePackageFormForTarget(item, mergeDeployForm(item, saved, getDeploySessionSecret(server, item, saved)), packageTargetRef.current))
+    setActionMode('install')
+    setAdvancedOpen(false)
+    setConfirmed(false)
+    setShowDeployPassword(false)
+  }
+
+  const update = (key, value) => {
+    formEditRevisionRef.current += 1
+    setForm((current) => {
+      const next = {
+        ...current,
+        [key]: value,
+        ...(['installDir', 'source'].includes(key)
+          ? { installMode: key === 'source' && value === 'online' ? 'managed' : 'manual', detectedInstallDir: '', detectedExecutable: '', detectedService: '', detectedConfigPath: '', detectedSocket: '', detectedDataDir: '', detectedServerUuid: '' }
+          : {})
+      }
+      if (supportsCustomInstanceService(selected) && ['installDir', 'port'].includes(key) && current.source !== 'online') {
+        const currentAutoName = deriveInstanceServiceName(selected, current.installDir, current.port)
+        if (!current.serviceName || current.serviceName === currentAutoName || current.serviceName === selected.serviceName) {
+          next.serviceName = deriveInstanceServiceName(
+            selected,
+            key === 'installDir' ? value : current.installDir,
+            key === 'port' ? value : current.port
+          )
+        }
+      }
+      if (key === 'password' || key === 'passwordConfirm') {
+        setDeploySessionSecret(server, selected, next)
+      }
+      return next
+    })
+  }
+
+  const startDeployerResize = (event) => {
+    event.preventDefault()
+    const bounds = deployerLayoutRef.current?.getBoundingClientRect()
+    if (!bounds?.width) return
+    document.body.classList.add('is-resizing-panel')
+
+    const handleMove = (moveEvent) => {
+      const nextPercent = ((moveEvent.clientX - bounds.left) / bounds.width) * 100
+      setDeployerSplit(Math.min(50, Math.max(24, nextPercent)))
+    }
+
+    const handleUp = () => {
+      document.body.classList.remove('is-resizing-panel')
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
+
+  const saveDeployConfig = async (item, currentForm) => {
+    const key = getDeployConfigKey(server, item)
+    const serialized = serializeDeployForm(currentForm)
+    if (item.id === 'mysql' && currentForm.detectedService) {
+      serialized.mysqlInstances = {
+        ...(savedDeployConfigs[key]?.mysqlInstances || currentForm.mysqlInstances || {}),
+        [currentForm.detectedService]: {
+          serviceName: currentForm.detectedService,
+          installDir: currentForm.detectedInstallDir || currentForm.installDir,
+          configPath: currentForm.detectedConfigPath || '',
+          socketPath: currentForm.detectedSocket || '',
+          dataDir: currentForm.detectedDataDir || '',
+          serverUuid: currentForm.detectedServerUuid || '',
+          port: currentForm.port || '',
+          verifiedAt: currentForm.detectedServerUuid ? new Date().toISOString() : ''
+        }
+      }
+    }
+    const nextConfigs = {
+      ...savedDeployConfigs,
+      [key]: serialized
+    }
+    setSavedDeployConfigs(nextConfigs)
+    await window.opsFlow.setStore('deployConfigs', nextConfigs)
+  }
+
+  const updateSource = (value) => {
+    formEditRevisionRef.current += 1
+    setForm((current) => {
+      const next = {
+        ...current,
+        source: value,
+        installMode: value === 'online' ? 'managed' : 'manual',
+        detectedInstallDir: '',
+        detectedExecutable: '',
+        detectedService: '',
+        detectedConfigPath: '',
+        detectedSocket: '',
+        detectedDataDir: '',
+        detectedServerUuid: '',
+        packageUrl: value === 'github' ? (current.packageUrl || selected.githubUrl || '') : current.packageUrl,
+        offlinePath: value === 'offline'
+          ? (current.offlinePath?.startsWith('/opt/ops-flow/packages/') ? current.offlinePath : '')
+          : current.offlinePath
+      }
+      if (supportsCustomInstanceService(selected) && value !== 'online' && (!current.serviceName || current.serviceName === selected.serviceName)) {
+        next.serviceName = deriveInstanceServiceName(selected, current.installDir, current.port)
+      }
+      return resolvePackageFormForTarget(selected, next, packageTargetRef.current)
+    })
+  }
+
+  const selectMySqlInstance = (serviceName) => {
+    const instance = detectedInstallation?.instances?.find((candidate) => candidate.serviceName === serviceName)
+    const savedInstance = savedDeployConfigs[getDeployConfigKey(server, selected)]?.mysqlInstances?.[serviceName]
+    formEditRevisionRef.current += 1
+    detectedInstallationRef.current = instance || detectedInstallation
+    setForm((current) => {
+      const next = {
+        ...mergeDetectedInstallation(current, instance || null),
+        detectedServerUuid: savedInstance?.serverUuid || ''
+      }
+      return { ...next, ...getDeploySessionSecret(server, selected, next) }
+    })
+    setConfirmed(false)
+  }
+
+  const uploadOfflinePackage = async () => {
+    if (!serverConnected) {
+      onToast('error', 'Connect server first.')
+      return
+    }
+    const uploadTarget = resolveOfflinePackageUploadTarget(form.offlinePath)
+    if (!uploadTarget.ok) {
+      onToast('error', uploadTarget.message)
+      return
+    }
+    const requestServerId = server.id
+    setBusyAction('upload')
+    try {
+      const result = await window.opsFlow.uploadRemoteFile(server, uploadTarget.path, { targetIsFile: uploadTarget.targetIsFile })
+      if (serverIdRef.current !== requestServerId) return
+      if (result?.canceled) return
+      if (!result?.ok) {
+        onToast('error', result?.message || 'Upload failed')
+        setLogs((current) => [...current, `Upload failed: ${result?.message || 'Unknown error'}`].slice(-18))
+        return
+      }
+      update('source', 'offline')
+      update('offlinePath', result.remotePath)
+      setLogs((current) => [...current, `Uploaded package: ${result.remotePath}`].slice(-18))
+      onToast('success', 'Package uploaded')
+    } finally {
+      if (serverIdRef.current === requestServerId) {
+        setBusyAction('')
+      }
+    }
+  }
+
+  const runAction = async (action) => {
+    if (!serverConnected) {
+      onToast('error', 'Connect server first.')
+      return
+    }
+    if (['install', 'download'].includes(action) && (packageTargetLoading || !packageTarget)) {
+      onToast('error', packageTargetLoading ? '正在检测目标服务器的系统和架构，请稍后再试。' : '未能确认目标服务器的系统和架构，请重新连接后再试。')
+      return
+    }
+    if (action === 'test' && selected.id === 'mysql' && !String(form.password || '')) {
+      onToast('error', '请输入当前 MySQL 管理员密码后再测试；仅检查进程和版本不能代表数据库认证正常。')
+      return
+    }
+    if (action === 'test' && selected.id === 'mysql' && mysqlInstances.length > 1 && !form.detectedService) {
+      onToast('error', '检测到多个 MySQL 实例，请先选择要测试的实例。')
+      return
+    }
+    if (action === 'configure' && selected.id === 'mysql' && mysqlInstances.length > 1 && !form.detectedService) {
+      onToast('error', '检测到多个 MySQL 实例，请先选择要配置的实例。')
+      return
+    }
+    if (action === 'test' && selected.id === 'mysql' && !String(form.detectedSocket || '')) {
+      onToast('error', '尚未确认当前 MySQL 实例的 socket，请刷新状态或检查该实例的服务配置。')
+      return
+    }
+    if (['install', 'configure', 'uninstall'].includes(action) && !confirmed) {
+      onToast('error', 'Confirm the operation first.')
+      return
+    }
+    if ((action === 'install' || action === 'download') && form.source === 'github' && !form.packageUrl?.trim()) {
+      onToast('error', 'Enter a downloadable package URL first.')
+      return
+    }
+    if (action === 'install' && form.source === 'offline' && !form.offlinePath?.trim()) {
+      onToast('error', 'Upload a package or enter its remote path first.')
+      return
+    }
+    if (['install', 'configure', 'uninstall'].includes(action) && fields.has('installDir') && !/^\/[A-Za-z0-9._/-]+$/.test(String(form.installDir || ''))) {
+      onToast('error', '安装路径必须是绝对 Linux 路径，且只能包含字母、数字、点、下划线、横线和斜线。')
+      return
+    }
+    if (['install', 'configure'].includes(action) && fields.has('installDir') && form.installMode !== 'managed' && isProtectedInstallRoot(form.installDir)) {
+      onToast('error', `拒绝把 ${form.installDir} 作为自定义安装目录：该路径属于系统根目录，递归安装或卸载可能破坏服务器。`)
+      return
+    }
+    if (action === 'install' && fields.has('runUser') && form.runUser && !/^[a-z_][a-z0-9_-]{0,31}$/i.test(String(form.runUser))) {
+      onToast('error', '服务用户只能包含字母、数字、下划线和横线，且必须以字母或下划线开头。')
+      return
+    }
+    if (action === 'install') {
+      for (const [key, fallback, label] of [['port', selected.defaultPort, '端口'], ['consolePort', selected.defaultConsolePort, '控制台端口']]) {
+        if (!fields.has(key)) continue
+        const value = Number(form[key] || fallback)
+        if (!Number.isInteger(value) || value < 1 || value > 65535) {
+          onToast('error', `请输入 1 到 65535 之间的${label}。`)
+          return
+        }
+      }
+    }
+    if (action === 'install' && selected.id === 'redis' && /[\r\n\0]/.test(String(form.password || ''))) {
+      onToast('error', 'Redis 密码不能包含换行符或空字符。')
+      return
+    }
+    if (action === 'install' && supportsCustomInstanceService(selected) && form.source !== 'online' && !/^[A-Za-z0-9_.@-]+[.]service$/.test(String(form.serviceName || ''))) {
+      onToast('error', `${selected.name} 服务名称只能包含字母、数字、点、下划线、@ 和横线，并且必须以 .service 结尾。`)
+      return
+    }
+    if (action === 'install' && selected.id === 'minio') {
+      if (form.source === 'online') {
+        onToast('error', 'MinIO 不使用系统软件源安装，请选择“包地址”或“上传离线包”。')
+        return
+      }
+      if (!/^[A-Za-z0-9._-]{3,32}$/.test(String(form.adminUser || ''))) {
+        onToast('error', 'MinIO 管理员用户名需为 3 到 32 位字母、数字、点、下划线或横线。')
+        return
+      }
+      if (String(form.password || '').length < 8 || /[\r\n\0]/.test(String(form.password || ''))) {
+        onToast('error', '请输入至少 8 位且不含换行符的 MinIO 管理员密码。')
+        return
+      }
+      if (form.password !== form.passwordConfirm) {
+        onToast('error', '两次输入的 MinIO 管理员密码不一致。')
+        return
+      }
+      if (String(form.port || '9000') === String(form.consolePort || '9001')) {
+        onToast('error', 'MinIO API 端口和控制台端口不能相同。')
+        return
+      }
+    }
+    if (['install', 'configure'].includes(action) && selected.id === 'mysql') {
+      if (!/^[A-Za-z0-9_]{1,32}$/.test(String(form.adminUser || 'root'))) {
+        onToast('error', 'MySQL 管理员用户名只能包含字母、数字和下划线，最多 32 位。')
+        return
+      }
+      if (String(form.password || '').length < 8) {
+        onToast('error', '请输入至少 8 位的 MySQL 管理员密码。')
+        return
+      }
+      if (form.password !== form.passwordConfirm) {
+        onToast('error', '两次输入的 MySQL 管理员密码不一致。')
+        return
+      }
+    }
+    if (action === 'uninstall' && fields.has('installDir')) {
+      try {
+        const freshDetection = await detectRemoteComponentInstallation(server, selected, form)
+        const freshInstallation = resolveDetectedInstallation(freshDetection, form)
+        if (selected.id === 'mysql' && freshDetection?.instances?.length > 1 && !freshInstallation) {
+          setDetectedInstallation(freshDetection)
+          onToast('error', '检测到多个 MySQL 实例，请先选择要卸载的实例。')
+          return
+        }
+        if (selected.id === 'mysql' && freshDetection?.instances?.length > 1 && freshInstallation?.installMode === 'managed') {
+          setDetectedInstallation(freshDetection)
+          onToast('error', '该服务器存在多个 MySQL 实例，不能直接执行系统包卸载；请先停用其他实例或使用实例级维护。')
+          return
+        }
+        if (!freshInstallation?.installDir) {
+          onToast('error', '无法从远程服务或可执行文件确认真实安装目录，已阻止卸载，避免误删默认路径。')
+          return
+        }
+        const currentPath = normalizeRemoteInstallDir(form.installDir)
+        const metadataChanged = currentPath !== freshInstallation.installDir || form.installMode !== freshInstallation.installMode || form.detectedInstallDir !== freshInstallation.installDir
+        if (metadataChanged) {
+          detectedInstallationRef.current = freshInstallation
+          setDetectedInstallation(freshDetection)
+          setForm((current) => mergeDetectedInstallation(current, freshInstallation))
+          setConfirmed(false)
+          onToast('info', `已把安装目录校正为 ${freshInstallation.installDir}。请核对后重新勾选确认，再执行卸载。`)
+          return
+        }
+      } catch (error) {
+        onToast('error', `卸载前目录校验失败：${error?.message || 'unknown error'}`)
+        return
+      }
+    }
+    const resolvedPrivilege = await onPreparePrivilege?.(server)
+    if (!resolvedPrivilege) return
+    if (['install', 'configure', 'uninstall'].includes(action)) {
+      await saveDeployConfig(selected, form)
+    }
+    setActionMode(action)
+    const requestServerId = server.id
+    const generated = buildPackageCommand(action, selected, form, { mode: 'normal', password: '' })
+    const command = advancedOpen && action === actionMode ? commandDraft : generated
+    const taskId = `deploy-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    const executionId = `deploy-command-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    const verificationKey = getDeployVerificationKey(server, selected, form)
+    const taskName = `${toTitle(action)} ${selected.name}`
+    setBusyAction(action)
+    onTaskUpdate?.({
+      id: taskId,
+      type: 'deploy',
+      action,
+      name: taskName,
+      remotePath: form.source === 'offline' ? form.offlinePath : form.packageUrl,
+      executionId,
+      transferred: 0,
+      total: 0,
+      indeterminate: true,
+      status: 'running',
+      message: '正在建立远程执行通道…'
+    })
+    const previousLogs = deployLogsRef.current.slice(-17)
+    const startedAt = new Date().toLocaleTimeString()
+    const logHeader = `$ ${action} ${selected.name}\n[${startedAt}] 已提交远程命令，正在等待实时输出…`
+    let rawOutput = ''
+    let streamFlushTimer = null
+    let lastRemoteOutputAt = Date.now()
+    let monitorNote = ''
+    let lastProgress = { transferred: 0, total: 0, indeterminate: true, message: '正在等待远程输出…' }
+    const publishLiveOutput = () => {
+      streamFlushTimer = null
+      const cleanOutput = cleanPackageOutput(rawOutput.replace(/\r(?!\n)/g, '\n'))
+      const stage = parsePackageExecutionStage(cleanOutput)
+      const latestLine = lastMeaningfulPackageLine(cleanOutput)
+      lastProgress = stage
+        ? {
+            ...stage,
+            message: [stage.message, latestLine && latestLine !== stage.message ? latestLine : '', monitorNote ? monitorNote.replace(/^\[本地监控\]\s*/, '') : ''].filter(Boolean).join(' · ')
+          }
+        : {
+            transferred: 0,
+            total: 0,
+            indeterminate: true,
+            message: monitorNote ? monitorNote.replace(/^\[本地监控\]\s*/, '') : (latestLine || '远程命令正在执行，等待下一条输出…')
+          }
+      const visibleOutput = [cleanOutput, monitorNote].filter(Boolean).join('\n\n')
+      const sessionLog = visibleOutput ? `${logHeader}\n\n${visibleOutput}` : logHeader
+      setLogs([...previousLogs, sessionLog].slice(-18))
+      onTaskUpdate?.({
+        id: taskId,
+        type: 'deploy',
+        action,
+        name: taskName,
+        remotePath: form.source === 'offline' ? form.offlinePath : form.packageUrl,
+        executionId,
+        ...lastProgress,
+        status: 'running'
+      })
+    }
+    const queueLiveOutput = () => {
+      if (streamFlushTimer) return
+      streamFlushTimer = window.setTimeout(publishLiveOutput, 80)
+    }
+    const stopListening = window.opsFlow.onSshExecData?.((payload) => {
+      if (payload?.executionId !== executionId) return
+      lastRemoteOutputAt = Date.now()
+      monitorNote = ''
+      rawOutput = `${rawOutput}${String(payload.data || '')}`.slice(-120000)
+      queueLiveOutput()
+    })
+    const silenceTimer = window.setInterval(() => {
+      const silentSeconds = Math.floor((Date.now() - lastRemoteOutputAt) / 1000)
+      if (silentSeconds < 10) return
+      monitorNote = `[本地监控] 已 ${silentSeconds} 秒未收到新的远程输出；命令仍在运行，可在“传输”中手动停止。`
+      if (streamFlushTimer) window.clearTimeout(streamFlushTimer)
+      publishLiveOutput()
+    }, 5000)
+    setLogs([...previousLogs, logHeader].slice(-18))
+    try {
+      const result = window.opsFlow.execSshStream
+        ? await window.opsFlow.execSshStream(server, command, executionId, resolvedPrivilege)
+        : await window.opsFlow.execSshPrivileged(server, command, resolvedPrivilege)
+      if (serverIdRef.current !== requestServerId) return
+      if (streamFlushTimer) window.clearTimeout(streamFlushTimer)
+      if (!rawOutput) rawOutput = [result.stdout, result.stderr].filter(Boolean).join('\n')
+      const output = cleanPackageOutput(rawOutput.replace(/\r(?!\n)/g, '\n'))
+      const summary = result.ok ? '' : summarizePackageFailure(output, form.source)
+      const canceled = Boolean(result?.cancelled || result?.canceled)
+      monitorNote = ''
+      const exitResult = canceled
+        ? `[${new Date().toLocaleTimeString()}] 已停止远程命令。`
+        : result.ok
+          ? `[${new Date().toLocaleTimeString()}] 命令执行成功（退出码 ${result.code ?? 0}）。`
+          : `[${new Date().toLocaleTimeString()}] 命令执行失败（${result.message || `退出码 ${result.code ?? 'unknown'}`}）。`
+      const completedLog = [logHeader, output, summary, exitResult].filter(Boolean).join('\n\n')
+      const failureMessage = summary || lastMeaningfulPackageLine(output) || `${toTitle(action)} failed`
+      setLogs([...previousLogs, completedLog].slice(-18))
+      onTaskUpdate?.({
+        id: taskId,
+        type: 'deploy',
+        action,
+        name: taskName,
+        remotePath: form.source === 'offline' ? form.offlinePath : form.packageUrl,
+        executionId,
+        transferred: result.ok ? 100 : (lastProgress.transferred || 0),
+        total: result.ok ? 100 : (lastProgress.total || 0),
+        indeterminate: false,
+        status: canceled ? 'cancelled' : (result.ok ? 'done' : 'failed'),
+        message: canceled ? `${toTitle(action)} stopped` : (result.ok ? `${toTitle(action)} completed` : failureMessage)
+      })
+      onToast(canceled ? 'info' : (result.ok ? 'success' : 'error'), canceled ? `${toTitle(action)} stopped` : (result.ok ? `${toTitle(action)} completed` : failureMessage))
+      if (selected.id === 'mysql' && ['install', 'configure', 'test'].includes(action)) {
+        setComponentVerification((current) => ({ ...current, [verificationKey]: result.ok ? 'verified' : 'failed' }))
+      }
+      if (selected.id === 'mysql' && action === 'test' && result.ok) {
+        const identity = parseMySqlIdentity(output)
+        if (identity) {
+          const verifiedForm = {
+            ...form,
+            detectedSocket: identity.socketPath || form.detectedSocket,
+            detectedDataDir: identity.dataDir || form.detectedDataDir,
+            detectedServerUuid: identity.serverUuid || form.detectedServerUuid,
+            port: identity.port || form.port
+          }
+          setForm(verifiedForm)
+          await saveDeployConfig(selected, verifiedForm)
+        }
+      }
+      if (selected.id === 'mysql' && action === 'uninstall' && result.ok) {
+        setComponentVerification((current) => {
+          const next = { ...current }
+          delete next[verificationKey]
+          return next
+        })
+        clearDeploySessionSecret(server, selected, form)
+        detectedInstallationRef.current = null
+        setDetectedInstallation(null)
+        setForm((current) => mergeDetectedInstallation({ ...current, password: '', passwordConfirm: '' }, null))
+      }
+      if (result.ok && action === 'uninstall') {
+        setStatusOverrides((current) => ({
+          ...current,
+          [selected.id]: { installed: false, serviceActive: false, detectedBy: '', version: 'Not installed' }
+        }))
+      }
+      if (result.ok && ['install', 'configure'].includes(action)) {
+        await saveDeployConfig(selected, form)
+      }
+      if (['install', 'configure', 'uninstall'].includes(action)) {
+        refreshDeployStatuses()
+      }
+    } catch (error) {
+      if (serverIdRef.current !== requestServerId) return
+      if (selected.id === 'mysql' && ['install', 'configure', 'test'].includes(action)) {
+        setComponentVerification((current) => ({ ...current, [verificationKey]: 'failed' }))
+      }
+      onTaskUpdate?.({
+        id: taskId,
+        type: 'deploy',
+        action,
+        name: taskName,
+        remotePath: form.source === 'offline' ? form.offlinePath : form.packageUrl,
+        executionId,
+        transferred: lastProgress.transferred || 0,
+        total: lastProgress.total || 0,
+        indeterminate: false,
+        status: 'failed',
+        message: error.message
+      })
+      setLogs((current) => [...current, `${toTitle(action)} failed: ${error.message}`].slice(-18))
+      onToast('error', `${toTitle(action)} failed`)
+    } finally {
+      if (streamFlushTimer) window.clearTimeout(streamFlushTimer)
+      window.clearInterval(silenceTimer)
+      stopListening?.()
+      if (serverIdRef.current === requestServerId) {
+        setBusyAction('')
+        setConfirmed(false)
+      }
+    }
+  }
+
+  return (
+    <div className="package-deployer">
+      {!serverConnected && <div className="module-disabled-banner">{t('deployer.connectFirst', 'Connect server first before deploying packages.')}</div>}
+      <section className="package-hero">
+        <div>
+          <strong>{t('deployer.title', 'Package Deployer')}</strong>
+          <span>{t('deployer.description', 'Install, test and uninstall server components on the selected machine.')}</span>
+        </div>
+        <div className="package-hero-actions">
+          <label className="privilege-control">
+            <span>{t('deployer.privilege', 'Privilege')}</span>
+            <select value={privilege.mode || 'auto'} onChange={(event) => onPrivilegeChange({ mode: event.target.value, suggestedMode: event.target.value, password: '', passwordRequired: false, cached: false })}>
+              <option value="auto">{t('workflow.privilegeAuto', 'Auto detect (recommended)')}</option>
+              <option value="normal">{t('workflow.privilegeCurrent', 'Current SSH user')}</option>
+              <option value="sudo">sudo root</option>
+              <option value="su">su root</option>
+            </select>
+          </label>
+          {(['sudo', 'su'].includes(privilege.mode) || privilege.passwordRequired) && !privilege.cached && (
+            <input
+              className="privilege-password"
+              type="password"
+              value={privilege.password || ''}
+              onChange={(event) => onPrivilegeChange({ ...privilege, password: event.target.value })}
+              placeholder={`${privilege.suggestedMode === 'su' || privilege.mode === 'su' ? 'root' : 'sudo'} password`}
+            />
+          )}
+          {privilege.cached && (
+            <button type="button" className="privilege-session-button" onClick={onForgetPrivilege} disabled={!serverConnected || busyAction}>
+              已验证 · 忘记
+            </button>
+          )}
+        </div>
+      </section>
+      <div
+        className="package-layout"
+        ref={deployerLayoutRef}
+        style={{ gridTemplateColumns: `minmax(260px, ${deployerSplit}%) 10px minmax(0, 1fr)` }}
+      >
+        <section className="package-catalog-panel">
+          <div className="package-section-title">
+            <strong>{t('deployer.components', 'Components')}</strong>
+            <button onClick={() => refreshDeployStatuses()} disabled={!serverConnected || busyAction || statusLoading || deployStatusLoading}><RefreshCw size={14} />{statusLoading || deployStatusLoading ? t('deployer.checking', 'Checking') : t('deployer.refreshStatus', 'Refresh status')}</button>
+          </div>
+          <div className="package-component-list">
+            {deployPackageCatalog.map((item) => {
+              const status = statuses[item.id]
+              const verification = item.id === 'mysql' && item.id === selected.id
+                ? componentVerification[getDeployVerificationKey(server, item, form)]
+                : componentVerification[getDeployConfigKey(server, item)]
+              const statusText = status.checked === false
+                ? t('deployer.notChecked', 'Not checked')
+                : !status.installed
+                  ? t('deployer.notInstalled', 'Not installed')
+                : (item.id === 'mysql'
+                    ? (verification === 'verified'
+                        ? t('deployer.authVerified', 'Authentication verified')
+                        : (verification === 'failed'
+                            ? t('deployer.configurationRequired', 'Installed / authentication failed')
+                            : (status.running || status.serviceActive ? t('deployer.runningUnverified', 'Running / unverified') : t('deployer.installed', 'Installed'))))
+                    : (status.running || status.serviceActive ? t('deployer.running', 'Running') : t('deployer.installed', 'Installed')))
+              const statusClass = status.checked === false
+                ? 'unchecked'
+                : !status.installed
+                  ? 'missing'
+                : (item.id === 'mysql' && verification !== 'verified' ? 'needs-config' : 'installed')
+              return (
+                <button key={item.id} className={item.id === selected.id ? 'selected' : ''} onClick={() => changeSelected(item)}>
+                  <Download size={15} />
+                  <strong>{item.name}</strong>
+                  <span title={status.version}>{status.version}</span>
+                  <em className={statusClass}>{statusText}</em>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+        <div
+          className="package-splitter"
+          role="separator"
+          aria-orientation="vertical"
+          title="Drag to resize components and install panel"
+          onMouseDown={startDeployerResize}
+        />
+        <section className="package-install-panel">
+          <div className="package-section-title">
+            <strong>{t('deployer.installTitle', '{name} install', { name: selected.name })}</strong>
+            <span>{versionLockedToPackage ? t('deployer.offlineVersionNote', 'Offline packages use the uploaded file version.') : t('deployer.installDescription', 'Choose package source, version and install parameters.')}</span>
+          </div>
+          <div className="package-form-grid">
+            <div className="package-field-note package-wide-field">
+              <strong>{t('deployer.targetSystem', 'Target system')}</strong>
+              <span>{packageTargetLoading
+                ? t('deployer.detectingTarget', 'Detecting OS and architecture...')
+                : (packageTarget
+                    ? `${packageTarget.prettyName || packageTarget.osId} · ${packageTarget.rawArch} (${packageTarget.canonicalArch})`
+                    : t('deployer.targetUnavailable', 'Connect the server to detect its OS and architecture before selecting a package.'))}</span>
+            </div>
+            <Field label={t('deployer.source', 'Source')}>
+              <select value={form.source} onChange={(event) => updateSource(event.target.value)}>
+                <option value="online">{t('deployer.sourceOnline', 'Online package manager')}</option>
+                <option value="github">{t('deployer.sourceUrl', 'Package URL')}</option>
+                <option value="offline">{t('deployer.sourceOffline', 'Uploaded offline package')}</option>
+              </select>
+            </Field>
+            {versionLockedToPackage ? (
+              <div className="package-field-note">
+                <strong>{t('deployer.version', 'Version')}</strong>
+                <span>{form.source === 'online'
+                  ? t('deployer.detectedAfterInstall', 'Detected after install from the package repository.')
+                  : t('deployer.detectedAfterInstall', 'Detected after install from the selected package.')}</span>
+              </div>
+            ) : (
+              <Field label={t('deployer.version', 'Version')}>
+                <select value={form.version} onChange={(event) => update('version', event.target.value)}>
+                  {selected.versions.map((version) => <option key={version} value={version}>{version}</option>)}
+                </select>
+              </Field>
+            )}
+            {selected.id === 'mysql' && mysqlInstances.length > 1 && (
+              <Field label="MySQL 实例">
+                <select value={form.detectedService || ''} onChange={(event) => selectMySqlInstance(event.target.value)}>
+                  <option value="">请选择要操作的实例</option>
+                  {mysqlInstances.map((instance) => (
+                    <option key={instance.serviceName} value={instance.serviceName}>
+                      {[instance.serviceName, instance.port ? `端口 ${instance.port}` : '', instance.socketPath || 'socket 未确认'].filter(Boolean).join(' · ')}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            {fields.has('installDir') && (
+              <Field label={t('deployer.installPath', 'Install path')}>
+                <input value={form.installDir} onChange={(event) => update('installDir', event.target.value)} placeholder="/opt/apps/redis" />
+                {installationPathLoading && <small className="package-field-hint">正在读取远程服务和可执行文件的真实路径…</small>}
+                {!installationPathLoading && resolvedDetectedInstallation?.installDir && form.detectedInstallDir === form.installDir && (
+                  <small className="package-field-hint package-path-detected" title={resolvedDetectedInstallation.execStart || resolvedDetectedInstallation.executable || ''}>
+                    已从远程服务器确认：{resolvedDetectedInstallation.installDir} · {resolvedDetectedInstallation.installMode === 'managed' ? '系统包管理' : (resolvedDetectedInstallation.serviceName || resolvedDetectedInstallation.executable || '自定义安装')}
+                  </small>
+                )}
+                {!installationPathLoading && selectedStatus?.installed && !resolvedDetectedInstallation?.installDir && (
+                  <small className="package-field-hint package-path-warning">检测到组件，但暂时无法确认真实安装目录；卸载前将再次校验。</small>
+                )}
+              </Field>
+            )}
+            {fields.has('serviceName') && form.source !== 'online' && (
+              <Field label="服务名称">
+                <input value={form.serviceName || ''} onChange={(event) => update('serviceName', event.target.value)} placeholder={deriveInstanceServiceName(selected, '/instance2', form.port)} />
+              </Field>
+            )}
+            {fields.has('port') && (
+              <Field label={t('deployer.port', 'Port')}>
+                <input value={form.port} onChange={(event) => update('port', event.target.value)} placeholder="Optional" />
+              </Field>
+            )}
+            {fields.has('consolePort') && (
+              <Field label={t('deployer.consolePort', 'Console port')}>
+                <input value={form.consolePort} onChange={(event) => update('consolePort', event.target.value)} placeholder="Optional" />
+              </Field>
+            )}
+            {fields.has('password') && (
+              <Field label={['mysql', 'minio'].includes(selected.id) ? t('deployer.adminPassword', 'Admin password') : t('deployer.password', 'Password')}>
+                <div className="package-secret-control">
+                  <input
+                    type={showDeployPassword ? 'text' : 'password'}
+                    value={form.password}
+                    onChange={(event) => update('password', event.target.value)}
+                    placeholder={selected.id === 'mysql'
+                      ? t('deployer.mysqlPasswordPlaceholder', 'At least 8 characters; applied after install')
+                      : (selected.id === 'minio' ? t('deployer.minioPasswordPlaceholder', 'At least 8 characters; applied to MinIO') : 'optional, leave empty for no auth')}
+                  />
+                  <button type="button" onClick={() => setShowDeployPassword((current) => !current)} title={showDeployPassword ? t('deployer.hidePassword', 'Hide password') : t('deployer.showPassword', 'Show password')}>
+                    {showDeployPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </Field>
+            )}
+            {fields.has('passwordConfirm') && (
+              <Field label={t('deployer.confirmPassword', 'Confirm admin password')}>
+                <input
+                  type={showDeployPassword ? 'text' : 'password'}
+                  value={form.passwordConfirm || ''}
+                  onChange={(event) => update('passwordConfirm', event.target.value)}
+                  placeholder={t('deployer.confirmPassword', 'Confirm admin password')}
+                />
+              </Field>
+            )}
+            {fields.has('runUser') && (
+              <Field label={t('deployer.serviceUser', 'Service user')}>
+                <input value={form.runUser} onChange={(event) => update('runUser', event.target.value)} placeholder={`${selected.id} user, blank uses default`} />
+              </Field>
+            )}
+            {fields.has('adminUser') && (
+              <Field label={t('deployer.adminUser', 'Admin user')}>
+                <input value={form.adminUser} onChange={(event) => update('adminUser', event.target.value)} placeholder={selected.id === 'minio' ? 'root console user' : 'admin user, optional'} />
+              </Field>
+            )}
+            {fields.has('checksum') && (
+              <Field label={t('deployer.checksum', 'Checksum')}>
+                <input value={form.checksum} onChange={(event) => update('checksum', event.target.value)} placeholder="sha256, optional" />
+              </Field>
+            )}
+            {form.source === 'github' && (
+              <Field label={t('deployer.packageUrl', 'Package URL')}>
+                <input value={form.packageUrl} onChange={(event) => update('packageUrl', event.target.value)} placeholder="GitHub release/archive URL, or internal http(s) package URL" />
+              </Field>
+            )}
+            {form.source === 'offline' && (
+              <Field label={t('deployer.remotePackagePath', 'Remote package path')} className="package-wide-field">
+                <div className="package-path-control">
+                  <input value={form.offlinePath} onChange={(event) => update('offlinePath', event.target.value)} placeholder={`remote path, e.g. /opt/ops-flow/packages/${getPackageHintForTarget(selected, packageTarget)}`} />
+                  <button type="button" onClick={uploadOfflinePackage} disabled={!serverConnected || busyAction}><Upload size={14} />{busyAction === 'upload' ? t('deployer.uploading', 'Uploading') : t('deployer.upload', 'Upload')}</button>
+                </div>
+              </Field>
+            )}
+          </div>
+          <div className="package-summary">
+            <span>{selectedStatus.checked === false
+              ? t('deployer.notCheckedHint', 'Installation status has not been checked yet.')
+              : selectedStatus.installed
+              ? `${t('deployer.detected', 'Detected: {value}', { value: selectedStatus.version })}${selected.id === 'mysql' ? ` · ${selectedVerification === 'verified' ? t('deployer.authVerified', 'Authentication verified') : (selectedVerification === 'failed' ? t('deployer.mysqlAuthFailed', 'Administrator authentication failed.') : t('deployer.mysqlAuthPending', 'mysqld is running, but administrator authentication has not been verified.'))}` : ''}${hasSavedConfig ? ` · ${t('deployer.configSaved', 'parameters saved; verification not implied')}` : ''}`
+              : (hasSavedConfig ? t('deployer.configSavedLocal', 'Config saved locally. Install status not detected yet.') : t('deployer.notDetected', 'Not installed or not detected yet.'))}</span>
+            <button onClick={() => setAdvancedOpen((current) => !current)}>{advancedOpen ? t('deployer.hideAdvanced', 'Hide advanced') : t('deployer.advancedCommand', 'Advanced command')}</button>
+          </div>
+          {advancedOpen && (
+            <div className="package-preview">
+              <div className="package-preview-head">
+                <div>
+                  <strong>{t('deployer.commandEditor', 'Command editor')}</strong>
+                  <span>{t('deployer.commandEditorHint', 'Edit only when the default recipe does not match this server.')}</span>
+                </div>
+                <div className="package-preview-tools">
+                  <select value={actionMode} onChange={(event) => setActionMode(event.target.value)}>
+                    <option value="download">{t('deployer.download', 'Download')}</option>
+                    <option value="test">{t('deployer.test', 'Test')}</option>
+                    <option value="install">{t('deployer.install', 'Install')}</option>
+                    <option value="uninstall">{t('deployer.uninstall', 'Uninstall')}</option>
+                  </select>
+                  <button onClick={() => setCommandDraft(generatedCommand)} disabled={busyAction}>{t('deployer.resetCommand', 'Reset command')}</button>
+                </div>
+              </div>
+              <textarea value={commandDraft} onChange={(event) => setCommandDraft(event.target.value)} spellCheck="false" />
+            </div>
+          )}
+          <div className="package-install-footer">
+            <label className="package-confirm" title={t('deployer.confirmTitle', 'Confirm before install or uninstall')}>
+              <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
+            </label>
+            <div className="package-actions">
+              <button onClick={() => runAction('download')} disabled={!serverConnected || busyAction || form.source !== 'github'}><Download size={14} />{busyAction === 'download' ? t('deployer.downloading', 'Downloading') : t('deployer.download', 'Download')}</button>
+              <button onClick={() => runAction('test')} disabled={!serverConnected || busyAction}><CheckCircle2 size={14} />{busyAction === 'test' ? t('deployer.testing', 'Testing') : t('deployer.test', 'Test')}</button>
+              <button className="solid-button" onClick={() => runAction(primaryInstallAction)} disabled={!serverConnected || busyAction || !confirmed}><CirclePlay size={14} />{busyAction === primaryInstallAction ? (mysqlNeedsConfiguration ? t('deployer.configuring', 'Configuring') : t('deployer.installing', 'Installing')) : (mysqlNeedsConfiguration ? (selectedVerification === 'failed' ? t('deployer.repairAuthentication', 'Repair authentication') : t('deployer.continueConfiguration', 'Continue configuration')) : t('deployer.install', 'Install'))}</button>
+              <button className="danger-button" onClick={() => runAction('uninstall')} disabled={!serverConnected || busyAction || !confirmed || !selectedStatus?.installed}><Trash2 size={14} />{t('deployer.uninstall', 'Uninstall')}</button>
+            </div>
+          </div>
+        </section>
+        <section className="package-log-panel">
+          <div className="package-section-title">
+            <strong>{t('deployer.progress', 'Progress')}</strong>
+            <span>{t('deployer.remoteOutput', 'Command output from the remote server.')}</span>
+          </div>
+          <pre ref={deployLogRef}>{logs.join('\n\n')}</pre>
+        </section>
+      </div>
+    </div>
+  )
+}
+
+function supportsCustomInstanceService(item) {
+  return ['redis', 'mysql', 'nginx', 'minio', 'tomcat'].includes(item?.id)
+}
+
+function deriveInstanceServiceName(item, installDir, port = '') {
+  const leaf = String(installDir || '').replace(/\/+$/, '').split('/').filter(Boolean).pop() || ''
+  const safeLeaf = leaf.toLowerCase().replace(/[^a-z0-9_.@-]+/g, '-').replace(/^-+|-+$/g, '')
+  const defaultService = String(item?.serviceName || `${item?.id || 'service'}.service`)
+  const serviceBase = defaultService.replace(/[.]service$/i, '')
+  const defaultPort = String(item?.defaultPort || '')
+  if (!safeLeaf || safeLeaf === item?.id || safeLeaf === serviceBase) {
+    const safePort = String(port || defaultPort).replace(/\D+/g, '')
+    return safePort && defaultPort && safePort !== defaultPort ? `${serviceBase}-${safePort}.service` : defaultService
+  }
+  return `${safeLeaf.startsWith(serviceBase) ? safeLeaf : `${serviceBase}-${safeLeaf}`}.service`
+}
+
+function buildDeployForm(item) {
+  return {
+    source: item.id === 'minio' ? 'github' : 'online',
+    version: item.versions[0] || 'latest',
+    installDir: item.defaultDir || '/opt/ops-packages',
+    serviceName: item.serviceName || '',
+    port: item.defaultPort || '',
+    consolePort: item.defaultConsolePort || '',
+    runUser: '',
+    adminUser: item.id === 'mysql' ? 'root' : (item.id === 'minio' ? 'minioadmin' : ''),
+    password: '',
+    passwordConfirm: '',
+    packageUrl: item.githubUrl || '',
+    offlinePath: item.packageHint || '',
+    checksum: '',
+    installMode: '',
+    detectedInstallDir: '',
+    detectedExecutable: '',
+    detectedService: '',
+    detectedConfigPath: '',
+    detectedSocket: '',
+    detectedDataDir: '',
+    detectedServerUuid: '',
+    mysqlInstances: {}
+  }
+}
+
+function normalizePackageArchitecture(value) {
+  const raw = String(value || '').trim().toLowerCase()
+  if (['x86_64', 'amd64', 'x64'].includes(raw)) return 'x64'
+  if (['aarch64', 'arm64'].includes(raw)) return 'arm64'
+  if (['armv7l', 'armv7', 'armhf'].includes(raw)) return 'armv7'
+  if (['armv6l', 'armv6'].includes(raw)) return 'armv6'
+  if (['i386', 'i486', 'i586', 'i686', 'x86'].includes(raw)) return 'x86'
+  if (['ppc64le', 's390x', 'riscv64'].includes(raw)) return raw
+  return raw || 'unknown'
+}
+
+function getVendorArchitecture(itemId, canonicalArch) {
+  const maps = {
+    dotnet: { x64: 'x64', arm64: 'arm64', armv7: 'arm' },
+    java: { x64: 'x64', arm64: 'aarch64' },
+    node: { x64: 'x64', arm64: 'arm64', armv7: 'armv7l', ppc64le: 'ppc64le', s390x: 's390x' },
+    go: { x64: 'amd64', arm64: 'arm64', armv7: 'armv6l', armv6: 'armv6l', x86: '386', ppc64le: 'ppc64le', s390x: 's390x', riscv64: 'riscv64' },
+    minio: { x64: 'amd64', arm64: 'arm64', ppc64le: 'ppc64le', s390x: 's390x' },
+    mysql: { x64: 'x86_64', arm64: 'aarch64' }
+  }
+  return maps[itemId]?.[canonicalArch] || ''
+}
+
+function getPackageHintForTarget(item, target) {
+  const original = item.packageHint || ''
+  if (!target) return original
+  const vendorArch = getVendorArchitecture(item.id, target.canonicalArch)
+  if (!vendorArch) return original
+  let hint = original.replace(/\{arch\}/g, vendorArch)
+  if (item.id === 'dotnet') hint = hint.replace(/linux-(?:x64|arm64|arm)(?=\.tar)/i, `linux-${vendorArch}`)
+  if (item.id === 'java') hint = hint.replace(/linux-(?:x64|aarch64)(?=_bin)/i, `linux-${vendorArch}`)
+  if (item.id === 'node') hint = hint.replace(/linux-(?:x64|arm64|armv7l|ppc64le|s390x)(?=\.tar)/i, `linux-${vendorArch}`)
+  if (item.id === 'go') hint = hint.replace(/\.linux-(?:amd64|arm64|armv6l|386|ppc64le|s390x|riscv64)(?=\.tar)/i, `.linux-${vendorArch}`)
+  if (item.id === 'mysql') {
+    hint = hint.replace(/(?:x86_64|aarch64)(?=\.rpm|\.tar)/i, vendorArch)
+    const major = String(target.osVersion || '').match(/^([789])(?:\.|$)/)?.[1]
+    if (major && /^(rhel|rocky|almalinux|centos|ol)$/i.test(target.osId || '')) {
+      hint = hint.replace(/-el[789]-/i, `-el${major}-`)
+    }
+  }
+  return hint
+}
+
+function isManagedPackageUrl(itemId, value) {
+  const url = String(value || '').trim()
+  if (!url) return true
+  if (itemId === 'dotnet') return /(?:builds\.dotnet\.microsoft\.com|dotnetcli\.azureedge\.net)\/dotnet\/Sdk\//i.test(url)
+  if (itemId === 'node') return /nodejs\.org\/dist\//i.test(url)
+  if (itemId === 'minio') return /dl\.min\.io\/server\/minio\/release\/linux-/i.test(url)
+  return false
+}
+
+function resolvePackageFormForTarget(item, form, target) {
+  if (!target) return form
+  const next = {
+    ...form,
+    targetArch: target.rawArch,
+    targetCanonicalArch: target.canonicalArch,
+    targetOsId: target.osId,
+    targetOsVersion: target.osVersion,
+    targetSignature: target.signature
+  }
+  const hint = getPackageHintForTarget(item, target)
+  if (next.offlinePath && !String(next.offlinePath).startsWith('/')) next.offlinePath = hint
+  if (isManagedPackageUrl(item.id, next.packageUrl)) {
+    const vendorArch = getVendorArchitecture(item.id, target.canonicalArch)
+    if (['dotnet', 'node', 'minio'].includes(item.id) && !vendorArch) next.packageUrl = ''
+    if (item.id === 'dotnet' && vendorArch && /^\d+\.\d+\.\d+$/.test(String(next.version || ''))) {
+      next.packageUrl = `https://builds.dotnet.microsoft.com/dotnet/Sdk/${next.version}/dotnet-sdk-${next.version}-linux-${vendorArch}.tar.gz`
+    }
+    if (item.id === 'node' && vendorArch) {
+      const version = /^\d+\.\d+\.\d+$/.test(String(next.version || '')) ? next.version : '20.15.1'
+      next.packageUrl = `https://nodejs.org/dist/v${version}/node-v${version}-linux-${vendorArch}.tar.xz`
+    }
+    if (item.id === 'minio') {
+      next.packageUrl = vendorArch ? `https://dl.min.io/server/minio/release/linux-${vendorArch}/minio` : ''
+    }
+  }
+  return next
+}
+
+async function detectRemotePackageTarget(server) {
+  const command = [
+    'ops_arch=$(uname -m 2>/dev/null || true)',
+    'ops_id=unknown; ops_version=unknown; ops_pretty=Linux',
+    'if [ -r /etc/os-release ]; then . /etc/os-release; ops_id=${ID:-unknown}; ops_version=${VERSION_ID:-unknown}; ops_pretty=${PRETTY_NAME:-$ops_id}; fi',
+    'printf "__OPS_ARCH__%s\\n__OPS_OS_ID__%s\\n__OPS_OS_VERSION__%s\\n__OPS_OS_PRETTY__%s\\n" "$ops_arch" "$ops_id" "$ops_version" "$ops_pretty"'
+  ].join('\n')
+  const result = await window.opsFlow.execSsh(server, command)
+  if (!result?.ok) throw new Error(result?.message || result?.stderr || 'Unable to detect target system.')
+  const output = [result.stdout, result.stderr].filter(Boolean).join('\n')
+  const read = (tag) => output.match(new RegExp(`${tag}([^\\r\\n]+)`))?.[1]?.trim() || 'unknown'
+  const rawArch = read('__OPS_ARCH__')
+  const osId = read('__OPS_OS_ID__')
+  const osVersion = read('__OPS_OS_VERSION__')
+  const prettyName = read('__OPS_OS_PRETTY__')
+  const canonicalArch = normalizePackageArchitecture(rawArch)
+  return {
+    rawArch,
+    canonicalArch,
+    osId,
+    osVersion,
+    prettyName,
+    signature: `${rawArch}:${osId}:${osVersion}`
+  }
+}
+
+async function detectRemoteDeployComponentStatuses(server, catalog, savedConfigs = {}) {
+  const command = buildRemoteDeployDetectionCommand(server, catalog, savedConfigs)
+  const result = await window.opsFlow.execSsh(server, command)
+  if (!result?.ok) throw new Error(result?.message || result?.stderr || 'Unable to detect installed components.')
+  return parseRemoteDeployComponentStatuses([result.stdout, result.stderr].filter(Boolean).join('\n'), catalog)
+}
+
+function buildRemoteDeployDetectionCommand(server, catalog, savedConfigs = {}) {
+  const lines = ['export SYSTEMD_PAGER=cat PAGER=cat SYSTEMD_COLORS=0']
+  catalog.forEach((item) => {
+    const saved = savedConfigs[getDeployConfigKey(server, item)] || {}
+    const spec = getDeployDetectionSpec(item, saved)
+    lines.push(
+      `printf "__OPS_DEPLOY_COMPONENT__${item.id}\\n"`,
+      `detected_path=""; detected_service=""; detected_process=""; detected_pid=""; observed_process_path=""; detected_version=""; service_active=no; process_confirms_install=${spec.processConfirmsInstall ? 'yes' : 'no'}`,
+      `for command_name in ${spec.commands.map(shellQuote).join(' ') || "''"}; do`,
+      '  [ -n "$command_name" ] || continue',
+      '  command_path=$(command -v "$command_name" 2>/dev/null || true)',
+      '  if [ -n "$command_path" ]; then detected_path=$(readlink -f "$command_path" 2>/dev/null || printf "%s" "$command_path"); break; fi',
+      'done',
+      `for candidate in ${spec.candidates.map(shellQuote).join(' ') || "''"}; do`,
+      '  [ -n "$candidate" ] || continue',
+      '  if [ -x "$candidate" ]; then detected_path=$(readlink -f "$candidate" 2>/dev/null || printf "%s" "$candidate"); break; fi',
+      'done',
+      `for process_name in ${spec.processes.map(shellQuote).join(' ') || "''"}; do`,
+      '  [ -n "$process_name" ] || continue',
+      '  process_pid=$(pgrep -x "$process_name" 2>/dev/null | head -1)',
+      '  if [ -n "$process_pid" ]; then detected_process="$process_name"; detected_pid="$process_pid"; observed_process_path=$(readlink -f "/proc/$process_pid/exe" 2>/dev/null || true); if [ "$process_confirms_install" = yes ] && [ -n "$observed_process_path" ]; then detected_path="$observed_process_path"; fi; break; fi',
+      'done'
+    )
+    if (item.id === 'dotnet') {
+      lines.push(
+        'if [ "$detected_process" = dotnet ] && [ -x "$observed_process_path" ]; then runtime_line=$("$observed_process_path" --list-runtimes 2>/dev/null | head -1 || true); if [ -n "$runtime_line" ]; then detected_path="$observed_process_path"; detected_version="$runtime_line"; process_confirms_install=yes; fi; fi',
+        'if [ -z "$detected_process" ]; then',
+        '  for maps in /proc/[0-9]*/maps; do',
+        '    if grep -qm1 "/libcoreclr[.]so" "$maps" 2>/dev/null; then detected_pid=${maps#/proc/}; detected_pid=${detected_pid%/maps}; detected_process="dotnet-self-contained"; observed_process_path=$(readlink -f "/proc/$detected_pid/exe" 2>/dev/null || true); break; fi',
+        '  done',
+        'fi'
+      )
+    }
+    if (item.id === 'tomcat') {
+      lines.push(
+        'if [ -z "$detected_process" ]; then detected_pid=$(pgrep -f "org[.]apache[.]catalina[.]startup[.]Bootstrap" 2>/dev/null | head -1); [ -n "$detected_pid" ] && detected_process="tomcat"; fi'
+      )
+    }
+    lines.push(
+      `for svc in ${spec.services.map(shellQuote).join(' ') || "''"}; do`,
+      '  [ -n "$svc" ] || continue',
+      '  if systemctl cat "$svc" >/dev/null 2>&1; then detected_service="$svc"; active_state=$(systemctl is-active "$svc" 2>/dev/null || true); if [ "$active_state" = active ] || [ "$active_state" = activating ]; then service_active=yes; fi; break; fi',
+      'done',
+      ...getDeployVersionProbeLines(item.id),
+      'if { [ "$process_confirms_install" = yes ] && [ -n "$detected_process" ]; } || [ "$service_active" = yes ]; then detected_state=running; elif [ -n "$detected_path" ] || [ -n "$detected_service" ]; then detected_state=installed; else detected_state=not-installed; fi',
+      'if [ -z "$detected_version" ]; then',
+      '  if [ "$detected_state" = running ] && [ -n "$detected_process" ]; then detected_version="running process: $detected_process"; [ -n "$detected_path" ] && detected_version="$detected_version ($detected_path)";',
+      '  elif [ -n "$detected_service" ]; then detected_version="service: $detected_service";',
+      '  elif [ -n "$detected_path" ]; then detected_version="executable: $detected_path";',
+      '  else detected_version="not installed"; fi',
+      'fi',
+      'printf "__OPS_DEPLOY_STATE__%s\\n__OPS_DEPLOY_PATH__%s\\n__OPS_DEPLOY_SERVICE__%s\\n__OPS_DEPLOY_SERVICE_ACTIVE__%s\\n__OPS_DEPLOY_PROCESS__%s\\n__OPS_DEPLOY_PROCESS_PATH__%s\\n__OPS_DEPLOY_PID__%s\\n__OPS_DEPLOY_VERSION__%s\\n" "$detected_state" "$detected_path" "$detected_service" "$service_active" "$detected_process" "$observed_process_path" "$detected_pid" "$detected_version"'
+    )
+  })
+  return lines.join('\n')
+}
+
+function getDeployDetectionSpec(item, saved = {}) {
+  const definitions = {
+    dotnet: { commands: ['dotnet'], relatives: ['dotnet'], processes: ['dotnet'], fixed: ['/usr/share/dotnet/dotnet', '/usr/lib64/dotnet/dotnet', '/usr/lib/dotnet/dotnet', '/usr/local/share/dotnet/dotnet'] },
+    java: { commands: ['java'], relatives: ['bin/java'], processes: ['java'], fixed: ['/usr/bin/java', '/usr/local/java/bin/java'] },
+    node: { commands: ['node', 'nodejs'], relatives: ['bin/node'], processes: ['node', 'nodejs'], fixed: ['/usr/bin/node', '/usr/local/bin/node', '/usr/local/node/bin/node', '/opt/node/bin/node'] },
+    python: { commands: ['python3', 'python'], relatives: [], processes: ['python3', 'python'], fixed: ['/usr/bin/python3', '/usr/local/bin/python3'] },
+    go: { commands: ['go'], relatives: ['bin/go'], processes: [], fixed: ['/usr/local/go/bin/go'] },
+    maven: { commands: ['mvn'], relatives: ['bin/mvn'], processes: [], fixed: ['/usr/local/maven/bin/mvn', '/opt/maven/bin/mvn'] },
+    git: { commands: ['git'], relatives: [], processes: [], fixed: ['/usr/bin/git', '/usr/local/bin/git'] },
+    redis: { commands: ['redis-server'], relatives: ['bin/redis-server'], processes: ['redis-server'], fixed: ['/usr/bin/redis-server', '/usr/local/bin/redis-server'] },
+    mysql: { commands: ['mysqld', 'mariadbd'], relatives: ['bin/mysqld', 'sbin/mysqld'], processes: ['mysqld', 'mariadbd'], fixed: ['/usr/sbin/mysqld', '/usr/libexec/mysqld'] },
+    nginx: { commands: ['nginx'], relatives: ['sbin/nginx'], processes: ['nginx'], fixed: ['/usr/sbin/nginx', '/usr/local/nginx/sbin/nginx'] },
+    minio: { commands: ['minio'], relatives: ['minio', 'bin/minio'], processes: ['minio'], fixed: ['/usr/local/bin/minio', '/opt/minio/minio'] },
+    tomcat: { commands: ['catalina.sh'], relatives: ['bin/catalina.sh'], processes: [], fixed: ['/usr/share/tomcat/bin/catalina.sh', '/opt/tomcat/bin/catalina.sh'] },
+    lynis: { commands: ['lynis'], relatives: ['lynis'], processes: [], fixed: ['/usr/bin/lynis', '/usr/local/bin/lynis'] }
+  }
+  const definition = definitions[item.id] || { commands: [item.packageName].filter(Boolean), relatives: [], processes: [], fixed: [] }
+  const roots = [saved.detectedInstallDir, saved.installDir, item.defaultDir]
+    .map((value) => String(value || '').trim().replace(/\/+$/, ''))
+    .filter((value) => value.startsWith('/'))
+  const candidates = [...definition.fixed]
+  roots.forEach((root) => definition.relatives.forEach((relative) => candidates.push(`${root}/${relative}`)))
+  return {
+    commands: [...new Set(definition.commands)],
+    candidates: [...new Set(candidates)],
+    processes: [...new Set(definition.processes)],
+    services: [...new Set(getComponentServiceNames(item, saved))],
+    processConfirmsInstall: ['redis', 'mysql', 'nginx', 'minio', 'tomcat'].includes(item.id)
+  }
+}
+
+function getDeployVersionProbeLines(itemId) {
+  const probes = {
+    dotnet: '[ "$(basename "$detected_path" 2>/dev/null)" = dotnet ] && detected_version=$("$detected_path" --list-runtimes 2>&1 | head -1 || true)',
+    java: 'detected_version=$("$detected_path" -version 2>&1 | head -1 || true)',
+    node: 'detected_version=$("$detected_path" -v 2>&1 | head -1 || true)',
+    python: 'detected_version=$("$detected_path" --version 2>&1 | head -1 || true)',
+    go: 'detected_version=$("$detected_path" version 2>&1 | head -1 || true)',
+    maven: 'detected_version=$("$detected_path" -v 2>&1 | head -1 || true)',
+    git: 'detected_version=$("$detected_path" --version 2>&1 | head -1 || true)',
+    redis: 'detected_version=$("$detected_path" --version 2>&1 | head -1 || true)',
+    mysql: 'detected_version=$("$detected_path" --version 2>&1 | head -1 || true)',
+    nginx: 'detected_version=$("$detected_path" -v 2>&1 | head -1 || true)',
+    minio: 'detected_version=$("$detected_path" --version 2>&1 | head -1 || true)',
+    tomcat: 'detected_version=$("$detected_path" version 2>&1 | grep -i "Server version" | head -1 || true)',
+    lynis: 'detected_version=$("$detected_path" show version 2>&1 | head -1 || true)'
+  }
+  const probe = probes[itemId]
+  return probe ? ['if [ -n "$detected_path" ] && [ -x "$detected_path" ]; then', `  ${probe}`, 'fi'] : []
+}
+
+function parseRemoteDeployComponentStatuses(output, catalog) {
+  const blocks = new Map()
+  String(output || '').split('__OPS_DEPLOY_COMPONENT__').slice(1).forEach((block) => {
+    const [idLine, ...rest] = block.split(/\r?\n/)
+    blocks.set(idLine.trim(), rest.join('\n'))
+  })
+  const read = (block, tag) => block.match(new RegExp(`${tag}([^\\r\\n]*)`))?.[1]?.trim() || ''
+  return Object.fromEntries(catalog.map((item) => {
+    const block = blocks.get(item.id)
+    if (!block) return [item.id, { checked: false, installed: false, running: false, serviceActive: false, detectedBy: '', version: 'Not checked' }]
+    const state = read(block, '__OPS_DEPLOY_STATE__')
+    const path = read(block, '__OPS_DEPLOY_PATH__')
+    const service = read(block, '__OPS_DEPLOY_SERVICE__')
+    const serviceActive = read(block, '__OPS_DEPLOY_SERVICE_ACTIVE__') === 'yes'
+    const process = read(block, '__OPS_DEPLOY_PROCESS__')
+    const observedProcessPath = read(block, '__OPS_DEPLOY_PROCESS_PATH__')
+    const version = read(block, '__OPS_DEPLOY_VERSION__')
+    return [item.id, {
+      checked: true,
+      installed: ['installed', 'running'].includes(state),
+      running: state === 'running',
+      serviceActive,
+      detectedBy: state === 'running' && process ? 'process' : service ? 'service' : path ? 'executable' : '',
+      version: version || (state === 'not-installed' ? 'Not installed' : path || service || process),
+      path,
+      service,
+      process,
+      observedProcessPath
+    }]
+  }))
+}
+
+async function detectRemoteComponentInstallation(server, item, saved = {}) {
+  if (item.id === 'mysql') {
+    const instances = await detectRemoteMySqlInstances(server)
+    if (instances.length) {
+      const single = instances.length === 1 ? instances[0] : null
+      return {
+        ok: true,
+        found: Boolean(single),
+        instances,
+        ...(single || { serviceName: '', executable: '', execStart: '', installDir: '', installMode: '', configPath: '', socketPath: '', dataDir: '', port: '' })
+      }
+    }
+  }
+  const runtimeCommands = {
+    dotnet: 'dotnet',
+    java: 'java',
+    node: 'node',
+    go: 'go',
+    maven: 'mvn',
+    redis: 'redis-server',
+    mysql: 'mysqld',
+    nginx: 'nginx',
+    minio: 'minio',
+    lynis: 'lynis'
+  }
+  const profileSpecs = {
+    dotnet: ['/etc/profile.d/ops-flow-dotnet.sh', 'DOTNET_ROOT'],
+    java: ['/etc/profile.d/ops-flow-java.sh', 'JAVA_HOME'],
+    go: ['/etc/profile.d/ops-flow-go.sh', 'GOROOT'],
+    maven: ['/etc/profile.d/ops-flow-maven.sh', 'MAVEN_HOME']
+  }
+  const services = getComponentServiceNames(item, saved)
+  const runtimeCommand = runtimeCommands[item.id] || ''
+  const profileSpec = profileSpecs[item.id]
+  const detectionSpec = getDeployDetectionSpec(item, saved)
+  const command = [
+    `service_names=${shellQuote(services.join(' '))}`,
+    'detected_service=""; detected_exec=""',
+    'for svc in $service_names; do',
+    '  if systemctl cat "$svc" >/dev/null 2>&1; then detected_service="$svc"; detected_exec=$(systemctl show "$svc" -p ExecStart --value 2>/dev/null || true); break; fi',
+    'done',
+    `runtime_command=${shellQuote(runtimeCommand)}`,
+    'runtime_path=""',
+    'if [ -n "$runtime_command" ]; then command_path=$(command -v "$runtime_command" 2>/dev/null || true); [ -n "$command_path" ] && runtime_path=$(readlink -f "$command_path" 2>/dev/null || printf "%s" "$command_path"); fi',
+    `for candidate in ${detectionSpec.candidates.map(shellQuote).join(' ') || "''"}; do [ -n "$candidate" ] || continue; if [ -x "$candidate" ]; then runtime_path=$(readlink -f "$candidate" 2>/dev/null || printf "%s" "$candidate"); break; fi; done`,
+    detectionSpec.processConfirmsInstall
+      ? `for process_name in ${detectionSpec.processes.map(shellQuote).join(' ') || "''"}; do [ -n "$process_name" ] || continue; process_pid=$(pgrep -x "$process_name" 2>/dev/null | head -1); if [ -n "$process_pid" ]; then process_path=$(readlink -f "/proc/$process_pid/exe" 2>/dev/null || true); [ -n "$process_path" ] && runtime_path="$process_path"; break; fi; done`
+      : 'true',
+    item.id === 'dotnet'
+      ? 'if [ -z "$runtime_path" ]; then process_pid=$(pgrep -x dotnet 2>/dev/null | head -1); process_path=$(readlink -f "/proc/$process_pid/exe" 2>/dev/null || true); if [ -x "$process_path" ] && "$process_path" --list-runtimes 2>/dev/null | grep -q .; then runtime_path="$process_path"; fi; fi'
+      : 'true',
+    `profile_file=${shellQuote(profileSpec?.[0] || '')}`,
+    `profile_variable=${shellQuote(profileSpec?.[1] || '')}`,
+    'profile_root=""',
+    'if [ -n "$profile_file" ] && [ -r "$profile_file" ]; then profile_root=$(sed -n "s/^export[[:space:]]*$profile_variable=//p" "$profile_file" | tail -1 | sed "s/[[:space:]]*$//" | sed "s/^\"//;s/\"$//;s/^\x27//;s/\x27$//"); fi',
+    'printf "__OPS_INSTALL_SERVICE__%s\n__OPS_INSTALL_EXEC__%s\n__OPS_INSTALL_RUNTIME__%s\n__OPS_INSTALL_PROFILE__%s\n" "$detected_service" "$detected_exec" "$runtime_path" "$profile_root"'
+  ].join('\n')
+  const result = await window.opsFlow.execSsh(server, command)
+  if (!result?.ok) throw new Error(result?.message || result?.stderr || 'Unable to inspect the remote installation path.')
+  const output = [result.stdout, result.stderr].filter(Boolean).join('\n')
+  const read = (tag) => output.match(new RegExp(`${tag}([^\\r\\n]*)`))?.[1]?.trim() || ''
+  const serviceName = read('__OPS_INSTALL_SERVICE__')
+  const execStart = read('__OPS_INSTALL_EXEC__')
+  const executable = read('__OPS_INSTALL_RUNTIME__')
+  const profileRoot = read('__OPS_INSTALL_PROFILE__')
+  const installDir = inferComponentInstallDir(item.id, { execStart, executable, profileRoot })
+  if (!installDir) {
+    return { ok: true, found: false, serviceName, executable, execStart, installDir: '', installMode: '' }
+  }
+  return {
+    ok: true,
+    found: true,
+    serviceName,
+    executable,
+    execStart,
+    installDir,
+    installMode: isSystemManagedInstallRoot(installDir) ? 'managed' : 'custom'
+  }
+}
+
+async function detectRemoteMySqlInstances(server) {
+  const command = [
+    'mysql_services=$(systemctl list-units --all --type=service --no-legend --no-pager 2>/dev/null | awk \'{print $1}\' | grep -E \'^(mysqld|mysql|mariadb)([-@][A-Za-z0-9_.@-]+)?\\.service$\' | sort -u || true)',
+    'mysql_service_count=$(printf "%s\\n" "$mysql_services" | sed \'/^$/d\' | wc -l | awk \'{print $1}\')',
+    'read_mysql_config_value() { sed -n -E "s/^[[:space:]]*$2[[:space:]]*=[[:space:]]*([^#;[:space:]]+).*/\\1/p" "$1" 2>/dev/null | head -1; }',
+    'for svc in $mysql_services; do',
+    '  exec_start=$(systemctl show "$svc" -p ExecStart --value 2>/dev/null || true)',
+    '  main_pid=$(systemctl show "$svc" -p MainPID --value 2>/dev/null || true)',
+    '  active=$(systemctl is-active "$svc" 2>/dev/null || true)',
+    '  executable=$(printf "%s\\n" "$exec_start" | grep -oE \'/[A-Za-z0-9._+@%:,=~/-]+/(s?bin)/mysqld\' | head -1)',
+    '  config_path=$(printf "%s\\n" "$exec_start" | sed -n -E \'s/.*--defaults-(extra-)?file[=[:space:]]+([^ ;}]+).*/\\2/p\' | head -1)',
+    '  socket_path=$(printf "%s\\n" "$exec_start" | sed -n -E \'s/.*--socket[=[:space:]]+([^ ;}]+).*/\\1/p\' | head -1)',
+    '  data_dir=$(printf "%s\\n" "$exec_start" | sed -n -E \'s/.*--datadir[=[:space:]]+([^ ;}]+).*/\\1/p\' | head -1)',
+    '  port=$(printf "%s\\n" "$exec_start" | sed -n -E \'s/.*--port[=[:space:]]+([0-9]+).*/\\1/p\' | head -1)',
+    '  install_root=""',
+    '  if [ -n "$executable" ]; then install_root=$(dirname "$(dirname "$executable")"); fi',
+    '  if [ -z "$config_path" ] && [ -n "$install_root" ] && [ -r "$install_root/my.cnf" ]; then config_path="$install_root/my.cnf"; fi',
+    '  if [ -z "$config_path" ] && [ "$mysql_service_count" -eq 1 ]; then for candidate in /etc/my.cnf /etc/mysql/my.cnf /etc/mysql/mysql.conf.d/mysqld.cnf; do if [ -r "$candidate" ]; then config_path="$candidate"; break; fi; done; fi',
+    '  if [ -n "$config_path" ] && [ -r "$config_path" ]; then',
+    '    [ -n "$socket_path" ] || socket_path=$(read_mysql_config_value "$config_path" socket)',
+    '    [ -n "$data_dir" ] || data_dir=$(read_mysql_config_value "$config_path" datadir)',
+    '    [ -n "$port" ] || port=$(read_mysql_config_value "$config_path" port)',
+    '  fi',
+    '  if [ -z "$socket_path" ] && [ "$mysql_service_count" -eq 1 ]; then',
+    '    socket_candidates=""; for candidate in /var/lib/mysql/mysql.sock /var/run/mysqld/mysqld.sock /run/mysqld/mysqld.sock /tmp/mysql.sock; do [ -S "$candidate" ] && socket_candidates="$socket_candidates $candidate"; done',
+    '    socket_count=$(printf "%s\\n" "$socket_candidates" | xargs -n1 2>/dev/null | sed \'/^$/d\' | wc -l | awk \'{print $1}\')',
+    '    [ "$socket_count" -eq 1 ] && socket_path=$(printf "%s\\n" "$socket_candidates" | xargs)',
+    '  fi',
+    '  printf "__OPS_MYSQL_INSTANCE_BEGIN__\\n__OPS_MYSQL_SERVICE__%s\\n__OPS_MYSQL_ACTIVE__%s\\n__OPS_MYSQL_PID__%s\\n__OPS_MYSQL_EXEC__%s\\n__OPS_MYSQL_EXECUTABLE__%s\\n__OPS_MYSQL_CONFIG__%s\\n__OPS_MYSQL_SOCKET__%s\\n__OPS_MYSQL_DATADIR__%s\\n__OPS_MYSQL_PORT__%s\\n" "$svc" "$active" "$main_pid" "$exec_start" "$executable" "$config_path" "$socket_path" "$data_dir" "$port"',
+    'done'
+  ].join('\n')
+  const result = await window.opsFlow.execSsh(server, command)
+  if (!result?.ok) throw new Error(result?.message || result?.stderr || 'Unable to inspect MySQL instances.')
+  const output = [result.stdout, result.stderr].filter(Boolean).join('\n')
+  return output.split('__OPS_MYSQL_INSTANCE_BEGIN__').slice(1).map((block) => {
+    const read = (tag) => block.match(new RegExp(`${tag}([^\\r\\n]*)`))?.[1]?.trim() || ''
+    const serviceName = read('__OPS_MYSQL_SERVICE__')
+    const execStart = read('__OPS_MYSQL_EXEC__')
+    const executable = read('__OPS_MYSQL_EXECUTABLE__')
+    const installDir = inferComponentInstallDir('mysql', { execStart, executable })
+    return {
+      ok: true,
+      found: true,
+      serviceName,
+      active: read('__OPS_MYSQL_ACTIVE__') === 'active',
+      mainPid: read('__OPS_MYSQL_PID__'),
+      execStart,
+      executable,
+      installDir,
+      installMode: isSystemManagedInstallRoot(installDir) ? 'managed' : 'custom',
+      configPath: read('__OPS_MYSQL_CONFIG__'),
+      socketPath: read('__OPS_MYSQL_SOCKET__'),
+      dataDir: read('__OPS_MYSQL_DATADIR__'),
+      port: read('__OPS_MYSQL_PORT__')
+    }
+  }).filter((instance) => instance.serviceName)
+}
+
+function resolveDetectedInstallation(detected, form = {}) {
+  const instances = Array.isArray(detected?.instances) ? detected.instances : []
+  if (!instances.length) return detected?.found ? detected : null
+  const exactService = instances.find((instance) => instance.serviceName === form.detectedService)
+  if (exactService) return exactService
+  const exactSocket = instances.find((instance) => instance.socketPath && instance.socketPath === form.detectedSocket)
+  if (exactSocket) return exactSocket
+  return instances.length === 1 ? instances[0] : null
+}
+
+function mergeDetectedInstallation(form, detected) {
+  if (!detected) {
+    return {
+      ...form,
+      detectedInstallDir: '',
+      detectedExecutable: '',
+      detectedService: '',
+      detectedConfigPath: '',
+      detectedSocket: '',
+      detectedDataDir: '',
+      detectedServerUuid: ''
+    }
+  }
+  const sameInstance = form.detectedService === detected.serviceName && form.detectedSocket === detected.socketPath
+  return {
+    ...form,
+    installDir: detected.installDir || form.installDir,
+    serviceName: detected.serviceName || form.serviceName || '',
+    port: detected.port || form.port,
+    installMode: detected.installMode || form.installMode,
+    detectedInstallDir: detected.installDir || '',
+    detectedExecutable: detected.executable || '',
+    detectedService: detected.serviceName || '',
+    detectedConfigPath: detected.configPath || '',
+    detectedSocket: detected.socketPath || '',
+    detectedDataDir: detected.dataDir || '',
+    detectedServerUuid: sameInstance ? (form.detectedServerUuid || '') : ''
+  }
+}
+
+function inferComponentInstallDir(itemId, evidence = {}) {
+  if (evidence.profileRoot?.startsWith('/')) return normalizeRemoteInstallDir(evidence.profileRoot)
+  const suffixes = {
+    dotnet: ['/dotnet'],
+    java: ['/bin/java'],
+    node: ['/bin/node'],
+    go: ['/bin/go'],
+    maven: ['/bin/mvn'],
+    redis: ['/bin/redis-server'],
+    mysql: ['/bin/mysqld', '/sbin/mysqld'],
+    nginx: ['/sbin/nginx'],
+    minio: ['/minio'],
+    tomcat: ['/bin/catalina.sh'],
+    lynis: ['/lynis']
+  }[itemId] || []
+  const text = [evidence.execStart, evidence.executable].filter(Boolean).join(' ')
+  const paths = text.match(/\/[A-Za-z0-9._+@%:,=~-]+(?:\/[A-Za-z0-9._+@%:,=~-]+)*/g) || []
+  for (const suffix of suffixes) {
+    const match = paths.find((candidate) => candidate.endsWith(suffix))
+    if (match) return normalizeRemoteInstallDir(match.slice(0, -suffix.length) || '/')
+  }
+  if (evidence.execStart && paths.some((candidate) => /^\/(?:usr\/)?(?:bin|sbin)\//.test(candidate) || /^\/usr\/(?:lib|lib64|share)\//.test(candidate))) {
+    return '/usr'
+  }
+  return ''
+}
+
+function normalizeRemoteInstallDir(value = '') {
+  const normalized = String(value || '').trim().replace(/\/{2,}/g, '/').replace(/\/+$/g, '')
+  return normalized || '/'
+}
+
+function isSystemManagedInstallRoot(value = '') {
+  const normalized = normalizeRemoteInstallDir(value)
+  return new Set(['/', '/bin', '/sbin', '/usr', '/usr/bin', '/usr/sbin', '/usr/local', '/usr/local/bin', '/usr/local/sbin', '/lib', '/lib64']).has(normalized) || /^\/usr\/(?:lib|lib64|share)(?:\/|$)/.test(normalized)
+}
+
+function isProtectedInstallRoot(value = '') {
+  return new Set(['/', '/bin', '/sbin', '/usr', '/usr/local', '/opt', '/home', '/var', '/etc', '/lib', '/lib64', '/mnt']).has(normalizeRemoteInstallDir(value))
+}
+
+function resolveOfflinePackageUploadTarget(value) {
+  const raw = String(value || '').trim()
+  const fallback = '/opt/ops-flow/packages'
+  const input = raw || fallback
+  if (!input.startsWith('/') || input.includes('\\')) {
+    return { ok: false, message: 'Enter an absolute Linux remote path starting with /' }
+  }
+  const hadTrailingSlash = /\/$/.test(input)
+  const normalized = input.replace(/\/{2,}/g, '/').replace(/\/+$/g, '') || '/'
+  const packageExtension = /\.(?:tar\.(?:gz|xz|bz2|zst)|tgz|txz|tbz2|zip|7z|gz|xz|bz2|zst|rpm|deb|apk|jar|war|pkg|bin|run)$/i
+  const targetIsFile = !hadTrailingSlash && packageExtension.test(normalized)
+  return { ok: true, path: normalized, targetIsFile }
+}
+
+function getDeployConfigKey(server, item) {
+  return `${server?.id || server?.host || 'unknown'}:${item.id}`
+}
+
+function getDeployVerificationKey(server, item, form = {}) {
+  const base = getDeployConfigKey(server, item)
+  if (item?.id !== 'mysql') return base
+  const expectedCustomSocket = form.installDir && form.source !== 'online' ? `${normalizeRemoteInstallDir(form.installDir)}/run/mysql.sock` : ''
+  return `${base}:${form.detectedService || form.detectedSocket || expectedCustomSocket || 'default'}`
+}
+
+const deploySessionSecrets = new Map()
+
+function getDeploySessionSecretKey(server, item, form = {}) {
+  const instance = item?.id === 'mysql' ? (form.detectedService || form.detectedSocket || 'default') : 'default'
+  return [server?.host || server?.id || 'unknown', server?.port || 22, server?.username || '', item?.id || 'unknown', instance].join(':')
+}
+
+function getDeploySessionSecret(server, item, form = {}) {
+  return deploySessionSecrets.get(getDeploySessionSecretKey(server, item, form)) || { password: '', passwordConfirm: '' }
+}
+
+function setDeploySessionSecret(server, item, form) {
+  const key = getDeploySessionSecretKey(server, item, form)
+  const secret = {
+    password: String(form?.password || ''),
+    passwordConfirm: String(form?.passwordConfirm || '')
+  }
+  if (!secret.password && !secret.passwordConfirm) {
+    deploySessionSecrets.delete(key)
+    return
+  }
+  deploySessionSecrets.set(key, secret)
+}
+
+function clearDeploySessionSecret(server, item, form = {}) {
+  deploySessionSecrets.delete(getDeploySessionSecretKey(server, item, form))
+}
+
+function normalizeDeployConfigs(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+}
+
+function mergeDeployForm(item, saved, secret) {
+  const merged = {
+    ...buildDeployForm(item),
+    ...(saved && typeof saved === 'object' ? saved : {}),
+    password: String(secret?.password || ''),
+    passwordConfirm: String(secret?.passwordConfirm || '')
+  }
+  if (supportsCustomInstanceService(item) && merged.source !== 'online' && !saved?.serviceName) {
+    merged.serviceName = deriveInstanceServiceName(item, merged.installDir, merged.port)
+  }
+  return merged
+}
+
+function serializeDeployForm(form) {
+  return {
+    source: form.source,
+    version: form.version,
+    installDir: form.installDir,
+    serviceName: form.serviceName || '',
+    port: form.port,
+    consolePort: form.consolePort,
+    runUser: form.runUser,
+    adminUser: form.adminUser,
+    packageUrl: form.packageUrl,
+    offlinePath: form.offlinePath,
+    checksum: form.checksum,
+    installMode: form.installMode || '',
+    detectedInstallDir: form.detectedInstallDir || '',
+    detectedExecutable: form.detectedExecutable || '',
+    detectedService: form.detectedService || '',
+    detectedConfigPath: form.detectedConfigPath || '',
+    detectedSocket: form.detectedSocket || '',
+    detectedDataDir: form.detectedDataDir || '',
+    detectedServerUuid: form.detectedServerUuid || '',
+    mysqlInstances: form.mysqlInstances && typeof form.mysqlInstances === 'object' ? form.mysqlInstances : {},
+    savedAt: new Date().toISOString()
+  }
+}
+
+function buildDeployStatuses(catalog, inspectorResult) {
+  const runtimes = inspectorResult?.runtimes || []
+  const services = inspectorResult?.services || []
+  return Object.fromEntries(catalog.map((item) => {
+    const runtime = runtimes.find((entry) => entry.name === item.runtimeName)
+    const service = findDeployService(item, services)
+    const serviceActive = service?.active === 'active' || service?.sub === 'running'
+    const checked = Boolean(runtime || service)
+    return [
+      item.id,
+      {
+        checked,
+        installed: Boolean(service || runtime?.installed),
+        running: Boolean(serviceActive || (runtime?.installed && /running process/i.test(runtime.version || ''))),
+        serviceActive,
+        detectedBy: service ? 'service' : (runtime?.installed ? 'runtime' : ''),
+        version: !checked
+          ? 'Not checked'
+          : service
+          ? `service: ${service.name} (${serviceActive ? 'active' : service.active || service.sub || 'installed'})`
+          : runtime?.version || 'Not installed'
+      }
+    ]
+  }))
+}
+
+function mergeDeployDetectionStatus(existing, supplemental) {
+  const current = existing || { checked: false, installed: false, running: false, serviceActive: false, detectedBy: '', version: 'Not checked' }
+  if (!supplemental) return current
+  if (current.installed && !supplemental.installed) return { ...current, checked: true }
+  if (!current.installed && supplemental.installed) return supplemental
+  if (!current.installed && !supplemental.installed) {
+    return supplemental.checked ? supplemental : current
+  }
+
+  const supplementalVersion = String(supplemental.version || '')
+  const currentVersion = String(current.version || '')
+  const supplementalIsMoreUseful = supplemental.running
+    || (!/^service:|^executable:|^running process:/i.test(supplementalVersion) && supplementalVersion.length > 0)
+  return {
+    ...current,
+    ...supplemental,
+    checked: true,
+    installed: true,
+    running: Boolean(current.running || current.serviceActive || supplemental.running || supplemental.serviceActive),
+    serviceActive: Boolean(current.serviceActive || supplemental.serviceActive),
+    detectedBy: supplemental.running ? supplemental.detectedBy : (current.detectedBy || supplemental.detectedBy),
+    version: supplementalIsMoreUseful ? supplementalVersion : (currentVersion || supplementalVersion)
+  }
+}
+
+function findDeployService(item, services = []) {
+  if (!item.serviceName) return null
+  if (supportsCustomInstanceService(item)) {
+    const exactNames = new Set(getComponentServiceNames(item))
+    const prefixes = item.id === 'mysql'
+      ? ['mysqld', 'mysql', 'mariadb']
+      : [item.serviceName.replace(/[.]service$/i, '')]
+    const matched = services.find((service) => {
+      const name = String(service.name || '')
+      return exactNames.has(name) || prefixes.some((prefix) => (name.startsWith(`${prefix}-`) || name.startsWith(`${prefix}@`)) && name.endsWith('.service'))
+    })
+    if (matched) return matched
+  }
+  const names = new Set([item.serviceName])
+  if (item.id === 'mysql') {
+    names.add('mysql.service')
+    names.add('mariadb.service')
+  }
+  if (item.id === 'tomcat') {
+    names.add('tomcat10.service')
+    names.add('tomcat9.service')
+    names.add('tomcat8.service')
+  }
+  return services.find((service) => names.has(service.name)) || null
+}
+
+function cleanPackageOutput(output = '') {
+  const lines = String(output || '')
+    .replace(/__OPS_PRIVILEGE_READY_[A-Z0-9_]+__/gi, '')
+    .replace(/\x1b\[[0-9;]*m/g, '')
+    .split(/\r?\n/)
+  const cleaned = []
+  let skippingLoginBlock = false
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd()
+    const compact = line.trim()
+    if (!compact) {
+      if (!skippingLoginBlock) cleaned.push('')
+      continue
+    }
+    if (/^Welcome to\b/i.test(compact) || /^System information as of time:/i.test(compact)) {
+      skippingLoginBlock = true
+      continue
+    }
+    if (skippingLoginBlock) {
+      if (
+        /^(System load|Processes|Memory used|Swap used|Usage On|IP address|Users online):/i.test(compact) ||
+        /^(Last login|Last failed login):/i.test(compact)
+      ) {
+        continue
+      }
+      skippingLoginBlock = false
+    }
+    if (/^Last login:/i.test(compact)) continue
+    if (/^UnionTechOS-Server-.*(ETA|B\/s|\d{2}:\d{2})/i.test(compact)) continue
+    cleaned.push(line)
+  }
+  return cleaned.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+function parsePackageExecutionStage(output = '') {
+  const matches = [...String(output || '').matchAll(/^\s*\[(\d+)\/(\d+)\]\s*(.*)$/gm)]
+  const match = matches.at(-1)
+  if (!match) return null
+  const current = Number(match[1])
+  const total = Number(match[2])
+  if (!Number.isInteger(current) || !Number.isInteger(total) || current < 1 || total < 1 || current > total) return null
+  return {
+    transferred: Math.max(0, current - 1),
+    total,
+    indeterminate: false,
+    message: match[3]?.trim() || `正在执行第 ${current}/${total} 阶段`
+  }
+}
+
+function lastMeaningfulPackageLine(output = '') {
+  const ignored = /^(warning: this system|all activities on this system|unauthorized access|last login:|upgradable packages:|upgrade command line:|activate the web console)/i
+  return String(output || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !ignored.test(line))
+    .at(-1) || ''
+}
+
+function parseMySqlIdentity(output = '') {
+  const value = String(output || '').match(/__OPS_MYSQL_IDENTITY__([^\r\n]+)/)?.[1]?.trim()
+  if (!value) return null
+  const [serverUuid = '', socketPath = '', port = '', dataDir = '', currentUser = ''] = value.split('|')
+  return { serverUuid, socketPath, port, dataDir, currentUser }
+}
+
+function summarizePackageFailure(output = '', source = '') {
+  const text = String(output || '')
+  if (/Failed to download metadata|Cannot download repomd\.xml|All mirrors were tried|Resolving timed out|Curl error \(28\)|Could not resolve host|Temporary failure resolving|Network is unreachable/i.test(text)) {
+    return source === 'online'
+      ? 'Online install failed: the server cannot reach its package repository. Use an offline package, GitHub/internal package URL, or fix the yum/dnf/apt repository network first.'
+      : 'Package download failed: the server cannot reach the configured package URL. Use an uploaded offline package or an internal mirror.'
+  }
+  if (/No package .*available|Unable to locate package|No match for argument|Nothing to do/i.test(text)) {
+    return 'Package install failed: this component is not available from the current package repository. Choose an offline package or configure a matching repository.'
+  }
+  if (/make is required|gcc is required|command not found|exited with 127/i.test(text)) {
+    return 'Package install failed: required build/runtime command is missing. Install make/gcc or use a prebuilt binary package.'
+  }
+  if (/Unsupported Redis package/i.test(text)) {
+    return 'Redis install failed: this package format is not supported. Use the official Redis source tar.gz or a binary package containing bin/redis-server.'
+  }
+  if (/Redis server v=.*Could not connect to Redis|Could not connect to Redis.*Connection refused/is.test(text)) {
+    return 'Redis files were installed, but the Redis service did not answer ping. Check redis.service status, port, password and redis.conf.'
+  }
+  if (/Nginx configure failed|pcre-devel|zlib-devel|openssl-devel/i.test(text)) {
+    return 'Nginx install failed: build dependencies are missing. Install pcre-devel, zlib-devel and openssl-devel, or use a prebuilt package.'
+  }
+  if (/Unsupported MySQL package|No MySQL RPM packages or generic binary files found|RPM based system/i.test(text)) {
+    return 'MySQL install failed: use an RPM bundle/single RPM, or an official generic Linux binary tar containing bin/mysqld.'
+  }
+  if (/Can't connect to local MySQL server through socket|Unable to set the MySQL root password/i.test(text)) {
+    return 'MySQL files were installed, but the server did not become ready for local socket authentication. Check the service status and mysqld error log below.'
+  }
+  if (/Access denied for user|administrator authentication verification failed/i.test(text)) {
+    return 'MySQL 已安装且服务正在运行，但管理员认证失败。请确认输入的是当前 root 密码；需要重新设置时，请输入目标密码并点击“修复认证”。'
+  }
+  if (/Failed to start|Job for .* failed|systemctl.*failed/i.test(text)) {
+    return 'Package install failed: files were installed, but the service did not start. Check the service log in the output below.'
+  }
+  if (/permission denied|authentication|sudo|su: Authentication failure|incorrect password/i.test(text)) {
+    return 'Package install failed: permission is required or the privilege password is incorrect.'
+  }
+  return ''
+}
+
+function buildPackageCommand(action, item, form, privilege) {
+  const cacheDir = '/opt/ops-flow/packages'
+  const packageFile = buildPackageFilePath(item, form, cacheDir)
+  const lines = [
+    'set -e',
+    `mkdir -p ${shellQuote(cacheDir)}`
+  ]
+
+  if (action === 'test') {
+    return buildPrivilegedCommand(`sh -lc ${shellQuote(buildPackageTestCommand(item, form))}`, privilege)
+  }
+
+  if (action === 'download') {
+    const url = form.packageUrl?.trim()
+    if (!url) {
+      lines.push('echo "No package URL configured."')
+      return lines.join('\n')
+    }
+    lines.push(
+      `target=${shellQuote(packageFile)}`,
+      `url=${shellQuote(url)}`,
+      'echo "Downloading $url"',
+      'if command -v curl >/dev/null 2>&1; then curl -L --progress-bar "$url" -o "$target"; elif command -v wget >/dev/null 2>&1; then wget "$url" -O "$target"; else echo "curl or wget is required to download package URLs; git is not required."; exit 1; fi',
+      ...buildPackageCompatibilityLines(form),
+      buildChecksumCommand(form.checksum, '$target'),
+      'echo "Downloaded: $target"'
+    )
+    return buildPrivilegedCommand(`sh -lc ${shellQuote(lines.join('\n'))}`, privilege)
+  }
+
+  if (action === 'uninstall') {
+    const uninstall = buildComponentUninstallLines(item, form).join('\n')
+    return buildPrivilegedCommand(`sh -lc ${shellQuote(uninstall)}`, privilege)
+  }
+
+  if (action === 'configure' && item.id === 'mysql') {
+    lines.push(
+      'echo "[1/3] Checking existing MySQL service"',
+      ...(form.detectedService ? buildSelectedServiceStartLines(form.detectedService, false) : buildServiceStartLines(item, false, form)),
+      'echo "[2/3] Configuring administrator credentials"',
+      ...buildMySqlCredentialSetupLines(form),
+      'echo "[3/3] Verifying MySQL service and authentication"',
+      ...buildComponentVerifyLines(item, form),
+      'echo "MySQL configuration completed without reinstalling files or reinitializing data."'
+    )
+    return buildPrivilegedCommand(`sh -lc ${shellQuote(lines.join('\n'))}`, privilege)
+  }
+
+  lines.push(`echo "[1/5] Preparing ${item.name}${form.source === 'offline' ? ' from uploaded package' : ` ${form.version}`}"`)
+  if (form.source === 'online') {
+    lines.push('echo "[2/5] Installing from package manager"')
+    lines.push('echo "Online mode keeps the distribution package layout and default service configuration; custom install paths and service settings are not applied."')
+    lines.push(buildOnlineInstallCommand(item, form))
+    lines.push('echo "[3/5] Starting package-managed service"')
+  } else {
+    lines.push('echo "[2/5] Checking package file"')
+    lines.push(...buildPackageSourceLines(item, form, packageFile))
+    lines.push('echo "[3/5] Installing package"')
+    lines.push(...buildComponentInstallLines(item, form))
+  }
+  if (item.id === 'mysql') {
+    lines.push(...buildServiceStartLines(item, false, form))
+  } else if (item.serviceName && form.source === 'online') {
+    lines.push(...buildServiceStartLines(item, false, form))
+  } else if (form.source === 'online') {
+    lines.push('echo "No service startup is required for this component."')
+  }
+  if (item.id === 'mysql') lines.push(...buildMySqlCredentialSetupLines(form))
+  if (form.port && form.source !== 'online') lines.push(`echo "Configured port: ${form.port}"`)
+  if (form.adminUser && !['mysql', 'minio'].includes(item.id)) lines.push(`echo "Admin user plan: ${form.adminUser}. Apply product-specific grants after install."`)
+  lines.push('echo "[4/5] Verifying installation"')
+  lines.push(...buildComponentVerifyLines(item, form))
+  lines.push('echo "[5/5] Install completed"')
+  return buildPrivilegedCommand(`sh -lc ${shellQuote(lines.join('\n'))}`, privilege)
+}
+
+function buildPackageTestCommand(item, form) {
+  if (item.id === 'redis') {
+    const dir = form.installDir || item.defaultDir
+    const auth = form.source !== 'online' && form.password ? ` -a ${shellQuote(form.password)} --no-auth-warning` : ''
+    const port = form.source === 'online' ? '6379' : (form.port || '6379')
+    return [
+      'set -e',
+      `cli=${shellQuote(`${dir}/bin/redis-cli`)}`,
+      'if [ ! -x "$cli" ]; then cli=$(command -v redis-cli || true); fi',
+      'if [ -z "$cli" ]; then echo "redis-cli not found. Install Redis first."; exit 127; fi',
+      buildActiveServiceVerifyLine(item, form),
+      `"$cli" -h 127.0.0.1 -p ${shellQuote(port)}${auth} ping`
+    ].join('\n')
+  }
+  if (item.id === 'mysql') {
+    const user = form.adminUser || 'root'
+    const socketPath = String(form.detectedSocket || '')
+    const adminPassword = String(form.password || '')
+    if (!adminPassword) return 'echo "MySQL administrator password is required for an authentication test."; exit 1'
+    if (!socketPath) return 'echo "The selected MySQL instance has no recorded socket. Refresh the component status and select the instance before testing."; exit 1'
+    const serviceCheck = form.detectedService
+      ? `if ! systemctl is-active --quiet ${shellQuote(form.detectedService)}; then echo "Selected MySQL service is not active: ${String(form.detectedService).replace(/"/g, '')}"; exit 1; fi; echo "Service active: ${String(form.detectedService).replace(/"/g, '')}"`
+      : buildActiveServiceVerifyLine(item, form)
+    return [
+      'set -e',
+      'echo "[1/3] Loading the selected MySQL instance"',
+      `mysql_admin_user=${shellQuote(user)}`,
+      `mysql_admin_password=${shellQuote(adminPassword)}`,
+      `mysql_expected_uuid=${shellQuote(form.detectedServerUuid || '')}`,
+      'mysql_client=$(command -v mysql || command -v mariadb || true)',
+      `if [ -z "$mysql_client" ] && [ -x ${shellQuote(`${form.installDir || item.defaultDir}/bin/mysql`)} ]; then mysql_client=${shellQuote(`${form.installDir || item.defaultDir}/bin/mysql`)}; fi`,
+      'if [ -z "$mysql_client" ]; then echo "MySQL client not found. Install MySQL first."; exit 127; fi',
+      `mysql_socket=${shellQuote(socketPath)}`,
+      'if [ ! -S "$mysql_socket" ]; then echo "Recorded MySQL socket is unavailable: $mysql_socket"; exit 1; fi',
+      'echo "MySQL socket: $mysql_socket"',
+      'mysql_run() { "$mysql_client" --protocol=socket --socket="$mysql_socket" --connect-timeout=5 "$@"; }',
+      'echo "[2/3] Verifying MySQL service and client"',
+      serviceCheck,
+      '"$mysql_client" --version',
+      'echo "[3/3] Verifying administrator authentication"',
+      'if ! mysql_identity=$(MYSQL_PWD="$mysql_admin_password" mysql_run -u "$mysql_admin_user" -Nse "SELECT CONCAT(\'__OPS_MYSQL_IDENTITY__\', @@server_uuid, \'|\', @@socket, \'|\', @@port, \'|\', @@datadir, \'|\', CURRENT_USER());"); then echo "MySQL administrator authentication failed for $mysql_admin_user via $mysql_socket."; unset mysql_admin_password; exit 1; fi',
+      'echo "$mysql_identity"',
+      'mysql_actual_uuid=${mysql_identity#__OPS_MYSQL_IDENTITY__}; mysql_actual_uuid=${mysql_actual_uuid%%|*}',
+      'if [ -n "$mysql_expected_uuid" ] && [ "$mysql_actual_uuid" != "$mysql_expected_uuid" ]; then echo "MySQL instance identity mismatch. Expected server UUID $mysql_expected_uuid but connected to $mysql_actual_uuid."; unset mysql_admin_password; exit 1; fi',
+      'echo "MySQL administrator authentication verified."',
+      'unset mysql_admin_password'
+    ].join('\n')
+  }
+  return [
+    'set -e',
+    'echo "Running component verification"',
+    ...buildComponentVerifyLines(item, form)
+  ].join('\n')
+}
+
+function buildMySqlCredentialSetupLines(form) {
+  const adminUser = String(form.adminUser || 'root')
+  const adminPassword = String(form.password || '')
+  const mysqlInstallDir = form.installDir || '/opt/ops-packages/mysql'
+  const mysqlSocket = form.detectedSocket || `${mysqlInstallDir}/run/mysql.sock`
+  const socketLocked = Boolean(form.detectedSocket)
+  const mysqlServices = getComponentServiceNames(deployPackageCatalog.find((item) => item.id === 'mysql'), form).map(shellQuote).join(' ')
+  if (!adminPassword) {
+    return ['echo "MySQL administrator password is required."', 'exit 1']
+  }
+
+  return [
+    'echo "[MySQL] Configuring administrator credentials"',
+    `mysql_admin_user=${shellQuote(adminUser)}`,
+    `mysql_admin_password=${shellQuote(adminPassword)}`,
+    `mysql_socket=${shellQuote(mysqlSocket)}`,
+    `mysql_socket_locked=${socketLocked ? 'yes' : 'no'}`,
+    `mysql_custom_config=${shellQuote(`${mysqlInstallDir}/my.cnf`)}`,
+    'mysql_client=$(command -v mysql || command -v mariadb || true)',
+    `if [ -z "$mysql_client" ] && [ -x ${shellQuote(`${form.installDir || '/opt/ops-packages/mysql'}/bin/mysql`)} ]; then mysql_client=${shellQuote(`${form.installDir || '/opt/ops-packages/mysql'}/bin/mysql`)}; fi`,
+    'if [ -z "$mysql_client" ]; then echo "MySQL client was not installed."; exit 127; fi',
+    'mysql_socket_ready=""',
+    'for attempt in $(seq 1 45); do',
+    '  if [ -S "$mysql_socket" ]; then mysql_socket_ready="$mysql_socket"; break; fi',
+    '  if [ "$mysql_socket_locked" != yes ] && [ ! -f "$mysql_custom_config" ]; then',
+    '    for candidate in /var/lib/mysql/mysql.sock /var/run/mysqld/mysqld.sock /run/mysqld/mysqld.sock /tmp/mysql.sock; do',
+    '      if [ -S "$candidate" ]; then mysql_socket_ready="$candidate"; break 2; fi',
+    '    done',
+    '  fi',
+    '  if [ $((attempt % 5)) -eq 0 ]; then echo "Waiting for MySQL socket... ${attempt}/45 seconds"; fi',
+    '  sleep 1',
+    'done',
+    'if [ -z "$mysql_socket_ready" ]; then',
+    '  echo "MySQL did not create a local socket within 45 seconds."',
+    `  for mysql_service in ${mysqlServices}; do systemctl status "$mysql_service" --no-pager 2>&1 | tail -80 || true; done`,
+    `  tail -100 ${shellQuote(`${form.installDir || '/opt/ops-packages/mysql'}/logs/mysqld.log`)} /var/log/mysqld.log 2>/dev/null || true`,
+    '  unset mysql_admin_password',
+    '  exit 1',
+    'fi',
+    'mysql_socket="$mysql_socket_ready"',
+    'echo "MySQL socket is ready: $mysql_socket"',
+    'mysql_run() { "$mysql_client" --protocol=socket --socket="$mysql_socket" "$@"; }',
+    "sql_escape() { printf '%s' \"$1\" | sed \"s/'/''/g\"; }",
+    'sql_password=$(sql_escape "$mysql_admin_password")',
+    'root_password_sql="SET SESSION sql_mode=\'NO_BACKSLASH_ESCAPES\'; ALTER USER \'root\'@\'localhost\' IDENTIFIED BY \'$sql_password\';"',
+    'mysql_password_ready=no',
+    'if MYSQL_PWD="$mysql_admin_password" mysql_run -uroot -Nse "SELECT 1" >/dev/null 2>&1; then',
+    '  mysql_password_ready=yes',
+    '  echo "MySQL root password is already configured."',
+    'else',
+    '  temporary_password=$(grep -i "temporary password" /var/log/mysqld.log 2>/dev/null | tail -1 | sed -E "s/.*root@localhost:[[:space:]]*//" || true)',
+    '  if [ -n "$temporary_password" ] && MYSQL_PWD="$temporary_password" mysql_run --connect-expired-password -uroot -e "$root_password_sql"; then',
+    '    mysql_password_ready=yes',
+    '  elif mysql_run -uroot -e "$root_password_sql"; then',
+    '    mysql_password_ready=yes',
+    '  fi',
+    'fi',
+    'unset temporary_password',
+    'if [ "$mysql_password_ready" != yes ]; then echo "Unable to set the MySQL root password. Check mysqld status and /var/log/mysqld.log."; unset mysql_admin_password sql_password; exit 1; fi',
+    'if [ "$mysql_admin_user" != root ]; then',
+    '  sql_user=$(sql_escape "$mysql_admin_user")',
+    '  admin_sql="SET SESSION sql_mode=\'NO_BACKSLASH_ESCAPES\'; CREATE USER IF NOT EXISTS \'$sql_user\'@\'localhost\' IDENTIFIED BY \'$sql_password\'; ALTER USER \'$sql_user\'@\'localhost\' IDENTIFIED BY \'$sql_password\'; GRANT ALL PRIVILEGES ON *.* TO \'$sql_user\'@\'localhost\' WITH GRANT OPTION; FLUSH PRIVILEGES;"',
+    '  MYSQL_PWD="$mysql_admin_password" mysql_run -uroot -e "$admin_sql"',
+    '  echo "MySQL local administrator created: $mysql_admin_user@localhost"',
+    'else',
+    '  echo "MySQL administrator configured: root@localhost"',
+    'fi',
+    'echo "Verifying MySQL administrator authentication..."',
+    'if ! MYSQL_PWD="$mysql_admin_password" mysql_run -u "$mysql_admin_user" -Nse "SELECT 1" >/dev/null; then echo "MySQL administrator authentication verification failed after configuration."; unset mysql_admin_password sql_password root_password_sql admin_sql; exit 1; fi',
+    'echo "MySQL administrator authentication verified."',
+    'unset mysql_admin_password sql_password root_password_sql admin_sql'
+  ]
+}
+
+function buildComponentUninstallLines(item, form) {
+  const installDir = form.installDir || item.defaultDir
+  const lines = [
+    'set -e',
+    `echo "[1/4] Uninstalling ${item.name}"`
+  ]
+
+  const serviceNames = item.id === 'mysql' && form.detectedService ? [form.detectedService] : getComponentServiceNames(item, form)
+  const packagePath = String(form.offlinePath || '').toLowerCase()
+  const customInstall = form.installMode === 'custom' || form.source !== 'online'
+  const customServiceNames = customInstall && ['redis', 'nginx', 'minio', 'tomcat'].includes(item.id)
+    ? getComponentServiceNames(item, form)
+    : (customInstall && item.id === 'mysql' && !packagePath.endsWith('.rpm') && !packagePath.includes('rpm-bundle') ? [form.detectedService || form.serviceName || 'mysqld.service'] : [])
+  if (serviceNames.length) {
+    lines.push('echo "[2/4] Stopping and disabling service"')
+    lines.push(...buildServiceUninstallLines(serviceNames, customServiceNames))
+  } else {
+    lines.push('echo "[2/4] No service registration for this component"')
+  }
+
+  lines.push('echo "[3/4] Removing installed files"')
+  lines.push(...buildInstallFileRemovalLines(item, form, installDir))
+
+  lines.push('echo "[4/4] Verifying removal"')
+  lines.push(...buildComponentRemovalVerifyLines(item, form, installDir))
+  lines.push('echo "Uninstall completed"')
+
+  return lines
+}
+
+function getComponentServiceNames(item, form = {}) {
+  if (!item.serviceName) return []
+  if (supportsCustomInstanceService(item) && form.source && form.source !== 'online') {
+    return [form.serviceName || deriveInstanceServiceName(item, form.installDir || item.defaultDir, form.port || item.defaultPort)]
+  }
+  if (item.id === 'redis') {
+    return ['redis.service', 'redis-server.service']
+  }
+  if (item.id === 'mysql') return ['mysqld.service', 'mysql.service', 'mariadb.service']
+  if (item.id === 'tomcat') return ['tomcat.service', 'tomcat10.service', 'tomcat9.service', 'tomcat8.service']
+  return [item.serviceName]
+}
+
+function buildServiceUninstallLines(serviceNames, customServiceNames = []) {
+  const quotedServices = serviceNames.map(shellQuote).join(' ')
+  const lines = [
+    `for svc in ${quotedServices}; do`,
+    '  if systemctl list-unit-files "$svc" >/dev/null 2>&1 || systemctl list-units --all "$svc" >/dev/null 2>&1; then',
+    '    echo "Stopping $svc"',
+    '    if systemctl stop "$svc" 2>&1; then echo "Stopped $svc"; else echo "WARNING: stop returned a non-zero result for $svc; continuing cleanup"; fi',
+    '    echo "Disabling $svc"',
+    '    if systemctl disable "$svc" 2>&1; then echo "Disabled $svc"; else echo "WARNING: disable returned a non-zero result for $svc; continuing cleanup"; fi',
+    '    systemctl reset-failed "$svc" 2>/dev/null || true',
+    '  fi',
+    'done',
+  ]
+  if (customServiceNames.length) {
+    lines.push(`for svc in ${customServiceNames.map(shellQuote).join(' ')}; do rm -f "/etc/systemd/system/$svc"; done`)
+  }
+  lines.push('systemctl daemon-reload 2>/dev/null || true')
+  return lines
+}
+
+function buildInstallFileRemovalLines(item, form, installDir) {
+  const quotedDir = shellQuote(installDir)
+  const lines = [`echo "Removal target: ${installDir}"`]
+  const packagePath = String(form.offlinePath || '').toLowerCase()
+  const detectedCustomInstall = form.installMode === 'custom'
+  const packageManaged = form.installMode === 'managed' || (!detectedCustomInstall && (form.source === 'online' || (item.id === 'mysql' && (packagePath.endsWith('.rpm') || packagePath.includes('rpm-bundle')))))
+
+  if (packageManaged) {
+    lines.push(...buildPackageManagerRemoveLines(item, form))
+    lines.push('echo "Package-managed uninstall completed; system root directories were not recursively deleted."')
+    return lines
+  }
+
+  if (item.id === 'dotnet') {
+    if (packageManaged) lines.push(...buildPackageManagerRemoveLines(item, form))
+    lines.push(`rm -rf ${quotedDir}`, 'rm -f /etc/profile.d/ops-flow-dotnet.sh')
+  } else if (item.id === 'java') {
+    if (packageManaged) lines.push(...buildPackageManagerRemoveLines(item, form))
+    lines.push(`rm -rf ${quotedDir}`, 'rm -f /etc/profile.d/ops-flow-java.sh')
+  } else if (item.id === 'node') {
+    if (packageManaged) lines.push(...buildPackageManagerRemoveLines(item, form))
+    lines.push(`rm -rf ${quotedDir}`, 'rm -f /etc/profile.d/ops-flow-node.sh')
+  } else if (item.id === 'go') {
+    if (packageManaged) lines.push(...buildPackageManagerRemoveLines(item, form))
+    lines.push(`rm -rf ${quotedDir}`, 'rm -f /etc/profile.d/ops-flow-go.sh')
+  } else if (item.id === 'maven') {
+    if (packageManaged) lines.push(...buildPackageManagerRemoveLines(item, form))
+    lines.push(`rm -rf ${quotedDir}`, 'rm -f /etc/profile.d/ops-flow-maven.sh')
+  } else if (item.id === 'lynis') {
+    if (packageManaged) lines.push(...buildPackageManagerRemoveLines(item, form))
+    lines.push(`rm -rf ${quotedDir}`, 'rm -f /usr/local/bin/lynis')
+  } else if (['redis', 'nginx', 'minio', 'tomcat'].includes(item.id)) {
+    if (packageManaged) lines.push(...buildPackageManagerRemoveLines(item, form))
+    lines.push(`rm -rf ${quotedDir}`)
+    const serviceBase = String(form.serviceName || item.serviceName).replace(/[.]service$/i, '')
+    if (item.id === 'minio') lines.push(`rm -f ${shellQuote(`/etc/ops-flow/${serviceBase}.env`)}`)
+    if (item.id === 'tomcat') lines.push(`rm -f ${shellQuote(`/etc/default/ops-flow-${serviceBase}`)}`)
+  } else if (item.id === 'mysql') {
+    if (packageManaged) lines.push(...buildPackageManagerRemoveLines(item, form))
+    lines.push(`for link in /usr/local/bin/mysql /usr/local/bin/mysqld; do target=$(readlink -f "$link" 2>/dev/null || true); case "$target" in ${installDir}/*) rm -f "$link" ;; esac; done`)
+    lines.push(`rm -rf ${quotedDir}`)
+  } else if (['python', 'git'].includes(item.id)) {
+    lines.push(...buildPackageManagerRemoveLines(item, form))
+    lines.push(`rm -rf ${quotedDir}`)
+  } else {
+    lines.push(...buildPackageManagerRemoveLines(item, form))
+    lines.push(`rm -rf ${quotedDir}`)
+  }
+
+  lines.push(`echo "File cleanup command completed: ${installDir}"`)
+  return lines
+}
+
+function buildPackageManagerRemoveLines(item, form = {}) {
+  const selectedVersion = String(form.version || '')
+  const javaVersion = /^(8|11|17|21)$/.test(selectedVersion) ? selectedVersion : '17'
+  const dotnetChannel = selectedVersion.match(/^\d+\.\d+/)?.[0] || '8.0'
+  const aptNames = {
+    dotnet: `dotnet-sdk-${dotnetChannel}`,
+    java: `openjdk-${javaVersion}-jdk`,
+    go: 'golang-go',
+    redis: 'redis-server',
+    tomcat: 'tomcat10 tomcat9'
+  }
+  const rpmNames = {
+    dotnet: `dotnet-sdk-${dotnetChannel}`,
+    java: javaVersion === '8' ? 'java-1.8.0-openjdk-devel' : `java-${javaVersion}-openjdk-devel`
+  }
+  const aptName = aptNames[item.id] || item.packageName
+  const rpmName = rpmNames[item.id] || item.packageName
+  return [
+    `if command -v apt-get >/dev/null 2>&1; then for pkg in ${aptName}; do echo "Running apt-get remove: $pkg"; apt-get remove -y "$pkg" || true; done; elif command -v dnf >/dev/null 2>&1; then for pkg in ${rpmName}; do echo "Running dnf remove: $pkg"; dnf remove -y "$pkg" || true; done; elif command -v yum >/dev/null 2>&1; then for pkg in ${rpmName}; do echo "Running yum remove: $pkg"; yum remove -y "$pkg" || true; done; else echo "Package manager remove skipped"; fi`
+  ]
+}
+
+function buildComponentRemovalVerifyLines(item, form, installDir) {
+  const lines = ['removal_verification_failed=no']
+  const serviceNames = item.id === 'mysql' && form.detectedService ? [form.detectedService] : getComponentServiceNames(item, form)
+  if (serviceNames.length) {
+    const quotedServices = serviceNames.map(shellQuote).join(' ')
+    lines.push(
+      `for svc in ${quotedServices}; do state=$(systemctl is-enabled "$svc" 2>/dev/null || true); active=$(systemctl is-active "$svc" 2>/dev/null || true); [ -n "$state" ] || state="not-found"; [ -n "$active" ] || active="not-found"; echo "$svc enabled=$state active=$active"; if [ "$active" = active ] || [ "$active" = activating ]; then echo "Service is still running after uninstall: $svc"; removal_verification_failed=yes; fi; done`
+    )
+  }
+  if (form.installMode !== 'managed') {
+    lines.push(`if [ ! -e ${shellQuote(installDir)} ]; then echo "Install path removed: ${installDir}"; else echo "Install path still exists: ${installDir}"; removal_verification_failed=yes; fi`)
+  }
+  lines.push('if [ "$removal_verification_failed" = yes ]; then echo "Uninstall verification failed."; exit 1; fi')
+  return lines
+}
+
+function buildOnlineInstallCommand(item, form = {}) {
+  const selectedVersion = String(form.version || '')
+  const javaVersion = /^(8|11|17|21)$/.test(selectedVersion) ? selectedVersion : '17'
+  const dotnetChannel = selectedVersion.match(/^\d+\.\d+/)?.[0] || '8.0'
+  const rpmNames = {
+    dotnet: `dotnet-sdk-${dotnetChannel}`,
+    java: javaVersion === '8' ? 'java-1.8.0-openjdk-devel' : `java-${javaVersion}-openjdk-devel`
+  }
+  const aptNames = {
+    dotnet: `dotnet-sdk-${dotnetChannel}`,
+    java: `openjdk-${javaVersion}-jdk`,
+    go: 'golang-go',
+    redis: 'redis-server',
+    tomcat: 'tomcat10'
+  }
+  const packageName = rpmNames[item.id] || item.packageName
+  const aptName = aptNames[item.id] || item.packageName
+  const networkMessage = 'echo "Package repository is unreachable. Fix DNS/repository access or use Uploaded offline package."'
+  return `if command -v apt-get >/dev/null 2>&1; then apt-get -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10 update || { ${networkMessage}; exit 1; }; apt-get install -y ${aptName}${item.id === 'tomcat' ? ' || apt-get install -y tomcat9' : ''}; elif command -v dnf >/dev/null 2>&1; then dnf -y --setopt=timeout=10 --setopt=retries=1 install ${packageName} || { ${networkMessage}; exit 1; }; elif command -v yum >/dev/null 2>&1; then yum -y --setopt=timeout=10 --setopt=retries=1 install ${packageName} || { ${networkMessage}; exit 1; }; else echo "Unsupported package manager"; exit 1; fi`
+}
+
+function buildPackageFilePath(item, form, cacheDir) {
+  if (form.source === 'offline' && form.offlinePath?.startsWith('/')) return form.offlinePath
+  const filename = form.offlinePath?.split(/[\\/]/).filter(Boolean).pop() || item.packageHint || `${item.id}-${form.version}.pkg`
+  return `${cacheDir}/${filename}`
+}
+
+function buildPackageSourceLines(item, form, packageFile) {
+  const lines = []
+  if (form.source === 'github') {
+    lines.push(
+      `target=${shellQuote(packageFile)}`,
+      `url=${shellQuote(form.packageUrl || '')}`,
+      'if [ -z "$url" ]; then echo "Package URL is required"; exit 1; fi',
+      'if [ ! -f "$target" ]; then if command -v curl >/dev/null 2>&1; then curl -L --progress-bar "$url" -o "$target"; elif command -v wget >/dev/null 2>&1; then wget "$url" -O "$target"; else echo "curl or wget is required to download package URLs; git is not required."; exit 1; fi; fi'
+    )
+  } else {
+    lines.push(`target=${shellQuote(packageFile)}`)
+  }
+  lines.push(
+    'if [ ! -f "$target" ]; then echo "Package file not found: $target"; exit 1; fi',
+    'echo "Using package: $target"',
+    ...buildPackageCompatibilityLines(form),
+    buildChecksumCommand(form.checksum, '$target')
+  )
+  return lines
+}
+
+function buildPackageCompatibilityLines(form) {
+  const expectedArch = String(form.targetArch || '').trim()
+  const expectedOsId = String(form.targetOsId || '').trim()
+  const expectedOsVersion = String(form.targetOsVersion || '').trim()
+  return [
+    'actual_arch=$(uname -m 2>/dev/null || true)',
+    'actual_os=unknown; actual_os_version=unknown',
+    'if [ -r /etc/os-release ]; then . /etc/os-release; actual_os=${ID:-unknown}; actual_os_version=${VERSION_ID:-unknown}; fi',
+    'echo "Target system: os=$actual_os version=$actual_os_version arch=$actual_arch"',
+    ...(expectedArch ? [`[ "$actual_arch" = ${shellQuote(expectedArch)} ] || { echo "Target architecture changed: expected ${expectedArch}, detected $actual_arch. Re-detect the server and choose the matching package."; exit 1; }`] : []),
+    ...(expectedOsId && expectedOsId !== 'unknown' ? [`[ "$actual_os" = ${shellQuote(expectedOsId)} ] || { echo "Target OS changed: expected ${expectedOsId}, detected $actual_os. Re-detect the server before installing."; exit 1; }`] : []),
+    ...(expectedOsVersion && expectedOsVersion !== 'unknown' ? [`[ "$actual_os_version" = ${shellQuote(expectedOsVersion)} ] || { echo "Target OS version changed: expected ${expectedOsVersion}, detected $actual_os_version. Re-detect the server before installing."; exit 1; }`] : []),
+    'package_name=$(basename "$target" | tr "[:upper:]" "[:lower:]")',
+    'case "$actual_arch" in',
+    '  x86_64|amd64) case "$package_name" in *aarch64*|*arm64*|*armv7*|*armv6*|*ppc64*|*s390x*|*riscv64*) echo "Package architecture does not match x86_64: $package_name"; exit 1 ;; esac ;;',
+    '  aarch64|arm64) case "$package_name" in *x86_64*|*amd64*|*linux-x64*|*i386*|*i686*|*ppc64*|*s390x*|*riscv64*) echo "Package architecture does not match ARM64: $package_name"; exit 1 ;; esac ;;',
+    '  armv7l|armv7) case "$package_name" in *x86_64*|*amd64*|*linux-x64*|*aarch64*|*arm64*|*ppc64*|*s390x*) echo "Package architecture does not match ARMv7: $package_name"; exit 1 ;; esac ;;',
+    '  ppc64le) case "$package_name" in *x86_64*|*amd64*|*linux-x64*|*aarch64*|*arm64*|*s390x*) echo "Package architecture does not match ppc64le: $package_name"; exit 1 ;; esac ;;',
+    '  s390x) case "$package_name" in *x86_64*|*amd64*|*linux-x64*|*aarch64*|*arm64*|*ppc64*) echo "Package architecture does not match s390x: $package_name"; exit 1 ;; esac ;;',
+    'esac'
+  ]
+}
+
+function buildServiceAccountLines(user) {
+  const quotedUser = shellQuote(user)
+  return [
+    `getent group ${quotedUser} >/dev/null 2>&1 || groupadd -r ${quotedUser}`,
+    `id ${quotedUser} >/dev/null 2>&1 || useradd -r -g ${quotedUser} -s /sbin/nologin ${quotedUser}`,
+    `id ${quotedUser} >/dev/null 2>&1 || { echo "Unable to create service user: ${user}"; exit 1; }`,
+    `getent group ${quotedUser} >/dev/null 2>&1 || { echo "Unable to create service group: ${user}"; exit 1; }`
+  ]
+}
+
+function quoteRedisConfigValue(value) {
+  return `"${String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+}
+
+function quoteSystemdEnvironmentValue(value) {
+  return String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+function buildCustomInstanceSafetyLines(label, serviceName, executablePath, ports = []) {
+  const safePorts = ports.map((port) => String(port || '').replace(/\D+/g, '')).filter(Boolean)
+  return [
+    `instance_service=${shellQuote(serviceName)}`,
+    `instance_expected_exec=${shellQuote(executablePath)}`,
+    'if systemctl cat "$instance_service" >/dev/null 2>&1; then instance_existing_exec=$(systemctl show "$instance_service" -p ExecStart --value 2>/dev/null || true); case "$instance_existing_exec" in *"$instance_expected_exec"*) systemctl stop "$instance_service" ;; *) echo "' + label + ' service name is already used by another instance: $instance_service"; echo "Existing ExecStart: $instance_existing_exec"; exit 1 ;; esac; fi',
+    ...(safePorts.length ? [
+      `for instance_port in ${safePorts.map(shellQuote).join(' ')}; do if { command -v ss >/dev/null 2>&1 && ss -ltnH 2>/dev/null | awk -v port="$instance_port" '{ address=$4; sub(/^.*:/, "", address); if (address == port) found=1 } END { exit !found }'; } || { command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"$instance_port" -sTCP:LISTEN 2>/dev/null | grep -q .; }; then echo "${label} port is already in use: $instance_port. Choose a different port for this instance."; exit 1; fi; done`
+    ] : [])
+  ]
+}
+
+function buildServiceStartLines(item, restart = false, form = {}) {
+  const services = getComponentServiceNames(item, form).map(shellQuote).join(' ')
+  if (!services) return []
+  const action = restart ? 'restart' : 'start'
+  return [
+    'service_found=""',
+    `for svc in ${services}; do`,
+    '  if systemctl cat "$svc" >/dev/null 2>&1; then',
+    '    service_found="$svc"',
+    '    systemctl enable "$svc" >/dev/null',
+    `    systemctl ${action} "$svc"`,
+    '    break',
+    '  fi',
+    'done',
+    `if [ -z "$service_found" ]; then echo "No systemd service was installed for ${item.name}."; exit 1; fi`,
+    'if ! systemctl is-active --quiet "$service_found"; then echo "Service failed to become active: $service_found"; systemctl status "$service_found" --no-pager 2>&1 | tail -80 || true; journalctl -u "$service_found" -n 80 --no-pager 2>&1 || true; exit 1; fi',
+    'echo "Active service: $service_found"'
+  ]
+}
+
+function buildSelectedServiceStartLines(serviceName, restart = false) {
+  const service = String(serviceName || '')
+  const action = restart ? 'restart' : 'start'
+  return [
+    `selected_service=${shellQuote(service)}`,
+    'if ! systemctl cat "$selected_service" >/dev/null 2>&1; then echo "Selected service was not found: $selected_service"; exit 1; fi',
+    'systemctl enable "$selected_service" >/dev/null',
+    `systemctl ${action} "$selected_service"`,
+    'if ! systemctl is-active --quiet "$selected_service"; then echo "Selected service failed to become active: $selected_service"; systemctl status "$selected_service" --no-pager 2>&1 | tail -80 || true; exit 1; fi',
+    'echo "Active service: $selected_service"'
+  ]
+}
+
+function buildActiveServiceVerifyLine(item, form = {}) {
+  const services = getComponentServiceNames(item, form).map(shellQuote).join(' ')
+  if (!services) return 'true'
+  return `service_active=""; for svc in ${services}; do if systemctl is-active --quiet "$svc"; then service_active="$svc"; break; fi; done; if [ -z "$service_active" ]; then echo "No active service found for ${item.name}."; exit 1; fi; echo "Service active: $service_active"`
+}
+
+function buildComponentInstallLines(item, form) {
+  const dir = shellQuote(form.installDir || item.defaultDir)
+  if (item.id === 'dotnet') {
+    return [
+      'tar -tf "$target" | grep -Eq "(^|/)dotnet$" || { echo "Invalid .NET binary archive: dotnet executable not found."; exit 1; }',
+      `rm -rf ${dir}`,
+      `mkdir -p ${dir}`,
+      `tar -xf "$target" -C ${dir}`,
+      `cat > /etc/profile.d/ops-flow-dotnet.sh <<'EOF'\nexport DOTNET_ROOT=${form.installDir || item.defaultDir}\nexport PATH=$PATH:${form.installDir || item.defaultDir}\nEOF`,
+      'chmod 644 /etc/profile.d/ops-flow-dotnet.sh',
+      `. /etc/profile.d/ops-flow-dotnet.sh`
+    ]
+  }
+  if (item.id === 'java') {
+    return [
+      'tar -tf "$target" | grep -Eq "(^|/)bin/java$" || { echo "Invalid Java binary archive: bin/java not found."; exit 1; }',
+      `rm -rf ${dir}`,
+      `mkdir -p ${dir}`,
+      `tar -xf "$target" -C ${dir} --strip-components=1`,
+      `cat > /etc/profile.d/ops-flow-java.sh <<'EOF'\nexport JAVA_HOME=${form.installDir || item.defaultDir}\nexport PATH=$PATH:${form.installDir || item.defaultDir}/bin\nEOF`,
+      'chmod 644 /etc/profile.d/ops-flow-java.sh',
+      '. /etc/profile.d/ops-flow-java.sh'
+    ]
+  }
+  if (item.id === 'node') {
+    return [
+      'tar -tf "$target" | grep -Eq "(^|/)bin/node$" || { echo "Invalid Node.js binary archive. Use an official linux binary package, not a source archive."; exit 1; }',
+      `rm -rf ${dir}`,
+      `mkdir -p ${dir}`,
+      `tar -xf "$target" -C ${dir} --strip-components=1`,
+      `cat > /etc/profile.d/ops-flow-node.sh <<'EOF'\nexport NODE_HOME=${form.installDir || item.defaultDir}\nexport PATH=$PATH:${form.installDir || item.defaultDir}/bin\nEOF`,
+      'chmod 644 /etc/profile.d/ops-flow-node.sh',
+      '. /etc/profile.d/ops-flow-node.sh'
+    ]
+  }
+  if (item.id === 'go') {
+    return [
+      'tar -tf "$target" | grep -Eq "(^|/)bin/go$" || { echo "Invalid Go binary archive: bin/go not found."; exit 1; }',
+      `rm -rf ${dir}`,
+      `mkdir -p ${dir}`,
+      `tar -xf "$target" -C ${dir} --strip-components=1`,
+      `cat > /etc/profile.d/ops-flow-go.sh <<'EOF'\nexport GOROOT=${form.installDir || item.defaultDir}\nexport PATH=$PATH:${form.installDir || item.defaultDir}/bin\nEOF`,
+      'chmod 644 /etc/profile.d/ops-flow-go.sh',
+      '. /etc/profile.d/ops-flow-go.sh'
+    ]
+  }
+  if (item.id === 'maven') {
+    return [
+      'tar -tf "$target" | grep -Eq "(^|/)bin/mvn$" || { echo "Invalid Maven binary archive: bin/mvn not found."; exit 1; }',
+      `rm -rf ${dir}`,
+      `mkdir -p ${dir}`,
+      `tar -xf "$target" -C ${dir} --strip-components=1`,
+      `cat > /etc/profile.d/ops-flow-maven.sh <<'EOF'\nexport MAVEN_HOME=${form.installDir || item.defaultDir}\nexport PATH=$PATH:${form.installDir || item.defaultDir}/bin\nEOF`,
+      'chmod 644 /etc/profile.d/ops-flow-maven.sh',
+      '. /etc/profile.d/ops-flow-maven.sh'
+    ]
+  }
+  if (item.id === 'redis') {
+    const installDir = form.installDir || item.defaultDir
+    const runUser = form.runUser || 'redis'
+    const port = form.port || '6379'
+    const serviceName = form.serviceName || deriveInstanceServiceName(item, installDir, port)
+    const unitPath = `/etc/systemd/system/${serviceName}`
+    const passwordLine = form.password ? `requirepass ${quoteRedisConfigValue(form.password)}` : ''
+    return [
+      'workdir=$(mktemp -d /tmp/ops-flow-redis.XXXXXX)',
+      'trap \'rm -rf "$workdir"\' EXIT',
+      ...buildCustomInstanceSafetyLines('Redis', serviceName, `${installDir}/bin/redis-server`, [port]),
+      `mkdir -p ${shellQuote(installDir)} ${shellQuote(`${installDir}/bin`)} ${shellQuote(`${installDir}/data`)} ${shellQuote(`${installDir}/logs`)}`,
+      'tar -xf "$target" -C "$workdir"',
+      'redis_server_candidate=$(find "$workdir" -type f -path "*/bin/redis-server" | head -1)',
+      'redis_makefile=$(find "$workdir" -type f -name Makefile -exec grep -Il "Redis" {} \\; | head -1)',
+      'if [ -n "$redis_server_candidate" ]; then redis_bin=$(dirname "$redis_server_candidate"); cp "$redis_bin"/redis-* ' + shellQuote(`${installDir}/bin/`) + '; elif [ -n "$redis_makefile" ]; then redis_source=$(dirname "$redis_makefile"); command -v make >/dev/null 2>&1 || { echo "make is required to build Redis source package"; exit 127; }; command -v gcc >/dev/null 2>&1 || { echo "gcc is required to build Redis source package"; exit 127; }; make -C "$redis_source" -j"$(nproc 2>/dev/null || echo 2)" BUILD_TLS=no; make -C "$redis_source" PREFIX=' + shellQuote(installDir) + ' install; else echo "Unsupported Redis package. Use official redis-x.y.z.tar.gz source package or a binary package with bin/redis-server."; exit 1; fi',
+      ...buildServiceAccountLines(runUser),
+      `cat > ${shellQuote(`${installDir}/redis.conf`)} <<'EOF'\nbind 0.0.0.0\nprotected-mode yes\nport ${port}\ndaemonize no\nsupervised no\ndir ${installDir}/data\nlogfile ${installDir}/logs/redis.log\nappendonly yes\n${passwordLine}\nEOF`,
+      `chown -R ${shellQuote(runUser)}:${shellQuote(runUser)} ${shellQuote(installDir)}`,
+      `chmod 640 ${shellQuote(`${installDir}/redis.conf`)}`,
+      `cat > ${shellQuote(unitPath)} <<'EOF'\n[Unit]\nDescription=Redis In-Memory Data Store (${serviceName})\nAfter=network.target\n[Service]\nType=simple\nUser=${runUser}\nGroup=${runUser}\nExecStart=${installDir}/bin/redis-server ${installDir}/redis.conf --daemonize no\nKillSignal=SIGTERM\nTimeoutStopSec=90\nRestart=on-failure\nLimitNOFILE=65535\n[Install]\nWantedBy=multi-user.target\nEOF`,
+      'systemctl daemon-reload',
+      ...buildServiceStartLines(item, true, form)
+    ]
+  }
+  if (item.id === 'mysql') {
+    const installDir = form.installDir || item.defaultDir
+    const port = String(Number(form.port || 3306))
+    const configPath = `${installDir}/my.cnf`
+    const serviceName = form.serviceName || deriveInstanceServiceName(item, installDir, port)
+    const unitPath = `/etc/systemd/system/${serviceName}`
+    return [
+      'workdir=$(mktemp -d /tmp/ops-flow-mysql.XXXXXX)',
+      'trap \'rm -rf "$workdir"\' EXIT',
+      `mkdir -p ${shellQuote(installDir)}`,
+      'echo "Extracting and inspecting MySQL package..."',
+      'case "$target" in *.rpm) cp "$target" "$workdir/" ;; *.tar|*.tar.gz|*.tgz|*.tar.xz|*.txz) tar -xf "$target" -C "$workdir" ;; *) echo "Unsupported MySQL package. Use an RPM bundle/single RPM or an official generic Linux binary tar."; exit 1 ;; esac',
+      'mkdir -p "$workdir/rpms"',
+      'find "$workdir" -path "$workdir/rpms" -prune -o -type f -name "*.rpm" -exec cp -f {} "$workdir/rpms/" \\;',
+      'rpm_count=$(find "$workdir/rpms" -maxdepth 1 -type f -name "*.rpm" | wc -l | awk \'{print $1}\')',
+      'mysqld_candidate=$(find "$workdir" -type f -path "*/bin/mysqld" | head -1)',
+      'if [ "$rpm_count" -gt 0 ]; then',
+      '  echo "Detected MySQL RPM package bundle."',
+      `  [ ${shellQuote(serviceName)} = ${shellQuote(item.serviceName)} ] || { echo "MySQL RPM packages use the distribution service ${item.serviceName}; use an official generic binary archive for an additional instance."; exit 1; }`,
+      '  if command -v dnf >/dev/null 2>&1; then dnf -y --disablerepo="*" install "$workdir/rpms/"*.rpm || dnf -y install "$workdir/rpms/"*.rpm; elif command -v yum >/dev/null 2>&1; then yum -y --disablerepo="*" localinstall "$workdir/rpms/"*.rpm || yum -y localinstall "$workdir/rpms/"*.rpm; else echo "RPM based system with yum or dnf is required for MySQL RPM bundle."; exit 1; fi',
+      '  if grep -qi "temporary password" /var/log/mysqld.log 2>/dev/null; then echo "MySQL generated a temporary password; it will be replaced without printing it."; fi',
+      'elif [ -n "$mysqld_candidate" ]; then',
+      '  echo "Detected official MySQL generic binary package."',
+      ...buildCustomInstanceSafetyLines('MySQL', serviceName, `${installDir}/bin/mysqld`, [port]),
+      '  binary_root=$(dirname "$(dirname "$mysqld_candidate")")',
+      `  install_dir=${shellQuote(installDir)}`,
+      '  mkdir -p "$install_dir" "$install_dir/data" "$install_dir/logs" "$install_dir/run"',
+      '  echo "Copying MySQL binary files to $install_dir..."',
+      '  cp -a "$binary_root"/. "$install_dir"/',
+      '  echo "MySQL binary files copied."',
+      '  groupadd -r mysql 2>/dev/null || true',
+      '  id mysql >/dev/null 2>&1 || useradd -r -g mysql -d "$install_dir" -s /sbin/nologin mysql',
+      '  missing_libs=$(ldd "$install_dir/bin/mysqld" 2>/dev/null | awk \'/not found/ {print $1}\' | tr "\\n" " ")',
+      '  if [ -n "$missing_libs" ]; then echo "MySQL binary dependencies are missing: $missing_libs"; echo "Install the matching libaio/ncurses/openssl compatibility packages, then retry."; exit 1; fi',
+      `  cat > ${shellQuote(configPath)} <<'EOF'
+[mysqld]
+user=mysql
+basedir=${installDir}
+datadir=${installDir}/data
+port=${port}
+socket=${installDir}/run/mysql.sock
+pid-file=${installDir}/run/mysqld.pid
+log-error=${installDir}/logs/mysqld.log
+bind-address=127.0.0.1
+symbolic-links=0
+loose-mysqlx=0
+
+[client]
+port=${port}
+socket=${installDir}/run/mysql.sock
+EOF`,
+      '  chown -R root:mysql "$install_dir"',
+      '  chown -R mysql:mysql "$install_dir/data" "$install_dir/logs" "$install_dir/run"',
+      '  chmod 750 "$install_dir/data" "$install_dir/logs" "$install_dir/run"',
+      `  if [ ! -d ${shellQuote(`${installDir}/data/mysql`)} ]; then echo "Initializing MySQL data directory..."; "$install_dir/bin/mysqld" --defaults-file=${shellQuote(configPath)} --initialize-insecure --user=mysql; echo "MySQL data directory initialized."; else echo "Existing MySQL data directory detected; initialization skipped."; fi`,
+      '  command -v mysql >/dev/null 2>&1 || ln -s "$install_dir/bin/mysql" /usr/local/bin/mysql',
+      '  command -v mysqld >/dev/null 2>&1 || ln -s "$install_dir/bin/mysqld" /usr/local/bin/mysqld',
+      `  cat > ${shellQuote(unitPath)} <<'EOF'
+[Unit]
+Description=MySQL Server (${serviceName})
+After=network.target
+
+[Service]
+Type=simple
+User=mysql
+Group=mysql
+ExecStart=${installDir}/bin/mysqld --defaults-file=${configPath}
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
+EOF`,
+      '  systemctl daemon-reload',
+      'else',
+      '  echo "No MySQL RPM packages or generic binary files found in the archive."',
+      '  exit 1',
+      'fi'
+    ]
+  }
+  if (item.id === 'nginx') {
+    const installDir = form.installDir || item.defaultDir
+    const runUser = form.runUser || 'nginx'
+    const port = form.port || '80'
+    const serviceName = form.serviceName || deriveInstanceServiceName(item, installDir, port)
+    const unitPath = `/etc/systemd/system/${serviceName}`
+    return [
+      'workdir=$(mktemp -d /tmp/ops-flow-nginx.XXXXXX)',
+      'trap \'rm -rf "$workdir"\' EXIT',
+      ...buildCustomInstanceSafetyLines('Nginx', serviceName, `${installDir}/sbin/nginx`, [port]),
+      'tar -xf "$target" -C "$workdir" --strip-components=1',
+      'command -v make >/dev/null 2>&1 || { echo "make is required to build Nginx source package"; exit 127; }',
+      'command -v gcc >/dev/null 2>&1 || { echo "gcc is required to build Nginx source package"; exit 127; }',
+      ...buildServiceAccountLines(runUser),
+      `cd "$workdir" && ./configure --prefix=${shellQuote(installDir)} --user=${shellQuote(runUser)} --group=${shellQuote(runUser)} --with-http_ssl_module --with-http_stub_status_module || { echo "Nginx configure failed. Install pcre-devel/zlib-devel/openssl-devel or use a prebuilt package."; exit 1; }`,
+      'make -C "$workdir" -j"$(nproc 2>/dev/null || echo 2)"',
+      'make -C "$workdir" install',
+      `mkdir -p ${shellQuote(`${installDir}/conf/conf.d`)} ${shellQuote(`${installDir}/logs`)}`,
+      `cat > ${shellQuote(`${installDir}/conf/nginx.conf`)} <<'EOF'\nworker_processes auto;\nevents { worker_connections 1024; }\nhttp {\n    include       mime.types;\n    default_type  application/octet-stream;\n    sendfile on;\n    keepalive_timeout 65;\n    server {\n        listen ${port};\n        location / { root html; index index.html index.htm; }\n    }\n    include conf.d/*.conf;\n}\nEOF`,
+      `cat > ${shellQuote(unitPath)} <<'EOF'\n[Unit]\nDescription=Nginx HTTP Server (${serviceName})\nAfter=network.target\n[Service]\nType=forking\nPIDFile=${installDir}/logs/nginx.pid\nExecStart=${installDir}/sbin/nginx\nExecReload=${installDir}/sbin/nginx -s reload\nExecStop=${installDir}/sbin/nginx -s quit\nRestart=on-failure\n[Install]\nWantedBy=multi-user.target\nEOF`,
+      'systemctl daemon-reload',
+      `${shellQuote(`${installDir}/sbin/nginx`)} -t`,
+      ...buildServiceStartLines(item, true, form)
+    ]
+  }
+  if (item.id === 'minio') {
+    const installDir = form.installDir || item.defaultDir
+    const runUser = form.runUser || 'minio'
+    const adminUser = form.adminUser || 'minioadmin'
+    const adminPassword = form.password || ''
+    const serviceName = form.serviceName || deriveInstanceServiceName(item, installDir, form.port || '9000')
+    const unitPath = `/etc/systemd/system/${serviceName}`
+    const environmentPath = `/etc/ops-flow/${serviceName.replace(/[.]service$/i, '')}.env`
+    return [
+      ...buildCustomInstanceSafetyLines('MinIO', serviceName, `${installDir}/minio`, [form.port || '9000', form.consolePort || '9001']),
+      `mkdir -p ${shellQuote(installDir)} ${shellQuote(`${installDir}/data`)}`,
+      'if tar -tf "$target" >/dev/null 2>&1; then workdir=$(mktemp -d /tmp/ops-flow-minio.XXXXXX); trap \'rm -rf "$workdir"\' EXIT; tar -xf "$target" -C "$workdir"; minio_candidate=$(find "$workdir" -type f -name minio | head -1); [ -n "$minio_candidate" ] || { echo "MinIO executable not found in archive."; exit 1; }; else minio_candidate="$target"; fi',
+      `cp "$minio_candidate" ${shellQuote(`${installDir}/minio.new`)}`,
+      `chmod +x ${shellQuote(`${installDir}/minio.new`)}`,
+      `${shellQuote(`${installDir}/minio.new`)} --version`,
+      `mv -f ${shellQuote(`${installDir}/minio.new`)} ${shellQuote(`${installDir}/minio`)}`,
+      ...buildServiceAccountLines(runUser),
+      `chown -R ${shellQuote(runUser)}:${shellQuote(runUser)} ${shellQuote(installDir)}`,
+      'mkdir -p /etc/ops-flow',
+      `cat > ${shellQuote(environmentPath)} <<'EOF'\nMINIO_ROOT_USER="${quoteSystemdEnvironmentValue(adminUser)}"\nMINIO_ROOT_PASSWORD="${quoteSystemdEnvironmentValue(adminPassword)}"\nEOF`,
+      `chmod 600 ${shellQuote(environmentPath)}`,
+      `cat > ${shellQuote(unitPath)} <<'EOF'\n[Unit]\nDescription=MinIO Object Storage (${serviceName})\nAfter=network-online.target\nWants=network-online.target\n[Service]\nType=simple\nUser=${runUser}\nGroup=${runUser}\nEnvironmentFile=${environmentPath}\nExecStart=${installDir}/minio server ${buildMinioEndpoint(form, installDir)} --address :${form.port || '9000'} --console-address :${form.consolePort || '9001'}\nRestart=on-failure\nRestartSec=5\nUMask=0027\nLimitNOFILE=65536\n[Install]\nWantedBy=multi-user.target\nEOF`,
+      'systemctl daemon-reload',
+      ...buildServiceStartLines(item, true, form)
+    ]
+  }
+  if (item.id === 'tomcat') {
+    const installDir = form.installDir || item.defaultDir
+    const runUser = form.runUser || 'tomcat'
+    const port = form.port || '8080'
+    const serviceName = form.serviceName || deriveInstanceServiceName(item, installDir, port)
+    const unitPath = `/etc/systemd/system/${serviceName}`
+    const environmentPath = `/etc/default/ops-flow-${serviceName.replace(/[.]service$/i, '')}`
+    return [
+      ...buildCustomInstanceSafetyLines('Tomcat', serviceName, `${installDir}/bin/catalina.sh`, [port]),
+      'tar -tf "$target" | grep -Eq "(^|/)bin/catalina.sh$" || { echo "Invalid Tomcat archive: bin/catalina.sh not found."; exit 1; }',
+      'java_bin=$(command -v java || true)',
+      'if [ -z "$java_bin" ] && [ -x /usr/local/java/bin/java ]; then java_bin=/usr/local/java/bin/java; fi',
+      'if [ -z "$java_bin" ]; then echo "Java is required before installing Tomcat."; exit 127; fi',
+      'java_home=$(dirname "$(dirname "$(readlink -f "$java_bin")")")',
+      `rm -rf ${shellQuote(installDir)}`,
+      `mkdir -p ${shellQuote(installDir)}`,
+      `tar -xf "$target" -C ${shellQuote(installDir)} --strip-components=1`,
+      ...buildServiceAccountLines(runUser),
+      `chmod +x ${shellQuote(`${installDir}/bin/`)}*.sh`,
+      `sed -i '0,/port="8080"/s//port="${port}"/' ${shellQuote(`${installDir}/conf/server.xml`)}`,
+      `sed -i '0,/<Server port="8005"/s//<Server port="-1"/' ${shellQuote(`${installDir}/conf/server.xml`)}`,
+      `chown -R ${shellQuote(runUser)}:${shellQuote(runUser)} ${shellQuote(installDir)}`,
+      'mkdir -p /etc/default',
+      `printf 'JAVA_HOME="%s"\\n' "$java_home" > ${shellQuote(environmentPath)}`,
+      `chmod 600 ${shellQuote(environmentPath)}`,
+      `cat > ${shellQuote(unitPath)} <<'EOF'\n[Unit]\nDescription=Apache Tomcat (${serviceName})\nAfter=network.target\n[Service]\nType=simple\nUser=${runUser}\nGroup=${runUser}\nEnvironmentFile=${environmentPath}\nEnvironment=CATALINA_HOME=${installDir}\nEnvironment=CATALINA_BASE=${installDir}\nExecStart=${installDir}/bin/catalina.sh run\nKillSignal=SIGTERM\nSuccessExitStatus=143\nRestart=on-failure\nRestartSec=5\n[Install]\nWantedBy=multi-user.target\nEOF`,
+      'systemctl daemon-reload',
+      ...buildServiceStartLines(item, true, form)
+    ]
+  }
+  if (item.id === 'lynis') {
+    const installDir = form.installDir || item.defaultDir
+    return [
+      'tar -tf "$target" | grep -Eq "(^|/)lynis$" || { echo "Invalid Lynis archive: lynis executable not found."; exit 1; }',
+      `rm -rf ${shellQuote(installDir)}`,
+      `mkdir -p ${shellQuote(installDir)}`,
+      `tar -xf "$target" -C ${shellQuote(installDir)} --strip-components=1`,
+      `chmod +x ${shellQuote(`${installDir}/lynis`)}`,
+      `ln -sf ${shellQuote(`${installDir}/lynis`)} /usr/local/bin/lynis`
+    ]
+  }
+  return [
+    `case "$target" in *.rpm) if command -v dnf >/dev/null 2>&1; then dnf install -y "$target"; elif command -v yum >/dev/null 2>&1; then yum install -y "$target"; else echo "An RPM package requires dnf or yum on this server."; exit 1; fi ;; *.deb) command -v apt-get >/dev/null 2>&1 || { echo "A DEB package requires apt-get on this server."; exit 1; }; apt-get install -y "$target" ;; *) echo "Unsupported ${item.name} offline package. Use a matching .rpm or .deb package."; exit 1 ;; esac`
+  ]
+}
+
+function buildComponentVerifyLines(item, form) {
+  const dir = form.installDir || item.defaultDir
+  const verifiers = {
+    dotnet: [`PATH="$PATH:${dir}" DOTNET_ROOT=${shellQuote(dir)} dotnet --info`],
+    java: [`PATH="$PATH:${dir}/bin" JAVA_HOME=${shellQuote(dir)} java -version`],
+    node: [`PATH="$PATH:${dir}/bin" node -v`, `PATH="$PATH:${dir}/bin" npm -v || true`],
+    python: ['python3 --version || python --version'],
+    go: [`PATH="$PATH:${dir}/bin" GOROOT=${shellQuote(dir)} go version`],
+    maven: [`PATH="$PATH:${dir}/bin" MAVEN_HOME=${shellQuote(dir)} mvn -v | head -5`],
+    git: ['git --version'],
+    minio: [`${dir}/minio --version || minio --version`, buildActiveServiceVerifyLine(item, form)],
+    redis: [`${dir}/bin/redis-server --version || redis-server --version`, buildActiveServiceVerifyLine(item, form), `cli=${shellQuote(`${dir}/bin/redis-cli`)}; if [ ! -x "$cli" ]; then cli=$(command -v redis-cli || true); fi; if [ -z "$cli" ]; then echo "redis-cli not found. Install Redis first."; exit 127; fi; "$cli" -h 127.0.0.1 -p ${shellQuote(form.source === 'online' ? '6379' : (form.port || '6379'))}${form.source !== 'online' && form.password ? ` -a ${shellQuote(form.password)} --no-auth-warning` : ''} ping`],
+    mysql: [`PATH="$PATH:${dir}/bin" mysql --version || PATH="$PATH:${dir}/bin" mysqld --version || mariadb --version`, form.detectedService ? `if ! systemctl is-active --quiet ${shellQuote(form.detectedService)}; then echo "Selected MySQL service is not active: ${String(form.detectedService).replace(/"/g, '')}"; exit 1; fi; echo "Service active: ${String(form.detectedService).replace(/"/g, '')}"` : buildActiveServiceVerifyLine(item, form)],
+    nginx: [`${dir}/sbin/nginx -v || nginx -v`, `${dir}/sbin/nginx -t || nginx -t`, buildActiveServiceVerifyLine(item, form)],
+    tomcat: form.source === 'online' ? [buildActiveServiceVerifyLine(item, form)] : [`${dir}/bin/catalina.sh version | head -5`, buildActiveServiceVerifyLine(item, form)],
+    lynis: [`${dir}/lynis show version || ${dir}/lynis --version || lynis show version || lynis --version`]
+  }
+  return [
+    'echo "Verify result:"',
+    ...(verifiers[item.id] || [`${item.packageName} --version || true`])
+  ]
+}
+
+function buildMinioEndpoint(form, installDir) {
+  return `${installDir}/data`
+}
+
+function buildChecksumCommand(checksum, targetExpression) {
+  const value = String(checksum || '').trim()
+  if (!value) return 'echo "Checksum skipped"'
+  return `echo ${shellQuote(value)}  ${targetExpression} | sha256sum -c -`
+}
+
+function ResourceStrip({ items }) {
+  return (
+    <div className="resource-strip">
+      {items.map((item) => (
+        <div key={item.id}>
+          <strong>{item.name}</strong>
+          <span>{item.host}:{item.port}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+async function loadState() {
+  const rawResources = await window.opsFlow.getStore('resources')
+  const storedServers = await window.opsFlow.getStore('servers')
+  const storedDatabases = await window.opsFlow.getStore('databases')
+  const storedRedisStores = await window.opsFlow.getStore('redisStores')
+
+  if (!rawResources?.length && !storedServers?.length && !storedDatabases?.length && !storedRedisStores?.length) return null
+  const resourceServers = rawResources?.filter((item) => item.type === 'server') || []
+  const resourceDatabases = rawResources?.filter((item) => item.type === 'database') || []
+  const resourceRedisStores = rawResources?.filter((item) => item.type === 'redis') || []
+
+  return {
+    servers: mergeSavedItems(resourceServers, storedServers || []),
+    databases: mergeSavedItems(resourceDatabases, storedDatabases || []),
+    redisStores: mergeSavedItems(resourceRedisStores, storedRedisStores || [])
+  }
+}
+
+function mergeSavedItems(resourceItems, storedItems) {
+  const primary = storedItems.length ? storedItems : resourceItems
+  const secondary = storedItems.length ? resourceItems : []
+  const merged = primary.map(stripResourceType)
+  const knownIds = new Set(merged.map((item) => String(item.id || '')).filter(Boolean))
+  const knownValues = new Set(merged.map((item) => JSON.stringify(item)))
+  secondary.forEach((item) => {
+    const value = stripResourceType(item)
+    const id = String(value.id || '')
+    const signature = JSON.stringify(value)
+    if ((id && knownIds.has(id)) || knownValues.has(signature)) return
+    merged.push(value)
+    if (id) knownIds.add(id)
+    knownValues.add(signature)
+  })
+  return merged
+}
+
+function ensureUniqueResourceIds(items, prefix = 'resource') {
+  const used = new Set()
+  return (items || []).map((item) => {
+    let id = String(item?.id || '')
+    if (!id || used.has(id)) {
+      do {
+        id = makeId(prefix)
+      } while (used.has(id))
+      used.add(id)
+      return { ...item, id }
+    }
+    used.add(id)
+    return item
+  })
+}
+
+function stripResourceType(item) {
+  const { type, ...rest } = item
+  return rest
+}
+
+function persist({ servers, databases, redisStores }) {
+  const resources = [
+    ...servers.map((item) => ({ ...item, type: 'server' })),
+    ...databases.map((item) => ({ ...item, type: 'database' })),
+    ...redisStores.map((item) => ({ ...item, type: 'redis' }))
+  ]
+
+  return Promise.all([
+    window.opsFlow.setStore('resources', resources),
+    window.opsFlow.setStore('servers', servers),
+    window.opsFlow.setStore('databases', databases),
+    window.opsFlow.setStore('redisStores', redisStores)
+  ])
+}
+
+function buildServerFromForm(form) {
+  const name = form.name?.trim() || form.host?.trim() || 'new-server'
+  const server = {
+    id: `server-${Date.now()}`,
+    name,
+    hostname: '-',
+    host: form.host.trim(),
+    port: Number(form.port || 22),
+    username: form.username.trim(),
+    env: form.env?.trim() || 'dev',
+    status: 'disconnected',
+    load: '-',
+    memory: '-',
+    cpuUsage: null,
+    memoryUsage: null,
+    cpu: '-',
+    arch: '-',
+    os: '-',
+    kernel: '-',
+    uptime: '-'
+  }
+
+  if (form.authType === 'privateKey') {
+    server.privateKey = form.privateKey
+    server.passphrase = form.passphrase
+  } else {
+    server.password = form.password
+  }
+
+  return server
+}
+
+function buildFormFromServer(server) {
+  const authType = server.privateKey ? 'privateKey' : 'password'
+  return {
+    name: server.name || '',
+    host: server.host || '',
+    port: server.port || 22,
+    username: server.username || '',
+    password: server.password || '',
+    privateKey: server.privateKey || '',
+    passphrase: server.passphrase || '',
+    env: server.env || 'dev',
+    authType
+  }
+}
+
+function buildDatabaseFromForm(form) {
+  const connectionMode = form.connectionMode || 'ssh'
+  return {
+    id: `db-${Date.now()}`,
+    serverId: connectionMode === 'ssh' ? form.sshServerId || '' : '',
+    name: form.name?.trim() || `${form.engine}-${form.database || form.host}`,
+    engine: form.engine,
+    connectionMode,
+    sshTransport: form.sshTransport || 'tcp',
+    host: form.host?.trim(),
+    port: Number(form.port || defaultDatabasePort(form.engine)),
+    socketPath: form.socketPath?.trim() || '',
+    database: form.database?.trim(),
+    username: form.username?.trim(),
+    password: form.password || '',
+    tables: [],
+    status: 'configured'
+  }
+}
+
+function databaseMetadataIdentity(database = {}) {
+  return [
+    database.engine || '',
+    database.connectionMode || '',
+    database.serverId || '',
+    database.sshTransport || '',
+    database.host || '',
+    Number(database.port || 0),
+    database.socketPath || '',
+    database.database || '',
+    database.username || ''
+  ].join('\u0000')
+}
+
+function buildDatabaseFormFromConfig(database) {
+  return {
+    name: database.name || '',
+    engine: database.engine || 'mysql',
+    connectionMode: database.connectionMode || 'ssh',
+    sshServerId: database.connectionMode === 'direct' ? '' : database.serverId || '',
+    sshTransport: database.sshTransport || 'tcp',
+    host: database.host || '127.0.0.1',
+    port: database.port || defaultDatabasePort(database.engine),
+    socketPath: database.socketPath || '',
+    database: database.database || '',
+    username: database.username || '',
+    password: database.password || ''
+  }
+}
+
+function buildRedisFromForm(form, id = `redis-${Date.now()}`) {
+  const connectionMode = form.connectionMode || 'ssh'
+  return {
+    id,
+    serverId: connectionMode === 'ssh' ? form.sshServerId || '' : '',
+    name: form.name?.trim() || `${form.host || 'redis'}:${form.port || 6379}`,
+    connectionMode,
+    host: form.host?.trim(),
+    port: Number(form.port || 6379),
+    password: form.password || '',
+    database: Number(form.database || 0),
+    tls: Boolean(form.tls),
+    status: 'configured'
+  }
+}
+
+function buildRedisFormFromConfig(redis) {
+  return {
+    ...emptyRedisForm,
+    name: redis.name || '',
+    connectionMode: redis.connectionMode || 'ssh',
+    sshServerId: redis.connectionMode === 'direct' ? '' : redis.serverId || '',
+    host: redis.host || '127.0.0.1',
+    port: redis.port || 6379,
+    password: redis.password || '',
+    database: redis.database || 0,
+    tls: Boolean(redis.tls)
+  }
+}
+
+function formatRedisTtl(ttl) {
+  if (ttl === -1) return 'No expire'
+  if (ttl === -2) return 'Missing'
+  return `${ttl}s`
+}
+
+function updateRedisDatabaseCount(databases, database, count) {
+  const index = Number(database || 0)
+  const nextCount = Number(count || 0)
+  const base = databases.length
+    ? databases
+    : Array.from({ length: 16 }, (_item, itemIndex) => ({ index: itemIndex, keys: 0, expires: 0, avgTtl: 0 }))
+
+  return base.map((item) => (
+    Number(item.index) === index
+      ? { ...item, keys: Math.max(Number(item.keys || 0), nextCount) }
+      : item
+  ))
+}
+
+function parseSystemInspectorOutput(output = '') {
+  const sections = {}
+  let current = 'SYSTEM'
+  for (const rawLine of output.split(/\r?\n/)) {
+    const marker = rawLine.match(/^__OPS_SECTION__(.+)$/)
+    if (marker) {
+      current = marker[1].trim()
+      sections[current] = []
+      continue
+    }
+    if (!sections[current]) sections[current] = []
+    if (rawLine.trim()) sections[current].push(rawLine)
+  }
+
+  const osLines = sections.OS || []
+  const systemLines = sections.SYSTEM || []
+  const services = parseServiceLines(sections.SERVICES || [])
+  const runtimes = parseRuntimeLines(sections.RUNTIME || [])
+  const cronEntries = parseCronLines(sections.CRON || [])
+  const firewall = parseFirewallLines(sections.FIREWALL || [])
+  const packageLines = sections.PACKAGES || []
+  const prettyOsName = osLines.find((line) => line.startsWith('PRETTY_NAME='))?.split('=').slice(1).join('=').replace(/^"|"$/g, '')
+  const kernel = osLines.find((line) => /^Linux\s/.test(line)) || systemLines.find((line) => /Kernel:/i.test(line)) || ''
+  const packageSummary = packageLines.find((line) => /\bpackages:/.test(line)) || '-'
+
+  return {
+    ok: true,
+    sections,
+    runtimes,
+    services,
+    cronEntries,
+    firewall,
+    osName: prettyOsName || '-',
+    kernel: kernel.replace(/^Kernel:\s*/i, ''),
+    serviceCount: services.filter((service) => !isFirewallServiceName(service.name) && (service.active === 'active' || service.sub === 'running')).length,
+    packageSummary
+  }
+}
+
+function parseFirewallLines(lines = []) {
+  const firewall = {
+    backend: 'none',
+    state: 'unknown',
+    zone: '',
+    defaultZone: '',
+    persistence: 'unknown',
+    conflict: false,
+    controllers: [],
+    rules: [],
+    listening: []
+  }
+  if (lines.some((line) => /permission denied|authentication failure|incorrect password|a password is required|not in the sudoers/i.test(line))) {
+    firewall.state = 'permission-required'
+    firewall.permissionRequired = true
+  }
+  const rawRules = []
+
+  for (const line of lines) {
+    const parts = line.split('\t')
+    if (parts[0] === 'META') {
+      const key = parts[1]
+      const value = parts.slice(2).join('\t').trim()
+      if (key === 'conflict') firewall.conflict = value === 'yes'
+      else if (key === 'controllers') firewall.controllers = value ? value.split(',').filter(Boolean) : []
+      else firewall[key] = value
+      continue
+    }
+    if (parts[0] === 'RULE') {
+      firewall.rules.push({
+        id: parts[1],
+        port: parts[2],
+        protocol: parts[3],
+        source: parts[4] || 'any',
+        zone: parts[5] || '',
+        persistent: parts[6] === 'yes',
+        family: parts[7] || 'all',
+        deletable: parts[8] === 'yes' && /^\d+$/.test(parts[2]),
+        backend: firewall.backend
+      })
+      continue
+    }
+    if (parts[0] === 'RAW') {
+      rawRules.push({ backend: parts[1], family: parts[2], line: parts.slice(3).join('\t') })
+      continue
+    }
+    if (parts[0] === 'LISTEN') {
+      const item = parseListeningSocket(parts.slice(1).join('\t'))
+      if (item) firewall.listening.push(item)
+    }
+  }
+
+  if (firewall.root === 'no' && firewall.backend !== 'none') {
+    firewall.permissionRequired = true
+  }
+
+  for (const raw of rawRules) {
+    if (raw.backend === 'ufw') {
+      const normalizedLine = raw.line.trim()
+      const match = normalizedLine.match(/^\[\s*(\d+)\]\s+(\d+)(?:\/([a-z]+))?(?:\s+\(v6\))?\s+ALLOW\s+(?:IN\s+)?(.+)$/i)
+      if (!match) continue
+      firewall.rules.push({
+        id: `ufw:${match[1]}`,
+        index: Number(match[1]),
+        port: match[2],
+        protocol: (match[3] || 'tcp').toLowerCase(),
+        source: match[4].replace(/\s*\(v6\)\s*$/i, '').trim() || 'any',
+        zone: 'ufw',
+        persistent: true,
+        family: /\(v6\)/i.test(normalizedLine) ? 'ipv6' : 'ipv4',
+        deletable: /^Anywhere(?:\s|$)/i.test(match[4]),
+        backend: 'ufw'
+      })
+      continue
+    }
+    if (raw.backend === 'nftables') {
+      const match = raw.line.match(/\b(tcp|udp)\s+dport\s+(\d+).*comment\s+"(ops-flow:[^"]+)".*#\s+handle\s+(\d+)/i)
+      if (!match) continue
+      firewall.rules.push({
+        id: `nftables:${match[4]}`,
+        handle: Number(match[4]),
+        port: match[2],
+        protocol: match[1].toLowerCase(),
+        source: 'any',
+        zone: 'ops_flow',
+        persistent: firewall.persistence === 'configured',
+        family: 'inet',
+        comment: match[3],
+        deletable: true,
+        backend: 'nftables'
+      })
+      continue
+    }
+    if (raw.backend === 'iptables') {
+      if (!/\s-j\s+ACCEPT(?:\s|$)/.test(raw.line)) continue
+      const protocol = raw.line.match(/\s-p\s+(tcp|udp)(?:\s|$)/i)?.[1]?.toLowerCase()
+      const port = raw.line.match(/--dport\s+(\d+)/i)?.[1]
+      if (!protocol || !port) continue
+      const comment = raw.line.match(/--comment\s+"?([^"\s]+)"?/i)?.[1] || ''
+      const source = raw.line.match(/\s-s\s+([^\s]+)/i)?.[1] || 'any'
+      const managed = comment.startsWith('ops-flow:')
+      const simpleExactRule = isSafelyDeletableIptablesRule(raw.line)
+      firewall.rules.push({
+        id: `iptables:${raw.family}:${protocol}:${port}:${firewall.rules.length}`,
+        port,
+        protocol,
+        source,
+        zone: '',
+        persistent: firewall.persistence === 'configured',
+        family: raw.family,
+        comment,
+        raw: raw.line,
+        deletionMode: managed ? 'managed' : simpleExactRule ? 'exact-line' : 'read-only',
+        deletable: managed || simpleExactRule,
+        backend: 'iptables'
+      })
+    }
+  }
+
+  const ruleKeys = new Set()
+  firewall.rules = firewall.rules.filter((rule) => {
+    const key = rule.backend === 'iptables'
+      ? `${rule.backend}|${rule.family}|${rule.raw || ''}`
+      : `${rule.backend}|${rule.family}|${rule.zone}|${rule.port}|${rule.protocol}|${rule.source}`
+    if (ruleKeys.has(key)) return false
+    ruleKeys.add(key)
+    return true
+  })
+  const listeningKeys = new Set()
+  firewall.listening = firewall.listening.filter((item) => {
+    const key = `${item.protocol}|${item.address}|${item.port}`
+    if (listeningKeys.has(key)) return false
+    listeningKeys.add(key)
+    return true
+  }).sort((left, right) => Number(left.port) - Number(right.port))
+  return firewall
+}
+
+function parseListeningSocket(line = '') {
+  const parts = line.trim().split(/\s+/)
+  if (parts.length < 5) return null
+  const protocol = parts[0].toLowerCase()
+  const localAddress = parts[4]
+  const match = localAddress.match(/^(.*):(\d+)$/)
+  if (!match || !['tcp', 'udp'].some((name) => protocol.startsWith(name))) return null
+  return {
+    protocol: protocol.startsWith('udp') ? 'udp' : 'tcp',
+    address: match[1] || '*',
+    port: match[2],
+    process: parts.slice(6).join(' ')
+  }
+}
+
+function parseRuntimeLines(lines = []) {
+  const knownRuntimeNames = new Set([
+    'Java',
+    'Node.js',
+    'Python',
+    'Go',
+    '.NET',
+    'Maven',
+    'Git',
+    'Docker',
+    'Nginx',
+    'Tomcat',
+    'MySQL',
+    'PostgreSQL',
+    'Redis',
+    'MinIO',
+    'Fail2ban',
+    'AIDE',
+    'Lynis',
+    'Auditd',
+    'ClamAV'
+  ])
+  const seen = new Set()
+  return lines.map((line) => {
+    const [name, ...rest] = line.split('\t')
+    const rawVersion = rest.join('\t').trim() || 'not installed'
+    const timedOut = /detection timed out/i.test(rawVersion)
+    const applicationBundled = /^application-bundled runtime:/i.test(rawVersion)
+    const installed = !timedOut && !applicationBundled && (/^service:/i.test(rawVersion) || !/not installed|command not found|not-found|\bunknown\b|not found/i.test(rawVersion))
+    return {
+      name: (name || '-').trim(),
+      version: timedOut || applicationBundled ? rawVersion : installed ? rawVersion : 'not installed',
+      installed,
+      applicationBundled,
+      timedOut
+    }
+  }).filter((item) => {
+    if (!knownRuntimeNames.has(item.name) || seen.has(item.name)) return false
+    seen.add(item.name)
+    return true
+  })
+}
+
+function parseServiceLines(lines = []) {
+  return lines
+    .map((line) => line.trim())
+    .filter((line) => line && !/^(UNIT|LOAD\s+)/.test(line))
+    .map((line) => {
+      const systemd = line.match(/^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)$/)
+      if (systemd && systemd[1].endsWith('.service')) {
+        return {
+          name: systemd[1],
+          load: systemd[2],
+          active: systemd[3],
+          sub: systemd[4],
+          description: systemd[5]?.trim() || ''
+        }
+      }
+      const legacy = line.match(/^\[\s*([+-?])\s*\]\s+(.+)$/)
+      if (legacy) {
+        const active = legacy[1] === '+' ? 'active' : 'inactive'
+        return {
+          name: legacy[2].trim(),
+          load: '-',
+          active,
+          sub: active === 'active' ? 'running' : 'stopped',
+          description: 'sysv service'
+        }
+      }
+      return null
+    })
+    .filter(Boolean)
+}
+
+function parseCronLines(lines = []) {
+  return lines
+    .map((line, index) => ({ line: line.trim(), index }))
+    .filter((item) => item.line && !/^no crontab/i.test(item.line))
+    .map((item) => {
+      const normalizedLine = item.line.replace(/^#\s*/, '')
+      const parts = normalizedLine.split(/\s+/)
+      const expression = parts.length >= 5 ? parts.slice(0, 5).join(' ') : ''
+      const command = parts.length >= 6 ? parts.slice(5).join(' ') : normalizedLine
+      return {
+        ...item,
+        expression,
+        command,
+        enabled: !item.line.startsWith('#')
+      }
+    })
+}
+
+function buildBackupTaskInventoryCommand() {
+  return [
+    'set +e; set -f',
+    'ops_b64() { printf "%s" "$1" | base64 | tr -d "\\n"; }',
+    'ops_emit_task() {',
+    '  source_name="$1"; schedule_text="$2"; command_text="$3"',
+    '  script_path=$(printf "%s\\n" "$command_text" | grep -Eo "/[^[:space:];|&]+[.](sh|bash|py)" | head -1)',
+    '  if [ -z "$script_path" ]; then candidate=$(printf "%s\\n" "$command_text" | awk "{print \\$1}"); [ -f "$candidate" ] && script_path="$candidate"; fi',
+    '  script_body=""',
+    '  if [ -n "$script_path" ] && [ -r "$script_path" ]; then script_body=$(sed -n "1,260p" "$script_path" 2>/dev/null); fi',
+    '  printf "OPS_BACKUP_TASK\\t%s\\t%s\\t%s\\t%s\\t%s\\n" "$(ops_b64 "$source_name")" "$(ops_b64 "$schedule_text")" "$(ops_b64 "$command_text")" "$(ops_b64 "$script_path")" "$(ops_b64 "$script_body")"',
+    '}',
+    'ops_parse_cron() {',
+    '  source_name="$1"; system_format="$2"',
+    '  while IFS= read -r raw_line; do',
+    '    line=$(printf "%s" "$raw_line" | sed "s/^[[:space:]]*//;s/[[:space:]]*$//")',
+    '    [ -n "$line" ] || continue; case "$line" in \\#*|[A-Za-z_]*=*) continue ;; esac',
+    '    set -- $line; [ "$#" -ge 6 ] || continue',
+    '    schedule_text="$1 $2 $3 $4 $5"; shift 5',
+    '    if [ "$system_format" = yes ]; then [ "$#" -ge 2 ] || continue; run_user="$1"; shift; source_label="$source_name ($run_user)"; else source_label="$source_name"; fi',
+    '    command_text="$*"',
+    '    case "$command_text" in *backup*|*Backup*|*mysqldump*|*mysqlpump*|*pg_dump*|*pg_basebackup*|*mongodump*|*xtrabackup*|*redis-cli*--rdb*|*tar\\ *|*zip\\ *|*rsync\\ *|*.sh*|*.bash*|*.py*) ops_emit_task "$source_label" "$schedule_text" "$command_text" ;; esac',
+    '  done',
+    '}',
+    'current_user=${SUDO_USER:-$(id -un 2>/dev/null)}; [ -n "$current_user" ] || current_user=$(id -un)',
+    'current_cron=$(crontab -u "$current_user" -l 2>/dev/null); [ -n "$current_cron" ] && printf "%s\\n" "$current_cron" | ops_parse_cron "$current_user crontab" no',
+    'if [ "$(id -u)" = 0 ]; then',
+    '  if [ "$current_user" != root ]; then root_cron=$(crontab -u root -l 2>/dev/null); [ -n "$root_cron" ] && printf "%s\\n" "$root_cron" | ops_parse_cron "root crontab" no; fi',
+    '  [ -r /etc/crontab ] && sed -n "1,400p" /etc/crontab | ops_parse_cron "/etc/crontab" yes',
+    '  for cron_file in /etc/cron.d/*; do [ -f "$cron_file" ] && [ -r "$cron_file" ] || continue; sed -n "1,400p" "$cron_file" | ops_parse_cron "$cron_file" yes; done',
+    '  for period in hourly daily weekly monthly; do for scheduled_script in /etc/cron.$period/*; do [ -f "$scheduled_script" ] && [ -r "$scheduled_script" ] || continue; scheduled_body=$(sed -n "1,260p" "$scheduled_script" 2>/dev/null); case "$scheduled_body" in *backup*|*Backup*|*mysqldump*|*mysqlpump*|*pg_dump*|*pg_basebackup*|*mongodump*|*xtrabackup*|*redis-cli*--rdb*|*tar\\ *|*zip\\ *|*rsync\\ *) ops_emit_task "/etc/cron.$period" "@$period" "$scheduled_script" ;; esac; done; done',
+    'fi',
+    'if command -v systemctl >/dev/null 2>&1; then',
+    '  systemctl list-unit-files --type=timer --no-legend --no-pager 2>/dev/null | awk "{print \\$1}" | while IFS= read -r timer_unit; do',
+    '    [ -n "$timer_unit" ] || continue',
+    '    service_unit=$(systemctl show "$timer_unit" -p Triggers --value 2>/dev/null | awk "{print \\$1}")',
+    '    [ -n "$service_unit" ] || service_unit="${timer_unit%.timer}.service"',
+    '    command_text=$(systemctl cat "$service_unit" --no-pager 2>/dev/null | sed -n "s/^[[:space:]]*ExecStart=[-@:+!]*//p" | head -1)',
+    '    case "$command_text" in *backup*|*Backup*|*mysqldump*|*mysqlpump*|*pg_dump*|*pg_basebackup*|*mongodump*|*xtrabackup*|*redis-cli*--rdb*|*tar\\ *|*zip\\ *|*rsync\\ *|*.sh*|*.bash*|*.py*) ops_emit_task "systemd:$timer_unit" "systemd timer" "$command_text" ;; esac',
+    '  done',
+    'fi',
+    'for manifest_root in /var/lib/ops-flow/backups /opt/backups/ops-flow /srv/backups /data/backups; do',
+    '  [ -d "$manifest_root/.ops-flow/releases" ] || continue',
+    '  find "$manifest_root/.ops-flow/releases" -mindepth 3 -maxdepth 3 -type f -name manifest.env 2>/dev/null | while IFS= read -r manifest; do',
+    '    manifest_body=$(sed -n "1,120p" "$manifest" 2>/dev/null)',
+    '    ops_emit_task "ops-flow release" "workflow release" "$manifest"',
+    '    printf "OPS_BACKUP_MANIFEST\\t%s\\t%s\\n" "$(ops_b64 "$manifest")" "$(ops_b64 "$manifest_body")"',
+    '  done',
+    'done',
+    'printf "OPS_BACKUP_DONE\\n"'
+  ].join('\n')
+}
+
+function decodeBackupBase64(value = '') {
+  if (!value) return ''
+  try {
+    const bytes = Uint8Array.from(atob(value), (character) => character.charCodeAt(0))
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return ''
+  }
+}
+
+function parseBackupTaskInventory(output = '') {
+  const tasks = []
+  const manifestBodies = new Map()
+  for (const line of String(output).split(/\r?\n/)) {
+    const parts = line.split('\t')
+    if (parts[0] === 'OPS_BACKUP_MANIFEST') {
+      manifestBodies.set(decodeBackupBase64(parts[1]), decodeBackupBase64(parts[2]))
+      continue
+    }
+    if (parts[0] !== 'OPS_BACKUP_TASK') continue
+    const source = decodeBackupBase64(parts[1])
+    const schedule = decodeBackupBase64(parts[2])
+    const command = decodeBackupBase64(parts[3])
+    const scriptPath = decodeBackupBase64(parts[4])
+    const scriptContent = decodeBackupBase64(parts[5])
+    const id = stableBackupTaskId(`${source}\n${schedule}\n${command}`)
+    if (tasks.some((task) => task.id === id)) continue
+    tasks.push(analyzeBackupTask({ id, source, schedule, command, scriptPath, scriptContent }))
+  }
+  tasks.forEach((task) => {
+    if (task.source !== 'ops-flow release') return
+    const manifest = manifestBodies.get(task.command)
+    if (!manifest) return
+    Object.assign(task, analyzeReleaseManifestTask(task, manifest))
+  })
+  return { tasks, complete: String(output).includes('OPS_BACKUP_DONE') }
+}
+
+function stableBackupTaskId(value = '') {
+  let hash = 2166136261
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return `backup-task-${(hash >>> 0).toString(16)}`
+}
+
+function analyzeBackupTask(task) {
+  const text = `${task.command}\n${task.scriptContent || ''}`
+  const lower = text.toLowerCase()
+  let type = 'unknown'
+  let engine = ''
+  if (/\b(mysqldump|mysqlpump|xtrabackup)\b/i.test(text)) { type = 'database'; engine = 'mysql' }
+  else if (/\b(pg_dump|pg_dumpall|pg_basebackup)\b/i.test(text)) { type = 'database'; engine = 'postgresql' }
+  else if (/\bmongodump\b/i.test(text)) { type = 'database'; engine = 'mongodb' }
+  else if (/\bredis-cli\b[^\n]*(--rdb|save|bgsave)/i.test(text)) { type = 'database'; engine = 'redis' }
+  else if (/\/etc\/(nginx|httpd|apache2|ssh|systemd|my[.]cnf|redis|postgres)|[.]conf(?:\s|$)/i.test(text)) type = 'config'
+  else if (/\bsystemctl\s+(stop|start|restart)\b|\/var\/www|\/srv\/|\/opt\/|\/mnt\//i.test(text) && /\b(tar|zip|cp|rsync)\b/i.test(text)) type = 'service'
+  else if (/\b(tar|zip|cp|rsync)\b|backup/i.test(text)) type = 'resource'
+
+  const serviceName = text.match(/\bsystemctl\s+(?:stop|start|restart|reload)\s+([A-Za-z0-9_.@-]+(?:[.]service)?)/i)?.[1] || ''
+  const databaseNameHint = inferBackupDatabaseName(text, engine)
+  const targetPath = inferBackupTargetPath(text, type)
+  const searchDirs = inferBackupSearchDirectories(text)
+  const outputHints = extractBackupOutputHints(text)
+  const archiveRestorable = Boolean(targetPath && /\btar\b[^\n]*(?:-c|c[zjJ]?f)|\bzip\b[^\n]*-r/i.test(text))
+  const configSources = new Set(Array.from(text.matchAll(/\/etc\/[A-Za-z0-9_./-]+/g), (match) => match[0].replace(/\/$/, '')))
+  const restoreMode = type === 'config' && configSources.size > 1 ? 'archive-paths' : 'single'
+  const restoreRoot = '/'
+  const confidence = type === 'unknown' ? 'low' : (type === 'database' || (targetPath && searchDirs.length) ? 'high' : 'medium')
+  const name = inferBackupTaskName(task, type, engine, targetPath, serviceName)
+  return { ...task, type, engine, databaseNameHint, serviceName, restoreMode, restoreRoot, targetPath, searchDirs, outputHints, archiveRestorable, confidence, name, artifacts: [], artifactsScanned: false }
+}
+
+function inferBackupDatabaseName(text = '', engine = '') {
+  if (engine === 'mysql') {
+    return text.match(/\b(?:mysqldump|mysqlpump)\b[^\n>]*(?:--databases?\s+|\s)([A-Za-z0-9_$.-]+)\s*(?:>|$)/i)?.[1] || ''
+  }
+  if (engine === 'postgresql') {
+    return text.match(/\b(?:pg_dump|pg_dumpall)\b[^\n]*(?:-d|--dbname(?:=|\s+))\s*([A-Za-z0-9_$.-]+)/i)?.[1] || ''
+  }
+  return ''
+}
+
+function analyzeReleaseManifestTask(task, manifest = '') {
+  const value = (key) => {
+    const raw = manifest.match(new RegExp(`^${key}=(.*)$`, 'm'))?.[1]?.trim() || ''
+    return raw.replace(/^['"]|['"]$/g, '')
+  }
+  const decoded = (key) => decodeBackupBase64(value(key))
+  const backupPath = decoded('BACKUP_PATH_B64') || value('BACKUP_PATH')
+  const targetPath = decoded('APP_SOURCE_B64')
+  const serviceName = decoded('SERVICE_NAME_B64')
+  const appName = value('APP_NAME') || targetPath.split('/').filter(Boolean).pop() || 'Release'
+  return {
+    type: 'service',
+    engine: 'Ops Flow release',
+    name: `${appName} 发布备份`,
+    targetPath,
+    serviceName,
+    searchDirs: backupPath ? [backupPath.replace(/\/[^/]+$/, '')] : task.searchDirs,
+    outputHints: backupPath ? [backupPath] : [],
+    archiveRestorable: true,
+    confidence: 'high',
+    managedRelease: true,
+    manifestPath: task.command,
+    manifest
+  }
+}
+
+function inferBackupTaskName(task, type, engine, targetPath, serviceName) {
+  if (type === 'database') return `${engineLabel(engine)} 数据库备份`
+  if (serviceName) return `${serviceName.replace(/[.]service$/, '')} 业务备份`
+  if (targetPath) return `${targetPath.split('/').filter(Boolean).pop() || '资源'} 备份`
+  if (task.scriptPath) return `${task.scriptPath.split('/').pop()} 备份任务`
+  return `${backupTaskTypeLabel(type)}备份任务`
+}
+
+function inferBackupTargetPath(text = '', type = '') {
+  if (type === 'database') return ''
+  const tarWithC = text.match(/\btar\b[^\n]*\s-C\s+(["']?)(\/[A-Za-z0-9_./-]+)\1\s+(["']?)([A-Za-z0-9_.-]+)\3/i)
+  if (tarWithC) return `${tarWithC[2].replace(/\/$/, '')}/${tarWithC[4]}`
+  const copy = text.match(/\b(?:cp|rsync)\b[^\n]*?\s(["']?)(\/(?![^\s]*backup)[A-Za-z0-9_./-]+)\1\s+["']?\/[A-Za-z0-9_./$(){}%-]*backup/i)
+  if (copy) return copy[2]
+  const tarSource = text.match(/\btar\b[^\n]*(?:-c|c[zjJ]?f)[^\n]*?\s(["']?)(\/(?![^\s]*backup)[A-Za-z0-9_./-]+)\1\s*(?:$|\n)/i)
+  if (tarSource) return tarSource[2]
+  const configPath = text.match(/(\/etc\/[A-Za-z0-9_./-]+)/)
+  return configPath?.[1] || ''
+}
+
+function extractBackupOutputHints(text = '') {
+  const results = new Set()
+  const patterns = [
+    /(?:>|--result-file(?:=|\s+)|--file(?:=|\s+)|-f\s+)(["']?)(\/[A-Za-z0-9_./$(){}%+:-]+)\1/g,
+    /\b(?:tar\s+[^\n]*?(?:-f\s*|c[zjJ]?f\s+)|zip\s+[^\n]*?)(["']?)(\/[A-Za-z0-9_./$(){}%+:-]+)\1/g,
+    /\b(?:cp|rsync)\b[^\n]*\s(["']?)(\/[A-Za-z0-9_./$(){}%+:-]*(?:backup|backups)[A-Za-z0-9_./$(){}%+:-]*)\1/g
+  ]
+  patterns.forEach((pattern) => {
+    for (const match of text.matchAll(pattern)) {
+      const path = match[2] || match[1]
+      if (path?.startsWith('/')) results.add(path)
+    }
+  })
+  return Array.from(results)
+}
+
+function inferBackupSearchDirectories(text = '') {
+  const directories = new Set()
+  const assignmentMatches = text.matchAll(/\b(?:BACKUP_DIR|BACKUP_PATH|DEST|DEST_DIR|OUTPUT_DIR)\s*=\s*["']?(\/[A-Za-z0-9_./-]+)/gi)
+  for (const match of assignmentMatches) directories.add(match[1])
+  extractBackupOutputHints(text).forEach((path) => {
+    const staticPath = path.split('$')[0].replace(/[({]$/, '').replace(/\/$/, '')
+    const last = staticPath.split('/').pop() || ''
+    const directory = /[.](sql|dump|bak|gz|tgz|xz|zip|tar|conf|json|yaml|yml)$/i.test(last)
+      ? staticPath.replace(/\/[^/]+$/, '')
+      : staticPath
+    if (directory && directory !== '/') directories.add(directory)
+  })
+  for (const match of text.matchAll(/(\/[A-Za-z0-9_./-]*(?:backup|backups)[A-Za-z0-9_./-]*)/gi)) {
+    const raw = match[1].replace(/\/$/, '')
+    const last = raw.split('/').pop() || ''
+    directories.add(/[.][A-Za-z0-9]+$/.test(last) ? raw.replace(/\/[^/]+$/, '') : raw)
+  }
+  return Array.from(directories).filter((path) => path && path !== '/').slice(0, 8)
+}
+
+function buildBackupArtifactScanCommand(task = {}) {
+  const directFiles = (task.outputHints || []).filter((path) => !/[\$({]/.test(path))
+  const directories = Array.from(new Set([...(task.searchDirs || []), ...directFiles.map((path) => path.replace(/\/[^/]+$/, ''))]))
+    .filter((path) => path?.startsWith('/') && path !== '/')
+    .slice(0, 10)
+  const fallback = task.managedRelease ? [] : ['/var/backups', '/var/lib/ops-flow/backups', '/opt/backups', '/srv/backups', '/data/backups']
+  const roots = directories.length ? directories : fallback
+  return [
+    'set +e',
+    'ops_b64() { printf "%s" "$1" | base64 | tr -d "\\n"; }',
+    ...directFiles.map((path) => `[ ! -f ${shellQuote(path)} ] || printf 'OPS_BACKUP_ARTIFACT\\t%s\\t%s\\t%s\\n' "$(stat -c %Y ${shellQuote(path)} 2>/dev/null)" "$(stat -c %s ${shellQuote(path)} 2>/dev/null)" ${shellQuote(path)}`),
+    ...roots.map((root) => `[ -d ${shellQuote(root)} ] && find ${shellQuote(root)} -maxdepth 3 -type f -printf 'OPS_BACKUP_FILE\\t%T@\\t%s\\t%p\\n' 2>/dev/null || true`),
+    'printf "OPS_BACKUP_ARTIFACT_DONE\\n"'
+  ].join('\n')
+}
+
+function parseBackupArtifactOutput(output = '', task = {}) {
+  const artifacts = []
+  for (const line of String(output).split(/\r?\n/)) {
+    const parts = line.split('\t')
+    if (!['OPS_BACKUP_FILE', 'OPS_BACKUP_ARTIFACT'].includes(parts[0])) continue
+    const path = parts.slice(3).join('\t').trim()
+    if (!path || artifacts.some((item) => item.path === path)) continue
+    artifacts.push({
+      path,
+      name: path.split('/').filter(Boolean).pop() || path,
+      modifiedAt: Math.floor(Number(parts[1]) * 1000),
+      size: Number(parts[2]) || 0
+    })
+  }
+  return artifacts
+    .filter((artifact) => isLikelyBackupArtifact(artifact, task))
+    .sort((left, right) => right.modifiedAt - left.modifiedAt)
+    .slice(0, 100)
+}
+
+function isLikelyBackupArtifact(artifact = {}, task = {}) {
+  const path = String(artifact.path || '')
+  const name = String(artifact.name || '').toLowerCase()
+  if (!path || path === task.scriptPath) return false
+  if (/\.(?:sh|bash|py|pl|rb|service|timer|lock|pid|log)$/i.test(name)) return false
+  if (/^(?:manifest[.]env|readme(?:[.]txt|[.]md)?)$/i.test(name)) return false
+  if (task.type === 'database') {
+    if (task.engine === 'mysql') return /\.(?:sql(?:[.]gz)?|dump|bak|xbstream|tar|tgz|tar[.]gz|tar[.]xz|zip)$/i.test(name)
+    if (task.engine === 'postgresql') return /\.(?:sql(?:[.]gz)?|dump|backup|bak|tar|tgz|tar[.]gz|zip)$/i.test(name)
+    if (task.engine === 'redis') return /[.]rdb$/i.test(name)
+    if (task.engine === 'mongodb') return /\.(?:bson|archive|gz|tar|tgz|zip)$/i.test(name)
+  }
+  return true
+}
+
+function buildBackupArtifactVerifyCommand(path = '') {
+  const archiveType = backupArchiveType(path)
+  const contentCheck = archiveType === 'zip'
+    ? 'command -v unzip >/dev/null 2>&1 && unzip -tq "$BACKUP" >/dev/null'
+    : archiveType === 'tar'
+      ? 'tar -tf "$BACKUP" >/dev/null'
+      : /[.]gz$/i.test(path)
+        ? 'gzip -t "$BACKUP"'
+        : '[ -s "$BACKUP" ]'
+  return [
+    'set -Eeuo pipefail',
+    `BACKUP=${shellQuote(path)}`,
+    'ENTRY_FILE=""',
+    'cleanup_verify() { [ -z "$ENTRY_FILE" ] || rm -f -- "$ENTRY_FILE" 2>/dev/null || true; }',
+    'trap cleanup_verify EXIT',
+    '[ -f "$BACKUP" ] || { echo "Backup file not found: $BACKUP" >&2; exit 4; }',
+    'printf "[verify 1/2] Checking backup content\\n"',
+    contentCheck,
+    ...(archiveType ? [
+      'ENTRY_FILE=$(mktemp)',
+      archiveType === 'zip' ? 'unzip -Z1 "$BACKUP" > "$ENTRY_FILE"' : 'tar -tf "$BACKUP" > "$ENTRY_FILE"',
+      '[ -s "$ENTRY_FILE" ] || { echo "Archive is empty" >&2; exit 5; }',
+      'if grep -Eq "(^/|(^|/)[.][.](/|$))" "$ENTRY_FILE"; then echo "Archive contains an unsafe path" >&2; exit 5; fi',
+      'if LC_ALL=C grep -q "[[:cntrl:]]" "$ENTRY_FILE"; then echo "Archive contains an unsupported control character" >&2; exit 5; fi',
+      'if grep -Fq "*" "$ENTRY_FILE" || grep -Fq "?" "$ENTRY_FILE" || grep -Fq "[" "$ENTRY_FILE"; then echo "Archive contains an unsupported wildcard character" >&2; exit 5; fi',
+      'if [ -n "$(sort "$ENTRY_FILE" | uniq -d | head -n 1)" ]; then echo "Archive contains duplicate paths" >&2; exit 5; fi',
+      archiveType === 'zip' ? 'if unzip -Z -l "$BACKUP" | grep -Eq "^[lbcphs]"; then echo "Archive contains links or special files" >&2; exit 5; fi' : 'if tar -tvf "$BACKUP" | grep -Eq "^[lhbcps]"; then echo "Archive contains links or special files" >&2; exit 5; fi',
+      'entry_count=$(wc -l < "$ENTRY_FILE" | tr -d " ")',
+      'entry_truncated=no; [ "$entry_count" -le 300 ] || entry_truncated=yes',
+      'printf "OPS_BACKUP_ENTRY_COUNT\\t%s\\t%s\\n" "$entry_count" "$entry_truncated"',
+      'head -n 300 "$ENTRY_FILE" | while IFS= read -r entry; do if command -v base64 >/dev/null 2>&1; then encoded=$(printf "%s" "$entry" | base64 | tr -d "\\n"); else encoded=$(printf "%s" "$entry" | openssl base64 -A); fi; printf "OPS_BACKUP_ENTRY\\t%s\\n" "$encoded"; done'
+    ] : []),
+    'printf "[verify 2/2] Calculating SHA-256\\n"',
+    'if command -v sha256sum >/dev/null 2>&1; then checksum=$(sha256sum "$BACKUP" | awk "{print \\$1}"); elif command -v shasum >/dev/null 2>&1; then checksum=$(shasum -a 256 "$BACKUP" | awk "{print \\$1}"); else echo "SHA-256 tool is not installed" >&2; exit 5; fi',
+    'printf "OPS_BACKUP_VERIFY\\t%s\\n" "$checksum"'
+  ].join('\n')
+}
+
+function parseBackupArtifactVerification(output = '') {
+  const lines = String(output).split(/\r?\n/)
+  const checksum = lines.find((line) => line.startsWith('OPS_BACKUP_VERIFY\t'))?.split('\t')[1]?.trim() || ''
+  const countParts = lines.find((line) => line.startsWith('OPS_BACKUP_ENTRY_COUNT\t'))?.split('\t') || []
+  const entries = lines
+    .filter((line) => line.startsWith('OPS_BACKUP_ENTRY\t'))
+    .map((line) => decodeBackupEntry(line.slice('OPS_BACKUP_ENTRY\t'.length)))
+    .filter(Boolean)
+  return checksum ? {
+    ok: true,
+    checksum,
+    entries,
+    entryCount: Number(countParts[1]) || entries.length,
+    entriesTruncated: countParts[2] === 'yes'
+  } : { ok: false, message: '没有获得备份校验结果。' }
+}
+
+function decodeBackupEntry(value = '') {
+  try {
+    const binary = atob(value)
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return ''
+  }
+}
+
+function enrichBackupTask(task, databases = [], profiles = {}, serverId = '') {
+  const profile = profiles[backupRecoveryProfileKey(serverId, task.id)] || {}
+  const database = databases.find((item) => item.id === profile.databaseId)
+    || databases.find((item) => backupDatabaseEngineMatches(task.engine, item.engine) && task.databaseNameHint && item.database === task.databaseNameHint)
+    || databases.find((item) => backupDatabaseEngineMatches(task.engine, item.engine))
+  const targetPath = profile.targetPath || task.targetPath || ''
+  const restoreMode = profile.restoreMode || task.restoreMode || 'single'
+  const restoreRoot = profile.restoreRoot || task.restoreRoot || '/'
+  const serviceName = profile.serviceName || task.serviceName || ''
+  let readiness = 'ready'
+  if (task.type === 'database' && !database) readiness = 'needs-database'
+  else if (task.type === 'unknown' || (task.type !== 'database' && restoreMode === 'single' && !targetPath) || (task.type !== 'database' && restoreMode === 'archive-paths' && !String(restoreRoot).startsWith('/'))) readiness = 'needs-target'
+  return { ...task, restoreMode, restoreRoot, targetPath, serviceName, matchedDatabaseId: database?.id || '', matchedDatabaseName: database?.name || '', readiness }
+}
+
+function backupRecoveryProfileKey(serverId, taskId) {
+  return `${serverId || 'server'}:${taskId}`
+}
+
+function backupDatabaseEngineMatches(taskEngine = '', databaseEngine = '') {
+  const left = String(taskEngine).toLowerCase()
+  const right = String(databaseEngine).toLowerCase()
+  if (left === 'mysql') return ['mysql', 'mariadb'].includes(right)
+  if (left === 'postgresql') return ['postgres', 'postgresql'].includes(right)
+  return left === right
+}
+
+function buildSystemBackupRestoreCommand({ task, artifact, restoreMode = 'single', restoreRoot = '/', targetPath, serviceName, database }) {
+  const backupPath = String(artifact?.path || '')
+  if (!backupPath.startsWith('/') || backupPath === '/') return ''
+  if (task.type === 'database') return buildDatabaseBackupRestoreCommand(task, backupPath, database)
+  if (task.managedRelease && task.manifestPath) return buildReleaseRestoreFromManifestCommand(task.manifestPath, '')
+  if (restoreMode === 'archive-paths') return buildArchivePathRestoreCommand(backupPath, restoreRoot, serviceName)
+  if (!String(targetPath).startsWith('/') || targetPath === '/') return ''
+  const safeService = isSafeServiceName(serviceName) ? serviceName : ''
+  const archiveType = backupArchiveType(backupPath)
+  if (archiveType && !task.archiveRestorable) return ''
+  const targetDir = targetPath.replace(/\/[^/]+$/, '') || '/'
+  const targetName = targetPath.split('/').filter(Boolean).pop()
+  const stop = safeService ? `systemctl stop ${shellQuote(safeService)}` : ':'
+  const start = safeService ? `systemctl start ${shellQuote(safeService)}` : ':'
+  if (!archiveType) {
+    return [
+      'set -Eeuo pipefail',
+      `BACKUP=${shellQuote(backupPath)}`,
+      `TARGET=${shellQuote(targetPath)}`,
+      `TARGET_DIR=${shellQuote(targetDir)}`,
+      'BEFORE="${TARGET}.ops-flow-before-restore-$(date +%Y%m%d-%H%M%S)"',
+      'printf "[restore 1/5] Verifying backup file\\n"',
+      '[ -f "$BACKUP" ] || { echo "Backup file not found: $BACKUP" >&2; exit 4; }',
+      'mkdir -p "$TARGET_DIR"',
+      'TEMP="$TARGET_DIR/.ops-flow-restore-$(date +%s)-$$"',
+      'SERVICE_STOPPED=no',
+      `cleanup_restore() { status=$?; trap - EXIT; rm -f -- "$TEMP" 2>/dev/null || true; if [ "$SERVICE_STOPPED" = yes ]; then ${start} >/dev/null 2>&1 || true; fi; exit "$status"; }`,
+      'trap cleanup_restore EXIT',
+      'cp -a -- "$BACKUP" "$TEMP"',
+      'cmp -s -- "$BACKUP" "$TEMP" || { rm -f -- "$TEMP"; echo "Backup copy verification failed" >&2; exit 5; }',
+      '[ ! -e "$TARGET" ] || { chmod --reference="$TARGET" "$TEMP" 2>/dev/null || true; chown --reference="$TARGET" "$TEMP" 2>/dev/null || true; }',
+      'printf "[restore 2/5] Stopping related service\\n"',
+      stop,
+      safeService ? 'SERVICE_STOPPED=yes' : 'SERVICE_STOPPED=no',
+      'printf "[restore 3/5] Saving current target\\n"',
+      '[ ! -e "$TARGET" ] || mv -- "$TARGET" "$BEFORE"',
+      'printf "[restore 4/5] Replacing target atomically\\n"',
+      'if ! mv -- "$TEMP" "$TARGET"; then [ ! -e "$BEFORE" ] || mv -- "$BEFORE" "$TARGET"; exit 6; fi',
+      'printf "[restore 5/5] Starting related service\\n"',
+      start,
+      'SERVICE_STOPPED=no',
+      'trap - EXIT',
+      'printf "Restore completed. Previous target: %s\\n" "$BEFORE"'
+    ].join('\n')
+  }
+  const extract = archiveType === 'zip'
+    ? 'unzip -q "$BACKUP" -d "$STAGE"'
+    : 'tar -xf "$BACKUP" -C "$STAGE"'
+  return [
+    'set -Eeuo pipefail',
+    `BACKUP=${shellQuote(backupPath)}`,
+    `TARGET=${shellQuote(targetPath)}`,
+    `TARGET_DIR=${shellQuote(targetDir)}`,
+    `TARGET_NAME=${shellQuote(targetName)}`,
+    'BEFORE="${TARGET}.ops-flow-before-restore-$(date +%Y%m%d-%H%M%S)"',
+    'STAGE="$TARGET_DIR/.ops-flow-restore-$(date +%s)-$$"',
+    'SERVICE_STOPPED=no',
+    `cleanup_restore() { status=$?; trap - EXIT; rm -rf -- "$STAGE" 2>/dev/null || true; if [ "$SERVICE_STOPPED" = yes ]; then ${start} >/dev/null 2>&1 || true; fi; exit "$status"; }`,
+    'trap cleanup_restore EXIT',
+    'printf "[restore 1/6] Verifying archive\\n"',
+    '[ -f "$BACKUP" ] || { echo "Backup archive not found: $BACKUP" >&2; exit 4; }',
+    'mkdir -p "$STAGE"',
+    extract,
+    'CANDIDATE="$STAGE/$TARGET_NAME"',
+    '[ -e "$CANDIDATE" ] || { echo "Archive does not contain the expected root: $TARGET_NAME" >&2; exit 5; }',
+    'printf "[restore 2/6] Stopping related service\\n"',
+    stop,
+    safeService ? 'SERVICE_STOPPED=yes' : 'SERVICE_STOPPED=no',
+    'printf "[restore 3/6] Saving current target\\n"',
+    '[ ! -e "$TARGET" ] || mv -- "$TARGET" "$BEFORE"',
+    'printf "[restore 4/6] Replacing target atomically\\n"',
+    'if ! mv -- "$CANDIDATE" "$TARGET"; then [ ! -e "$BEFORE" ] || mv -- "$BEFORE" "$TARGET"; exit 6; fi',
+    'printf "[restore 5/6] Starting related service\\n"',
+    start,
+    'SERVICE_STOPPED=no',
+    'trap - EXIT',
+    'rm -rf -- "$STAGE" 2>/dev/null || true',
+    'printf "[restore 6/6] Restore completed. Previous target: %s\\n" "$BEFORE"'
+  ].join('\n')
+}
+
+function buildArchivePathRestoreCommand(backupPath, restoreRoot = '/', serviceName = '') {
+  const archiveType = backupArchiveType(backupPath)
+  if (!archiveType || !String(restoreRoot).startsWith('/')) return ''
+  const safeService = isSafeServiceName(serviceName) ? serviceName : ''
+  const stop = safeService ? `systemctl stop ${shellQuote(safeService)}` : ':'
+  const start = safeService ? `systemctl start ${shellQuote(safeService)}` : ':'
+  const listArchive = archiveType === 'zip'
+    ? 'command -v unzip >/dev/null 2>&1 || { echo "unzip is not installed" >&2; exit 4; }; unzip -Z1 "$BACKUP" > "$ENTRY_FILE"'
+    : 'tar -tf "$BACKUP" > "$ENTRY_FILE"'
+  const readEntry = archiveType === 'zip'
+    ? 'unzip -p "$BACKUP" "$raw" > "$STAGE/$rel"'
+    : 'tar -xOf "$BACKUP" "$raw" > "$STAGE/$rel"'
+  return [
+    'set -Eeuo pipefail',
+    `BACKUP=${shellQuote(backupPath)}`,
+    `ROOT=${shellQuote(restoreRoot.replace(/\/$/, '') || '/')}`,
+    'STAMP=$(date +%Y%m%d-%H%M%S)',
+    'STAGE=$(mktemp -d /tmp/ops-flow-restore.XXXXXX)',
+    'ENTRY_FILE="$STAGE/archive.entries"',
+    'FILE_LIST="$STAGE/files.list"',
+    'SNAPSHOT_ROOT=/var/lib/ops-flow/restore-snapshots',
+    'WORK="$SNAPSHOT_ROOT/$STAMP-$$"',
+    'EXISTING="$WORK/existing.list"',
+    'NEW_FILES="$WORK/new-files.list"',
+    'BEFORE="$WORK/before.tar"',
+    'SERVICE_STOPPED=no',
+    'APPLY_STARTED=no',
+    'cleanup_archive_restore() { status=$?; trap - EXIT; if [ "$status" -ne 0 ] && [ "$APPLY_STARTED" = yes ]; then printf "[rollback] Restoring files from the pre-restore snapshot\\n"; while IFS= read -r rel; do [ -n "$rel" ] && rm -f -- "$ROOT/$rel" 2>/dev/null || true; done < "$NEW_FILES"; if [ -s "$EXISTING" ] && [ -f "$BEFORE" ]; then tar -xf "$BEFORE" -C "$ROOT" >/dev/null 2>&1 || true; fi; fi; rm -rf -- "$STAGE" 2>/dev/null || true; if [ "$SERVICE_STOPPED" = yes ]; then ' + start + ' >/dev/null 2>&1 || true; fi; exit "$status"; }',
+    'trap cleanup_archive_restore EXIT',
+    'printf "[restore 1/7] Validating archive paths\\n"',
+    '[ -f "$BACKUP" ] || { echo "Backup archive not found: $BACKUP" >&2; exit 4; }',
+    listArchive,
+    '[ -s "$ENTRY_FILE" ] || { echo "Archive is empty" >&2; exit 5; }',
+    'if grep -Eq "(^/|(^|/)[.][.](/|$))" "$ENTRY_FILE"; then echo "Archive contains an unsafe path" >&2; exit 5; fi',
+    'if LC_ALL=C grep -q "[[:cntrl:]]" "$ENTRY_FILE"; then echo "Archive contains an unsupported control character" >&2; exit 5; fi',
+    'if grep -Fq "*" "$ENTRY_FILE" || grep -Fq "?" "$ENTRY_FILE" || grep -Fq "[" "$ENTRY_FILE"; then echo "Archive contains an unsupported wildcard character" >&2; exit 5; fi',
+    'if [ -n "$(sort "$ENTRY_FILE" | uniq -d | head -n 1)" ]; then echo "Archive contains duplicate paths" >&2; exit 5; fi',
+    archiveType === 'zip' ? 'if unzip -Z -l "$BACKUP" | grep -Eq "^[lbcphs]"; then echo "Archive contains links or special files" >&2; exit 5; fi' : 'if tar -tvf "$BACKUP" | grep -Eq "^[lhbcps]"; then echo "Archive contains links or special files" >&2; exit 5; fi',
+    'printf "[restore 2/7] Reading archive content safely\\n"',
+    ': > "$FILE_LIST"',
+    'while IFS= read -r raw; do rel=${raw#./}; [ -n "$rel" ] || continue; case "$rel" in */) mkdir -p -- "$STAGE/$rel"; continue;; esac; mkdir -p -- "$(dirname "$STAGE/$rel")"; ' + readEntry + '; [ -f "$STAGE/$rel" ] || { echo "Unable to read archive entry: $rel" >&2; exit 5; }; printf "%s\\n" "$rel" >> "$FILE_LIST"; done < "$ENTRY_FILE"',
+    '[ -s "$FILE_LIST" ] || { echo "Archive contains no restorable files" >&2; exit 5; }',
+    'mkdir -p -- "$ROOT" "$WORK"',
+    ': > "$EXISTING"; : > "$NEW_FILES"',
+    'assert_safe_target() { rel=$1; current=$ROOT; case "$rel" in */*) parent=${rel%/*};; *) parent="";; esac; old_ifs=$IFS; IFS=/; read -r -a parts <<< "$parent"; IFS=$old_ifs; for part in "${parts[@]}"; do [ -n "$part" ] || continue; current="$current/$part"; [ ! -L "$current" ] || { echo "Restore path crosses a symbolic link: $current" >&2; return 1; }; done; [ ! -L "$ROOT/$rel" ] || { echo "Restore target is a symbolic link: $ROOT/$rel" >&2; return 1; }; }',
+    'while IFS= read -r rel; do assert_safe_target "$rel"; if [ -e "$ROOT/$rel" ]; then [ -f "$ROOT/$rel" ] || { echo "Restore target is not a regular file: $ROOT/$rel" >&2; exit 6; }; printf "%s\\n" "$rel" >> "$EXISTING"; else printf "%s\\n" "$rel" >> "$NEW_FILES"; fi; done < "$FILE_LIST"',
+    'printf "[restore 3/7] Stopping related service\\n"',
+    stop,
+    safeService ? 'SERVICE_STOPPED=yes' : 'SERVICE_STOPPED=no',
+    'printf "[restore 4/7] Creating pre-restore snapshot\\n"',
+    'if [ -s "$EXISTING" ]; then tar -cf "$BEFORE" -C "$ROOT" -T "$EXISTING"; else printf "No existing files require a snapshot\\n"; fi',
+    'APPLY_STARTED=yes',
+    'printf "[restore 5/7] Replacing configuration files\\n"',
+    'while IFS= read -r rel; do src="$STAGE/$rel"; target="$ROOT/$rel"; parent=$(dirname "$target"); mkdir -p -- "$parent"; temp="$parent/.ops-flow-new-$$-$(basename "$rel")"; cp -- "$src" "$temp"; if [ -e "$target" ]; then chmod --reference="$target" "$temp" 2>/dev/null || true; chown --reference="$target" "$temp" 2>/dev/null || true; fi; mv -f -- "$temp" "$target"; cmp -s -- "$src" "$target" || { echo "Restore verification failed: $target" >&2; exit 7; }; done < "$FILE_LIST"',
+    'printf "[restore 6/7] Starting related service\\n"',
+    start,
+    'SERVICE_STOPPED=no',
+    'APPLY_STARTED=no',
+    'trap - EXIT',
+    'rm -rf -- "$STAGE" 2>/dev/null || true',
+    'printf "[restore 7/7] Restore completed. Snapshot: %s\\n" "$WORK"'
+  ].join('\n')
+}
+
+function buildDatabaseBackupRestoreCommand(task, backupPath, database) {
+  if (!database) return ''
+  const engine = String(database.engine || '').toLowerCase()
+  const host = database.host || '127.0.0.1'
+  const port = Number(database.port || (engine === 'mysql' ? 3306 : 5432))
+  const username = database.username || ''
+  const databaseName = database.database || ''
+  if (['mysql', 'mariadb'].includes(engine) && /[.]sql(?:[.]gz)?$/i.test(backupPath)) {
+    const reader = /[.]gz$/i.test(backupPath) ? `gzip -dc -- ${shellQuote(backupPath)}` : `cat -- ${shellQuote(backupPath)}`
+    return [
+      'set -Eeuo pipefail',
+      'printf "[database restore 1/3] Checking MySQL client and backup\\n"',
+      'command -v mysql >/dev/null 2>&1 || { echo "mysql client is not installed" >&2; exit 4; }',
+      `[ -f ${shellQuote(backupPath)} ] || { echo "Backup file not found" >&2; exit 4; }`,
+      'printf "[database restore 2/3] Importing SQL backup\\n"',
+      `export MYSQL_PWD=${shellQuote(database.password || '')}`,
+      `${reader} | mysql --protocol=tcp -h ${shellQuote(host)} -P ${port} -u ${shellQuote(username)} ${databaseName ? shellQuote(databaseName) : ''}`.trim(),
+      'unset MYSQL_PWD',
+      'printf "[database restore 3/3] MySQL restore completed\\n"'
+    ].join('\n')
+  }
+  if (['postgres', 'postgresql'].includes(engine) && /[.](?:sql|dump|backup)(?:[.]gz)?$/i.test(backupPath)) {
+    const compressed = /[.]gz$/i.test(backupPath)
+    const custom = /[.](?:dump|backup)$/i.test(backupPath)
+    const restore = custom
+      ? `pg_restore --clean --if-exists -h ${shellQuote(host)} -p ${port} -U ${shellQuote(username)} -d ${shellQuote(databaseName)} ${shellQuote(backupPath)}`
+      : `${compressed ? `gzip -dc -- ${shellQuote(backupPath)}` : `cat -- ${shellQuote(backupPath)}`} | psql -v ON_ERROR_STOP=1 -h ${shellQuote(host)} -p ${port} -U ${shellQuote(username)} -d ${shellQuote(databaseName)}`
+    return [
+      'set -Eeuo pipefail',
+      'printf "[database restore 1/3] Checking PostgreSQL client and backup\\n"',
+      `[ -f ${shellQuote(backupPath)} ] || { echo "Backup file not found" >&2; exit 4; }`,
+      `export PGPASSWORD=${shellQuote(database.password || '')}`,
+      'printf "[database restore 2/3] Restoring PostgreSQL backup\\n"',
+      restore,
+      'unset PGPASSWORD',
+      'printf "[database restore 3/3] PostgreSQL restore completed\\n"'
+    ].join('\n')
+  }
+  return ''
+}
+
+function backupArchiveType(path = '') {
+  if (/[.]zip$/i.test(path)) return 'zip'
+  if (/[.](?:tar|tgz|tar[.]gz|tar[.]xz|tar[.]bz2)$/i.test(path)) return 'tar'
+  return ''
+}
+
+function backupTaskTypeLabel(type) {
+  return ({ database: '数据库', service: '业务服务', config: '配置文件', resource: '文件资源', unknown: '待识别' })[type] || '备份'
+}
+
+function backupTaskReadinessLabel(task = {}) {
+  if (task.readiness === 'needs-database') return '需补充连接'
+  if (task.readiness === 'needs-target') return '需确认目标'
+  return task.confidence === 'high' ? '可恢复' : '需核对'
+}
+
+function engineLabel(engine = '') {
+  return ({ mysql: 'MySQL', postgresql: 'PostgreSQL', mongodb: 'MongoDB', redis: 'Redis' })[engine] || engine || '数据库'
+}
+
+function formatBytes(value = 0) {
+  const size = Number(value) || 0
+  if (size < 1024) return `${size} B`
+  if (size < 1024 ** 2) return `${(size / 1024).toFixed(1)} KB`
+  if (size < 1024 ** 3) return `${(size / 1024 ** 2).toFixed(1)} MB`
+  return `${(size / 1024 ** 3).toFixed(1)} GB`
+}
+
+function defaultDatabaseBackupSchema(database = {}) {
+  if (database.engine === 'postgres') return 'public'
+  if (database.engine === 'sqlserver') return 'dbo'
+  if (['oracle', 'dm'].includes(database.engine)) return String(database.username || '').toUpperCase()
+  return database.database || ''
+}
+
+function databaseBackupProgressPercent(progress = {}) {
+  if (!progress) return 0
+  if (progress.status === 'done' || progress.stage === 'done') return 100
+  if (['failed', 'canceled'].includes(progress.status)) {
+    return Math.max(0, Math.min(99, Number(progress.percent || 0)))
+  }
+  if (progress.stage === 'selecting') return 1
+  if (progress.stage === 'preparing') return 3
+  const total = Math.max(1, Number(progress.tableCount || 1))
+  const current = Math.max(0, Math.min(total, Number(progress.tableIndex || 0)))
+  const ratio = current / total
+  if (progress.content === 'structure') return Math.min(98, Math.round(5 + ratio * 93))
+  if (progress.content === 'data') return Math.min(98, Math.round(5 + ratio * 93))
+  if (progress.stage === 'structure') return Math.min(49, Math.round(5 + ratio * 44))
+  if (progress.stage === 'data') return Math.min(98, Math.round(50 + ratio * 48))
+  if (progress.stage === 'objects') return 99
+  return 3
+}
+
+function formatBackupArtifactTime(value) {
+  const date = new Date(Number(value) || 0)
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString()
+}
+
+function parseCronLineToForm(line = '') {
+  const parts = String(line).trim().split(/\s+/)
+  if (parts.length < 6) return { ...emptyCronForm, scheduleType: 'advanced', expression: '', command: line }
+  const [minute, hour, dayOfMonth, month, weekday, ...commandParts] = parts
+  const expression = [minute, hour, dayOfMonth, month, weekday].join(' ')
+  const command = commandParts.join(' ')
+  const base = { ...emptyCronForm, minute, hour, dayOfMonth, month, weekday, expression, command }
+
+  if (expression === '* * * * *') return { ...base, scheduleType: 'every-minute' }
+  if (/^\*\/\d+$/.test(minute) && hour === '*' && dayOfMonth === '*' && month === '*' && weekday === '*') {
+    return { ...base, scheduleType: 'every-n-minutes', everyMinutes: minute.slice(2) }
+  }
+  if (hour === '*' && dayOfMonth === '*' && month === '*' && weekday === '*') return { ...base, scheduleType: 'hourly' }
+  if (dayOfMonth === '*' && month === '*' && weekday === '*') return { ...base, scheduleType: 'daily' }
+  if (dayOfMonth === '*' && month === '*' && weekday !== '*') return { ...base, scheduleType: 'weekly' }
+  if (dayOfMonth !== '*' && month === '*' && weekday === '*') return { ...base, scheduleType: 'monthly' }
+  return { ...base, scheduleType: 'advanced' }
+}
+
+function buildCronLineFromForm(form = emptyCronForm) {
+  const expression = buildCronExpression(form)
+  const command = String(form.command || '').trim()
+  if (!expression || !command) return ''
+  return `${expression} ${command}`
+}
+
+function buildCronExpression(form = emptyCronForm) {
+  switch (form.scheduleType) {
+    case 'every-minute':
+      return '* * * * *'
+    case 'every-n-minutes':
+      return `*/${form.everyMinutes || '5'} * * * *`
+    case 'hourly':
+      return `${form.minute || '0'} * * * *`
+    case 'daily':
+      return `${form.minute || '0'} ${form.hour || '2'} * * *`
+    case 'weekly':
+      return `${form.minute || '0'} ${form.hour || '2'} * * ${form.weekday || '1'}`
+    case 'monthly':
+      return `${form.minute || '0'} ${form.hour || '2'} ${form.dayOfMonth || '1'} * *`
+    case 'advanced':
+      return String(form.expression || '').trim()
+    default:
+      return ''
+  }
+}
+
+function minuteOptions() {
+  return Array.from({ length: 60 }, (_item, index) => String(index))
+}
+
+function hourOptions() {
+  return Array.from({ length: 24 }, (_item, index) => String(index))
+}
+
+function dayOptions() {
+  return Array.from({ length: 31 }, (_item, index) => String(index + 1))
+}
+
+function weekdayOptions() {
+  return [
+    { value: '1', label: 'Monday' },
+    { value: '2', label: 'Tuesday' },
+    { value: '3', label: 'Wednesday' },
+    { value: '4', label: 'Thursday' },
+    { value: '5', label: 'Friday' },
+    { value: '6', label: 'Saturday' },
+    { value: '0', label: 'Sunday' }
+  ]
+}
+
+function padCronNumber(value) {
+  return String(value).padStart(2, '0')
+}
+
+function isSafeServiceName(name) {
+  return /^[A-Za-z0-9_.@-]+\.service$/.test(String(name || ''))
+}
+
+function isFirewallServiceName(name) {
+  return /^(firewalld|nftables|iptables|ip6tables|ufw|netfilter-persistent)\.service$/i.test(String(name || ''))
+}
+
+function buildFirewallInspectCommand(privilege = { mode: 'normal', password: '' }) {
+  const script = [
+    'set +e',
+    'export LC_ALL=C',
+    'is_root=no; [ "$(id -u 2>/dev/null)" = "0" ] && is_root=yes',
+    'firewalld_active=no; ufw_active=no; nftables_active=no; iptables_active=no',
+    'if command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state 2>/dev/null | grep -q running; then firewalld_active=yes; fi',
+    'if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | head -1 | grep -qi "Status: active"; then ufw_active=yes; fi',
+    'if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nftables.service 2>/dev/null; then nftables_active=yes; fi',
+    'if command -v systemctl >/dev/null 2>&1 && { systemctl is-active --quiet iptables.service 2>/dev/null || systemctl is-active --quiet netfilter-persistent.service 2>/dev/null; }; then iptables_active=yes; fi',
+    'controllers=""',
+    '[ "$firewalld_active" = yes ] && controllers="${controllers}firewalld,"',
+    '[ "$ufw_active" = yes ] && controllers="${controllers}ufw,"',
+    '[ "$nftables_active" = yes ] && controllers="${controllers}nftables,"',
+    '[ "$iptables_active" = yes ] && controllers="${controllers}iptables,"',
+    'controller_count=$(printf "%s" "$controllers" | tr -cd "," | wc -c | tr -d " ")',
+    'backend=none; state=inactive',
+    'if [ "$firewalld_active" = yes ]; then backend=firewalld; state=active; elif [ "$ufw_active" = yes ]; then backend=ufw; state=active; elif [ "$nftables_active" = yes ]; then backend=nftables; state=active; elif [ "$iptables_active" = yes ]; then backend=iptables; state=active; elif [ "$is_root" != yes ]; then backend=unknown; state=permission-required; elif command -v nft >/dev/null 2>&1 && [ -n "$(nft list ruleset 2>/dev/null)" ]; then backend=nftables; state=rules-present; elif command -v iptables >/dev/null 2>&1 && [ "$(iptables -S INPUT 2>/dev/null | wc -l)" -gt 1 ]; then backend=iptables; state=rules-present; elif command -v firewall-cmd >/dev/null 2>&1; then backend=firewalld; elif command -v ufw >/dev/null 2>&1; then backend=ufw; elif command -v nft >/dev/null 2>&1; then backend=nftables; elif command -v iptables >/dev/null 2>&1; then backend=iptables; fi',
+    'conflict=no; [ "$controller_count" -gt 1 ] && conflict=yes',
+    'printf "META\\tbackend\\t%s\\n" "$backend"',
+    'printf "META\\tstate\\t%s\\n" "$state"',
+    'printf "META\\tconflict\\t%s\\n" "$conflict"',
+    'printf "META\\tcontrollers\\t%s\\n" "${controllers%,}"',
+    'printf "META\\troot\\t%s\\n" "$is_root"',
+    'zone=""; default_zone=""; persistence=unknown',
+    'if [ "$backend" = firewalld ]; then',
+    '  persistence=supported',
+    '  if [ "$firewalld_active" = yes ]; then',
+    '    default_zone=$(firewall-cmd --get-default-zone 2>/dev/null)',
+    '    zone=$(firewall-cmd --get-active-zones 2>/dev/null | awk \'NF && $1 !~ /^(interfaces:|sources:)/ {print $1; exit}\')',
+    '    [ -n "$zone" ] || zone="$default_zone"',
+    '    zones=$(firewall-cmd --get-active-zones 2>/dev/null | awk \'NF && $1 !~ /^(interfaces:|sources:)/ {print $1}\')',
+    '    [ -n "$zones" ] || zones="$zone"',
+    '    for z in $zones; do',
+    '      runtime_ports=$(firewall-cmd --zone="$z" --list-ports 2>/dev/null)',
+    '      permanent_ports=$(firewall-cmd --permanent --zone="$z" --list-ports 2>/dev/null)',
+    '      for entry in $(printf "%s\\n%s\\n" "$runtime_ports" "$permanent_ports" | tr " " "\\n" | sed \'/^$/d\' | sort -u); do',
+    '        port=${entry%/*}; proto=${entry#*/}; permanent=no',
+    '        printf "%s\\n" "$permanent_ports" | tr " " "\\n" | grep -Fxq "$entry" && permanent=yes',
+    '        printf "RULE\\tfirewalld:%s:%s\\t%s\\t%s\\tany\\t%s\\t%s\\tall\\tyes\\n" "$z" "$entry" "$port" "$proto" "$z" "$permanent"',
+    '      done',
+    '      runtime_services=$(firewall-cmd --zone="$z" --list-services 2>/dev/null)',
+    '      permanent_services=$(firewall-cmd --permanent --zone="$z" --list-services 2>/dev/null)',
+    '      for svc in $(printf "%s\\n%s\\n" "$runtime_services" "$permanent_services" | tr " " "\\n" | sed \'/^$/d\' | sort -u); do',
+    '        service_permanent=no; printf "%s\\n" "$permanent_services" | tr " " "\\n" | grep -Fxq "$svc" && service_permanent=yes',
+    '        service_ports=$(firewall-cmd --info-service="$svc" 2>/dev/null | awk \'/^[[:space:]]*ports:/ {sub(/^[[:space:]]*ports:[[:space:]]*/, ""); print}\')',
+    '        for entry in $service_ports; do port=${entry%/*}; proto=${entry#*/}; printf "RULE\\tfirewalld-service:%s:%s:%s\\t%s\\t%s\\tservice:%s\\t%s\\t%s\\tall\\tno\\n" "$z" "$svc" "$entry" "$port" "$proto" "$svc" "$z" "$service_permanent"; done',
+    '      done',
+    '    done',
+    '  fi',
+    'elif [ "$backend" = ufw ]; then',
+    '  persistence=managed',
+    '  ufw status numbered 2>/dev/null | while IFS= read -r line; do printf "RAW\\tufw\\tall\\t%s\\n" "$line"; done',
+    'elif [ "$backend" = nftables ]; then',
+    '  persistence=not-configured; if [ -f /etc/nftables/ops-flow.nft ] && { [ -f /etc/nftables.conf ] || [ -f /etc/sysconfig/nftables.conf ]; }; then persistence=configured; fi',
+    '  if nft list chain inet ops_flow input >/dev/null 2>&1; then nft -a list chain inet ops_flow input 2>/dev/null | while IFS= read -r line; do printf "RAW\\tnftables\\tinet\\t%s\\n" "$line"; done; fi',
+    'elif [ "$backend" = iptables ]; then',
+    '  persistence=not-configured; if [ -f /etc/sysconfig/iptables ] || [ -f /etc/iptables/rules.v4 ] || command -v netfilter-persistent >/dev/null 2>&1; then persistence=configured; fi',
+    '  iptables -S INPUT 2>/dev/null | while IFS= read -r line; do printf "RAW\\tiptables\\tipv4\\t%s\\n" "$line"; done',
+    '  if command -v ip6tables >/dev/null 2>&1; then ip6tables -S INPUT 2>/dev/null | while IFS= read -r line; do printf "RAW\\tiptables\\tipv6\\t%s\\n" "$line"; done; fi',
+    'fi',
+    'printf "META\\tzone\\t%s\\n" "$zone"',
+    'printf "META\\tdefaultZone\\t%s\\n" "$default_zone"',
+    'printf "META\\tpersistence\\t%s\\n" "$persistence"',
+    'if command -v ss >/dev/null 2>&1; then ss -H -lntup 2>/dev/null || ss -H -lntu 2>/dev/null; fi | while IFS= read -r line; do printf "LISTEN\\t%s\\n" "$line"; done'
+  ].join('\n')
+  return buildPrivilegedCommand(`sh -lc ${shellQuote(script)}`, privilege)
+}
+
+function canManageFirewall(firewall = {}) {
+  if (firewall.conflict) return false
+  if (firewall.root !== 'yes') return false
+  if (!['firewalld', 'ufw', 'nftables', 'iptables'].includes(firewall.backend)) return false
+  if (['firewalld', 'ufw'].includes(firewall.backend)) return firewall.state === 'active'
+  return firewall.state === 'active' || firewall.persistence === 'configured'
+}
+
+function firewallRuleCoversPort(rule, port) {
+  if (!rule || String(rule.protocol).toLowerCase() !== 'tcp') return false
+  const target = Number(port)
+  const text = String(rule.port || '')
+  const range = text.match(/^(\d+)[:-](\d+)$/)
+  if (range) return target >= Number(range[1]) && target <= Number(range[2])
+  return Number(text) === target
+}
+
+function isSafelyDeletableIptablesRule(line = '') {
+  const text = String(line || '').trim()
+  if (!/^-A INPUT\s/.test(text)) return false
+  if (!/\s-p\s+(tcp|udp)(?:\s|$)/i.test(text)) return false
+  if (!/\s--dport\s+\d+(?:\s|$)/i.test(text)) return false
+  if (!/\s-j\s+ACCEPT\s*$/i.test(text)) return false
+  if (/--comment|--dports|\s-m\s+(multiport|conntrack|state|recent|set|string|hashlimit)\b/i.test(text)) return false
+  if (!/^[A-Za-z0-9_./:,\-\s]+$/.test(text)) return false
+  const protocol = text.match(/\s-p\s+(tcp|udp)(?:\s|$)/i)?.[1]?.toLowerCase()
+  const modules = Array.from(text.matchAll(/\s-m\s+(\S+)/g), (match) => match[1].toLowerCase())
+  return modules.every((moduleName) => moduleName === protocol)
+}
+
+function wrapFirewallScript(lines, privilege) {
+  const script = ['set -e', 'export LC_ALL=C', ...lines].join('\n')
+  return buildPrivilegedCommand(`sh -lc ${shellQuote(script)}`, privilege)
+}
+
+function buildFirewallAddCommand(firewall, form, privilege) {
+  const port = Number(form.port)
+  const protocol = form.protocol === 'udp' ? 'udp' : 'tcp'
+  const zone = /^[A-Za-z0-9_-]+$/.test(form.zone || '') ? form.zone : (firewall.zone || firewall.defaultZone || 'public')
+  if (firewall.backend === 'firewalld') {
+    const lines = [...buildFirewallBackupLines('firewalld'), `firewall-cmd --zone=${shellQuote(zone)} --add-port=${port}/${protocol}`]
+    if (form.persistent) lines.push(`firewall-cmd --permanent --zone=${shellQuote(zone)} --add-port=${port}/${protocol}`)
+    return wrapFirewallScript(lines, privilege)
+  }
+  if (firewall.backend === 'ufw') {
+    return wrapFirewallScript([...buildFirewallBackupLines('ufw'), `ufw allow ${port}/${protocol}`], privilege)
+  }
+  if (firewall.backend === 'nftables') {
+    const comment = `ops-flow:${port}/${protocol}`
+    const lines = [
+      ...buildFirewallBackupLines('nftables'),
+      'nft list table inet ops_flow >/dev/null 2>&1 || nft add table inet ops_flow',
+      "nft list chain inet ops_flow input >/dev/null 2>&1 || nft 'add chain inet ops_flow input { type filter hook input priority -10; policy accept; }'",
+      `nft -a list chain inet ops_flow input 2>/dev/null | grep -Fq ${shellQuote(`comment "${comment}"`)} || nft add rule inet ops_flow input ${protocol} dport ${port} accept comment ${shellQuote(comment)}`
+    ]
+    if (form.persistent) lines.push(...buildNftPersistenceLines())
+    return wrapFirewallScript(lines, privilege)
+  }
+  if (firewall.backend === 'iptables') {
+    const comment = `ops-flow:${port}/${protocol}`
+    const spec = `-p ${protocol} --dport ${port} -m comment --comment ${shellQuote(comment)} -j ACCEPT`
+    const lines = [
+      ...buildFirewallBackupLines('iptables'),
+      `iptables -C INPUT ${spec} 2>/dev/null || iptables -I INPUT 1 ${spec}`,
+      `if command -v ip6tables >/dev/null 2>&1; then ip6tables -C INPUT ${spec} 2>/dev/null || ip6tables -I INPUT 1 ${spec}; fi`
+    ]
+    if (form.persistent) lines.push(...buildIptablesPersistenceLines())
+    return wrapFirewallScript(lines, privilege)
+  }
+  return 'false'
+}
+
+function buildFirewallDeleteCommand(firewall, rule, privilege) {
+  const port = Number(rule.port)
+  const protocol = rule.protocol === 'udp' ? 'udp' : 'tcp'
+  if (firewall.backend === 'firewalld') {
+    const zone = /^[A-Za-z0-9_-]+$/.test(rule.zone || '') ? rule.zone : (firewall.zone || firewall.defaultZone || 'public')
+    return wrapFirewallScript([
+      ...buildFirewallBackupLines('firewalld'),
+      `runtime=1; permanent=1; firewall-cmd --zone=${shellQuote(zone)} --remove-port=${port}/${protocol} || runtime=$?`,
+      `firewall-cmd --permanent --zone=${shellQuote(zone)} --remove-port=${port}/${protocol} || permanent=$?`,
+      '[ "$runtime" -eq 0 ] || [ "$permanent" -eq 0 ]'
+    ], privilege)
+  }
+  if (firewall.backend === 'ufw') {
+    return wrapFirewallScript([...buildFirewallBackupLines('ufw'), `ufw --force delete allow ${port}/${protocol}`], privilege)
+  }
+  if (firewall.backend === 'nftables' && Number.isInteger(rule.handle)) {
+    const lines = [...buildFirewallBackupLines('nftables'), `nft delete rule inet ops_flow input handle ${rule.handle}`]
+    if (rule.persistent || firewall.persistence === 'configured') lines.push(...buildNftPersistenceLines())
+    return wrapFirewallScript(lines, privilege)
+  }
+  if (firewall.backend === 'iptables' && rule.comment?.startsWith('ops-flow:')) {
+    const tool = rule.family === 'ipv6' ? 'ip6tables' : 'iptables'
+    const spec = `-p ${protocol} --dport ${port} -m comment --comment ${shellQuote(rule.comment)} -j ACCEPT`
+    const lines = [...buildFirewallBackupLines('iptables'), `${tool} -D INPUT ${spec}`]
+    if (rule.persistent || firewall.persistence === 'configured') lines.push(...buildIptablesPersistenceLines())
+    return wrapFirewallScript(lines, privilege)
+  }
+  if (firewall.backend === 'iptables' && rule.deletionMode === 'exact-line' && isSafelyDeletableIptablesRule(rule.raw)) {
+    const tool = rule.family === 'ipv6' ? 'ip6tables' : 'iptables'
+    const lines = [
+      ...buildFirewallBackupLines('iptables'),
+      `target=${shellQuote(rule.raw)}`,
+      `matches=$(${tool} -S INPUT 2>/dev/null | grep -Fxc -- "$target" || true)`,
+      '[ "$matches" -eq 1 ] || { echo "The rule changed or is not unique; refresh and try again"; exit 1; }',
+      `line_no=$(${tool} -S INPUT 2>/dev/null | awk -v target="$target" '$1 == "-A" { count++; if ($0 == target) print count }')`,
+      'case "$line_no" in ""|*[!0-9]*) echo "Unable to resolve a unique rule number"; exit 1;; esac',
+      `${tool} -D INPUT "$line_no"`
+    ]
+    if (rule.persistent || firewall.persistence === 'configured') lines.push(...buildIptablesPersistenceLines())
+    return wrapFirewallScript(lines, privilege)
+  }
+  return 'false'
+}
+
+function buildFirewallToggleCommand(firewall, enable, sshPort, privilege) {
+  const port = Number(sshPort || 22)
+  if (firewall.backend === 'firewalld') {
+    if (!enable) return wrapFirewallScript([...buildFirewallBackupLines('firewalld'), 'systemctl disable --now firewalld.service'], privilege)
+    return wrapFirewallScript([
+      ...buildFirewallBackupLines('firewalld'),
+      'command -v firewall-offline-cmd >/dev/null 2>&1 || { echo "firewall-offline-cmd is required for safe remote enable"; exit 1; }',
+      'zone=$(firewall-offline-cmd --get-default-zone 2>/dev/null || true); [ -n "$zone" ] || zone=public',
+      `firewall-offline-cmd --zone="$zone" --add-port=${port}/tcp 2>/dev/null || true`,
+      'systemctl enable --now firewalld.service',
+      `firewall-cmd --zone="$zone" --add-port=${port}/tcp`,
+      `firewall-cmd --permanent --zone="$zone" --add-port=${port}/tcp`
+    ], privilege)
+  }
+  if (firewall.backend === 'ufw') {
+    return enable
+      ? wrapFirewallScript([...buildFirewallBackupLines('ufw'), `ufw allow ${port}/tcp`, 'ufw --force enable'], privilege)
+      : wrapFirewallScript([...buildFirewallBackupLines('ufw'), 'ufw disable'], privilege)
+  }
+  return 'false'
+}
+
+function buildFirewallBackupLines(backend) {
+  const lines = [
+    'backup_dir=/var/lib/ops-flow/firewall-backups/$(date +%Y%m%d-%H%M%S)-$$',
+    'mkdir -p "$backup_dir"'
+  ]
+  if (backend === 'firewalld') {
+    lines.push('firewall-cmd --list-all-zones > "$backup_dir/firewalld-runtime.txt" 2>/dev/null || true', '[ -d /etc/firewalld ] && cp -a /etc/firewalld "$backup_dir/" || true')
+  } else if (backend === 'ufw') {
+    lines.push('ufw status numbered > "$backup_dir/ufw-status.txt" 2>/dev/null || true', '[ -d /etc/ufw ] && cp -a /etc/ufw "$backup_dir/" || true')
+  } else if (backend === 'nftables') {
+    lines.push('nft list ruleset > "$backup_dir/nftables.conf" 2>/dev/null || true', '[ -f /etc/nftables/ops-flow.nft ] && cp -a /etc/nftables/ops-flow.nft "$backup_dir/" || true')
+  } else if (backend === 'iptables') {
+    lines.push('iptables-save > "$backup_dir/iptables.v4" 2>/dev/null || true', 'command -v ip6tables-save >/dev/null 2>&1 && ip6tables-save > "$backup_dir/iptables.v6" 2>/dev/null || true')
+  }
+  return lines
+}
+
+function buildNftPersistenceLines() {
+  return [
+    'mkdir -p /etc/nftables',
+    'tmp=/etc/nftables/ops-flow.nft.tmp',
+    'nft list table inet ops_flow > "$tmp"',
+    'mv -f "$tmp" /etc/nftables/ops-flow.nft',
+    'if [ -f /etc/sysconfig/nftables.conf ] || [ -f /etc/redhat-release ]; then config=/etc/sysconfig/nftables.conf; else config=/etc/nftables.conf; fi; touch "$config"',
+    'grep -Fq \'include "/etc/nftables/ops-flow.nft"\' "$config" || printf \'include "/etc/nftables/ops-flow.nft"\\n\' >> "$config"',
+    'if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files nftables.service >/dev/null 2>&1; then systemctl enable nftables.service >/dev/null 2>&1 || true; fi'
+  ]
+}
+
+function buildIptablesPersistenceLines() {
+  return [
+    'if { command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files iptables.service --no-legend 2>/dev/null | grep -q "^iptables.service"; } || [ -f /etc/sysconfig/iptables ]; then',
+    '  mkdir -p /etc/sysconfig; tmp=/etc/sysconfig/iptables.ops-flow.tmp; iptables-save > "$tmp"; mv -f "$tmp" /etc/sysconfig/iptables',
+    '  if command -v ip6tables-save >/dev/null 2>&1; then tmp6=/etc/sysconfig/ip6tables.ops-flow.tmp; ip6tables-save > "$tmp6"; mv -f "$tmp6" /etc/sysconfig/ip6tables; fi',
+    '  systemctl enable iptables.service >/dev/null 2>&1 || true',
+    'elif command -v netfilter-persistent >/dev/null 2>&1; then',
+    '  netfilter-persistent save',
+    'elif [ -d /etc/iptables ]; then',
+    '  tmp=/etc/iptables/rules.v4.ops-flow.tmp; iptables-save > "$tmp"; mv -f "$tmp" /etc/iptables/rules.v4',
+    '  if command -v ip6tables-save >/dev/null 2>&1; then tmp6=/etc/iptables/rules.v6.ops-flow.tmp; ip6tables-save > "$tmp6"; mv -f "$tmp6" /etc/iptables/rules.v6; fi',
+    'else',
+    '  echo "No supported iptables persistence service was detected"; exit 1',
+    'fi'
+  ]
+}
+
+function buildServiceActionCommand(serviceName, action, privilege = { mode: 'normal', password: '' }) {
+  const expectedState = action === 'stop' ? 'inactive' : 'active'
+  const systemctlCommand = `systemctl ${action} ${serviceName}`
+  const runCommand = buildPrivilegedCommand(systemctlCommand, privilege)
+  return [
+    `${runCommand} 2>&1`,
+    'code=$?',
+    `state=$(systemctl is-active ${serviceName} 2>&1 || true)`,
+    `if [ "$state" = "${expectedState}" ]; then echo "ok: ${serviceName} ${expectedState}"; exit 0; fi`,
+    `echo "failed: ${serviceName} is $state after ${action}"`,
+    'exit $code'
+  ].join('\n')
+}
+
+function buildPrivilegedCommand(command, privilege = { mode: 'normal', password: '' }) {
+  // Privilege elevation is applied by the Electron main process so secrets never enter command text.
+  void privilege
+  return command
+}
+
+function normalizeServiceActionMessage(output, action, serviceName) {
+  const text = String(output || '').trim()
+  if (/authentication is required|permission denied|access denied|interactive authentication|polkit|sudo|incorrect password|authentication failure|su: authentication/i.test(text)) {
+    return `${toTitle(action)} failed: permission required or password is incorrect for ${serviceName}.`
+  }
+  if (/not loaded|could not be found|not-found|not found|no such/i.test(text)) {
+    return `${toTitle(action)} failed: service not found (${serviceName}).`
+  }
+  return text ? `${toTitle(action)} failed: ${text.split(/\r?\n/).slice(-2).join(' ')}` : `${toTitle(action)} failed: ${serviceName}`
+}
+
+function buildCronInstallCommand(lines = []) {
+  const body = lines.join('\n')
+  return [
+    'tmp="/tmp/ops-flow-cron-$(date +%s)-$$"',
+    `printf %s ${shellQuote(body)} > "$tmp"`,
+    'crontab "$tmp"',
+    'rm -f "$tmp"'
+  ].join('\n')
+}
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`
+}
+
+function toTitle(value) {
+  return String(value || '').charAt(0).toUpperCase() + String(value || '').slice(1)
+}
+
+function formatRedisValue(value) {
+  if (typeof value === 'string') {
+    try {
+      return JSON.stringify(JSON.parse(value), null, 2)
+    } catch {
+      return value
+    }
+  }
+  return JSON.stringify(value, null, 2)
+}
+
+function resourceUsesSsh(resource) {
+  return Boolean(resource) && (resource.connectionMode || 'ssh') === 'ssh'
+}
+
+function findResourceSshServer(resource, serversOrServer) {
+  if (!resourceUsesSsh(resource)) return null
+  const candidates = Array.isArray(serversOrServer) ? serversOrServer : [serversOrServer]
+  return candidates.find((server) => server?.id && server.id === resource.serverId) || null
+}
+
+function resourceConnectionAvailable(resource, serversOrServer) {
+  if (!resource) return false
+  return !resourceUsesSsh(resource) || Boolean(findResourceSshServer(resource, serversOrServer))
+}
+
+function resourceConnectionError(resource) {
+  if (!resource) return 'Select a connection first.'
+  return resourceUsesSsh(resource)
+    ? 'The linked SSH server is missing. Edit this connection and select an available SSH jump server.'
+    : 'The direct connection is not available.'
+}
+
+function resourceConnectionLabel(resource, serversOrServer, t = (_key, fallback) => fallback) {
+  if (!resource) return ''
+  if (!resourceUsesSsh(resource)) return t('resource.direct', 'Direct')
+  const server = findResourceSshServer(resource, serversOrServer)
+  return server
+    ? t('resource.sshServer', 'SSH: {name}', { name: server.name })
+    : t('resource.missingSshServer', 'SSH: missing server')
+}
+
+function withDatabaseRuntime(database, serversOrServer) {
+  if (!resourceUsesSsh(database)) return database
+  return {
+    ...database,
+    connectionMode: 'ssh',
+    sshConfig: findResourceSshServer(database, serversOrServer) || undefined
+  }
+}
+
+function withRedisRuntime(redis, serversOrServer) {
+  if (!resourceUsesSsh(redis)) return redis
+  return {
+    ...redis,
+    connectionMode: 'ssh',
+    sshConfig: findResourceSshServer(redis, serversOrServer) || undefined
+  }
+}
+
+function buildColumnAlterSql(database, table, dialog, form) {
+  if (dialog.mode === 'edit') {
+    const nextName = form.newName?.trim()
+    const type = form.type?.trim()
+    if (!dialog.column?.name || !nextName || !type) return ''
+    return buildEditColumnSql(database, table, dialog.column, { ...form, newName: nextName, type })
+  }
+
+  const name = form.name?.trim()
+  const type = form.type?.trim()
+  if (!name || !type) return ''
+
+  const pieces = [
+    `ALTER TABLE ${qualifiedTableName(database, table)} ADD COLUMN ${quoteIdentifier(database, name)} ${type}`,
+    form.nullable ? '' : 'NOT NULL',
+    form.defaultValue?.trim() ? `DEFAULT ${form.defaultValue.trim()}` : ''
+  ].filter(Boolean)
+
+  return `${pieces.join(' ')};`
+}
+
+function buildTableAlterSql(database, dialog, form) {
+  if (dialog.mode === 'edit') {
+    const nextName = form.newName?.trim()
+    if (!dialog.table?.name || !nextName) return ''
+    return buildRenameTableSql(database, dialog.table, nextName)
+  }
+
+  const name = form.name?.trim()
+  const columns = (form.columns || [])
+    .map((column) => ({
+      name: column.name?.trim(),
+      type: column.type?.trim(),
+      nullable: column.nullable,
+      defaultValue: column.defaultValue?.trim()
+    }))
+    .filter((column) => column.name && column.type)
+
+  if (!name || !columns.length) return ''
+
+  const columnSql = columns.map((column) => [
+    `${quoteIdentifier(database, column.name)} ${column.type}`,
+    column.nullable ? '' : 'NOT NULL',
+    column.defaultValue ? `DEFAULT ${column.defaultValue}` : ''
+  ].filter(Boolean).join(' '))
+
+  return `CREATE TABLE ${qualifiedTableName(database, { schema: defaultSchemaForCreate(database), name })} (\n  ${columnSql.join(',\n  ')}\n);`
+}
+
+function buildRenameTableSql(database, table, nextName) {
+  if (database.engine === 'postgres') {
+    return `ALTER TABLE ${qualifiedTableName(database, table)} RENAME TO ${quoteIdentifier(database, nextName)};`
+  }
+  if (database.engine === 'sqlserver') {
+    return `EXEC sp_rename '${table.schema}.${table.name}', '${nextName}';`
+  }
+  if (isOracleLikeEngine(database.engine)) {
+    return `ALTER TABLE ${qualifiedTableName(database, table)} RENAME TO ${quoteIdentifier(database, nextName)};`
+  }
+  return `RENAME TABLE ${qualifiedTableName(database, table)} TO ${qualifiedTableName(database, { schema: table.schema, name: nextName })};`
+}
+
+function buildDropTableSql(database, table) {
+  return `DROP TABLE ${qualifiedTableName(database, table)};`
+}
+
+function buildEditColumnSql(database, table, column, form) {
+  const tableName = qualifiedTableName(database, table)
+  const currentName = column.name
+  const nextName = form.newName
+  const defaultValue = form.defaultValue?.trim()
+  const nullableSql = form.nullable ? 'NULL' : 'NOT NULL'
+  const defaultSql = defaultValue ? `DEFAULT ${defaultValue}` : ''
+
+  if (database.engine === 'postgres') {
+    const statements = []
+    if (currentName !== nextName) {
+      statements.push(`ALTER TABLE ${tableName} RENAME COLUMN ${quoteIdentifier(database, currentName)} TO ${quoteIdentifier(database, nextName)}`)
+    }
+    const finalName = quoteIdentifier(database, nextName)
+    statements.push(`ALTER TABLE ${tableName} ALTER COLUMN ${finalName} TYPE ${form.type}`)
+    statements.push(`ALTER TABLE ${tableName} ALTER COLUMN ${finalName} ${form.nullable ? 'DROP NOT NULL' : 'SET NOT NULL'}`)
+    statements.push(`ALTER TABLE ${tableName} ALTER COLUMN ${finalName} ${defaultValue ? `SET DEFAULT ${defaultValue}` : 'DROP DEFAULT'}`)
+    return `${statements.join(';\n')};`
+  }
+
+  if (database.engine === 'sqlserver') {
+    const statements = []
+    if (currentName !== nextName) {
+      statements.push(`EXEC sp_rename '${table.schema}.${table.name}.${currentName}', '${nextName}', 'COLUMN'`)
+    }
+    statements.push(`ALTER TABLE ${tableName} ALTER COLUMN ${quoteIdentifier(database, nextName)} ${form.type} ${nullableSql}`)
+    if (defaultValue) {
+      statements.push(`ALTER TABLE ${tableName} ADD DEFAULT ${defaultValue} FOR ${quoteIdentifier(database, nextName)}`)
+    }
+    return `${statements.join(';\n')};`
+  }
+
+  if (isOracleLikeEngine(database.engine)) {
+    const statements = []
+    if (currentName !== nextName) {
+      statements.push(`ALTER TABLE ${tableName} RENAME COLUMN ${quoteIdentifier(database, currentName)} TO ${quoteIdentifier(database, nextName)}`)
+    }
+    statements.push(`ALTER TABLE ${tableName} MODIFY ${quoteIdentifier(database, nextName)} ${form.type} ${form.nullable ? 'NULL' : 'NOT NULL'}`)
+    if (defaultValue) {
+      statements.push(`ALTER TABLE ${tableName} MODIFY ${quoteIdentifier(database, nextName)} DEFAULT ${defaultValue}`)
+    }
+    return `${statements.join(';\n')};`
+  }
+
+  return [
+    `ALTER TABLE ${tableName} CHANGE COLUMN ${quoteIdentifier(database, currentName)} ${quoteIdentifier(database, nextName)} ${form.type}`,
+    nullableSql,
+    defaultSql
+  ].filter(Boolean).join(' ') + ';'
+}
+
+function buildDropColumnSql(database, table, columnName) {
+  return `ALTER TABLE ${qualifiedTableName(database, table)} DROP COLUMN ${quoteIdentifier(database, columnName)};`
+}
+
+function qualifiedTableName(database, table) {
+  const schema = table.schema && table.schema !== '-' ? `${quoteIdentifier(database, table.schema)}.` : ''
+  return `${schema}${quoteIdentifier(database, table.name)}`
+}
+
+function defaultSchemaForCreate(database) {
+  if (database.engine === 'postgres') return 'public'
+  if (database.engine === 'sqlserver') return 'dbo'
+  if (isOracleLikeEngine(database.engine)) return database.username?.toUpperCase() || database.database
+  return database.database
+}
+
+function quoteIdentifier(database, identifier) {
+  const value = String(identifier || '')
+  if (database.engine === 'postgres' || isOracleLikeEngine(database.engine)) return `"${value.replace(/"/g, '""')}"`
+  if (database.engine === 'sqlserver') return `[${value.replace(/]/g, ']]')}]`
+  return `\`${value.replace(/`/g, '``')}\``
+}
+
+function defaultDatabasePort(engine) {
+  if (engine === 'postgres') return 5432
+  if (engine === 'sqlserver') return 1433
+  if (engine === 'oracle') return 1521
+  if (engine === 'dm') return 5236
+  return 3306
+}
+
+function supportsDatabaseCreateEngine(engine) {
+  return ['mysql', 'mariadb', 'postgres', 'sqlserver'].includes(String(engine || ''))
+}
+
+function databaseCreateEngineLabel(engine) {
+  if (engine === 'postgres') return 'PostgreSQL'
+  if (engine === 'sqlserver') return 'SQL Server'
+  if (engine === 'mariadb') return 'MariaDB'
+  return 'MySQL'
+}
+
+function databaseCreateEndpoint(database) {
+  if (!database) return '-'
+  if (isMySqlSshSocketConfig(database)) return database.socketPath || '-'
+  return `${database.host || '-'}:${database.port || defaultDatabasePort(database.engine)}`
+}
+
+function databaseCreateOptionsSourceKey(value = {}) {
+  if (value.sourceMode === 'existing') {
+    return `existing:${value.sourceDatabaseId || ''}:${value.engine || ''}`
+  }
+  return [
+    'manual',
+    value.engine || '',
+    value.connectionMode || '',
+    value.sshServerId || '',
+    value.sshTransport || '',
+    value.host || '',
+    value.port || '',
+    value.socketPath || '',
+    value.maintenanceDatabase || '',
+    value.username || '',
+    String(value.password || '').length
+  ].join(':')
+}
+
+function buildDatabaseCreateSqlPreview(value = {}) {
+  const name = String(value.databaseName || '').trim() || '<数据库名>'
+  if (['mysql', 'mariadb'].includes(value.engine)) {
+    return [
+      `CREATE DATABASE \`${name.replace(/`/g, '``')}\``,
+      value.charset ? `CHARACTER SET ${value.charset}` : '',
+      value.collation ? `COLLATE ${value.collation}` : ''
+    ].filter(Boolean).join(' ') + ';'
+  }
+  if (value.engine === 'postgres') return `CREATE DATABASE "${name.replace(/"/g, '""')}";`
+  if (value.engine === 'sqlserver') return `CREATE DATABASE [${name.replace(/]/g, ']]')}];`
+  return '-- 当前数据库类型暂不支持创建数据库'
+}
+
+function isOracleLikeEngine(engine) {
+  return engine === 'oracle' || engine === 'dm'
+}
+
+function formatConnectionMode(mode) {
+  return mode === 'ssh' ? 'Via server SSH' : 'Direct'
+}
+
+function formatDatabaseError(message = '', database = null) {
+  if (/Dameng legacy compatibility mode was active/i.test(message)) {
+    return `数据库连接失败：已开启“兼容旧版达梦”，但仍无法完成连接。请在“设置 → 常规 → 达梦数据库 → 高级设置与诊断”检查兼容环境，并核对数据库服务端配置。${message}`
+  }
+  if (/Dameng server and dmdb .+ negotiated a legacy cipher that is unavailable in this OpenSSL 3 runtime/i.test(message)) {
+    return `数据库连接失败：当前达梦服务端使用了旧加密算法。请在“设置 → 常规 → 达梦数据库”开启“兼容旧版达梦”后重试，或升级数据库服务端。${message}`
+  }
+  if (/No compatible Node\.js runtime|Node\.js runtime does not|isolated Dameng compatibility|isolated legacy cryptography/i.test(message)) {
+    return `数据库连接失败：旧版达梦兼容环境不可用。请在“设置 → 常规 → 达梦数据库 → 高级设置与诊断”重新选择兼容运行环境。${message}`
+  }
+  if (/Dameng requires an external official dmdb driver/i.test(message)) {
+    return '数据库连接失败：尚未配置达梦驱动。请到“设置 → 常规 → 达梦数据库”选择 dmdb 包目录。'
+  }
+  if (/Unable to load external dmdb driver/i.test(message)) {
+    return `数据库连接失败：外部达梦驱动加载失败。请在“设置 → 常规”重新选择官方 dmdb 包目录。${message}`
+  }
+  if (/Access denied for user .+ to database /i.test(message)) {
+    return `Database connection failed: authentication succeeded, but this MySQL account has no permission for database "${database?.database || ''}" on the selected instance. Connect to that instance and check SHOW GRANTS for the account.`
+  }
+  if (/Access denied for user .+\(using password:/i.test(message) && isMySqlSshSocketConfig(database)) {
+    return `Database connection failed: Unix Socket "${database?.socketPath || ''}" is reachable, but MySQL rejected "${database?.username || ''}@localhost". Verify this account and password on the same instance with mysql -u${database?.username || 'USER'} -p -S ${database?.socketPath || '/path/to/mysql.sock'} ${database?.database || ''}.`
+  }
+  if (/Access denied for user .+\(using password:/i.test(message) && database?.engine === 'mysql' && database?.connectionMode === 'ssh' && database?.sshTransport !== 'socket') {
+    return 'Database connection failed: MySQL rejected the TCP account matched by user@host. For a database on the SSH server, use Host 127.0.0.1; if the account is local/socket-only, choose Unix Socket and enter this instance’s socket path.'
+  }
+  if (/Unable to open remote MySQL Unix socket/i.test(message)) {
+    return `Database connection failed: ${message} Check that the path belongs to the selected MySQL instance, the SSH user can access it, and OpenSSH allows Unix socket forwarding.`
+  }
+  if (/Channel open failure: Connection refused/i.test(message)) {
+    return 'Database connection failed: SSH reached the server, but the database host/port refused the connection. Check the DB port, service status, or Docker/internal address.'
+  }
+  if (/ETIMEDOUT|timed out/i.test(message)) {
+    return 'Database connection failed: timed out. For local-only databases, use Via server SSH with Host 127.0.0.1; for exposed databases, use Direct connection.'
+  }
+  return `Database connection failed: ${message}`
+}
+
+function isMySqlSshSocketConfig(database) {
+  return database?.engine === 'mysql' && database?.connectionMode === 'ssh' && database?.sshTransport === 'socket'
+}
+
+function formatDatabaseEndpoint(database) {
+  if (isMySqlSshSocketConfig(database)) return database.socketPath || 'socket not configured'
+  return `${database?.host || '-'}:${database?.port || defaultDatabasePort(database?.engine)}`
+}
+
+function formatDatabaseOperationError(message = '') {
+  const denied = message.match(/\b(CREATE|ALTER|DROP|INSERT|UPDATE|DELETE)\s+command denied/i)
+  if (denied) {
+    const action = denied[1].toUpperCase()
+    return `Permission denied: current database user does not have ${action} permission. Ask the DBA to grant it, then retry.`
+  }
+  if (/access denied/i.test(message)) {
+    return `Permission denied: ${message}`
+  }
+  return message || 'Database operation failed.'
+}
+
+function normalizeDbTables(tables = []) {
+  return tables.map((table) => ({
+    schema: table.table_schema || table.TABLE_SCHEMA || table.schema || '-',
+    name: table.table_name || table.TABLE_NAME || table.name || '-'
+  }))
+}
+
+function normalizeDbColumns(columns = []) {
+  return columns.map((column) => ({
+    name: column.column_name || column.COLUMN_NAME || column.name || '-',
+    type: column.data_type || column.DATA_TYPE || column.column_type || column.COLUMN_TYPE || '-',
+    nullable: column.is_nullable || column.IS_NULLABLE || '-',
+    defaultValue: column.column_default ?? column.COLUMN_DEFAULT ?? '-'
+  }))
+}
+
+function normalizeSavedServer(server) {
+  return resetServerRuntime(server)
+}
+
+function resetServerRuntime(server) {
+  return {
+    ...server,
+    hostname: '-',
+    status: 'disconnected',
+    lastError: '',
+    load: '-',
+    memory: '-',
+    cpuUsage: null,
+    memoryUsage: null,
+    cpu: '-',
+    arch: '-',
+    os: '-',
+    kernel: '-',
+    uptime: '-'
+  }
+}
+
+function markServerConnectionFailed(server, message) {
+  return {
+    ...resetServerRuntime(server),
+    status: 'error',
+    lastError: message || 'Connection failed'
+  }
+}
+
+function formatServerStatus(server) {
+  if (server.status === 'connected') return 'online'
+  if (server.status === 'connecting') return 'connecting'
+  if (server.status === 'error') return 'failed'
+  return server.env || 'offline'
+}
+
+function formatCommandOutput(command, result) {
+  const chunks = []
+  if (result.stdout?.trim()) chunks.push(result.stdout.trimEnd())
+  if (result.stderr?.trim()) chunks.push(result.stderr.trimEnd())
+  if (!result.ok && !chunks.length) chunks.push(result.message || `Command failed: ${command}`)
+  if (!chunks.length) chunks.push('')
+  return chunks.join('\n')
+}
+
+function sanitizeWorkflowCommandLog(value) {
+  return String(value || '')
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/\r/g, '')
+    .replace(/((?:password|passwd|token|secret|authorization)\s*[:=]\s*)[^\s]+/gi, '$1***')
+    .replace(/(--(?:password|token|secret)(?:=|\s+))[^\s]+/gi, '$1***')
+}
+
+function formatSqlResult(result) {
+  if (!result.ok) return { ok: false, message: result.canceled ? result.message : `Error: ${result.message}` }
+  const rows = result.rows || []
+  const scriptMessage = result.script
+    ? result.message || `${result.completedStatements || result.statementCount || 0}/${result.statementCount || 0} SQL batches completed`
+    : ''
+  if (Array.isArray(rows)) {
+    return {
+      ok: true,
+      rows: rows.slice(0, 500),
+      rowCount: typeof result.rowCount === 'number' ? result.rowCount : rows.length,
+      message: scriptMessage || (rows.length ? `${rows.length} row${rows.length === 1 ? '' : 's'} returned` : 'Query OK, 0 rows returned')
+    }
+  }
+
+  const affectedRows = rows.affectedRows ?? result.rowCount
+  const changedRows = rows.changedRows
+  const insertId = rows.insertId
+  const details = [
+    typeof affectedRows === 'number' ? `${affectedRows} row${affectedRows === 1 ? '' : 's'} affected` : 'Query OK',
+    typeof changedRows === 'number' ? `${changedRows} changed` : '',
+    insertId ? `insert id ${insertId}` : ''
+  ].filter(Boolean).join(', ')
+
+  return {
+    ok: true,
+    rows: null,
+    rowCount: affectedRows,
+    message: scriptMessage || details
+  }
+}
+
+function scriptHasRollbackRisk(sql, engine) {
+  const source = String(sql || '')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/^\s*--.*$/gm, ' ')
+  const dialect = String(engine || '').toLowerCase()
+  const containsDdl = /\b(?:CREATE|ALTER|DROP|TRUNCATE|RENAME|GRANT|REVOKE|COMMENT)\b/i.test(source)
+  if (['mysql', 'mariadb', 'oracle', 'dm'].includes(dialect) && containsDdl) return true
+  return /\b(?:VACUUM|CREATE\s+DATABASE|ALTER\s+SYSTEM|REINDEX\s+CONCURRENTLY)\b/i.test(source)
+}
+
+function resultSummary(result) {
+  if (!result) return 'No result'
+  if (typeof result === 'string') return result
+  return result.message || 'Ready'
+}
+
+function hasPrivilege(privileges, name) {
+  if (privileges?.ok === false) return false
+  const value = privileges?.privileges?.[name]
+  return value !== false
+}
+
+function privilegeClass(value) {
+  if (value === true) return 'allowed'
+  if (value === false) return 'denied'
+  return 'unknown'
+}
+
+function formatCellValue(value) {
+  if (value === null) return 'NULL'
+  if (typeof value === 'undefined') return ''
+  if (value instanceof Date) return value.toLocaleString('zh-CN', { hour12: false })
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+function parseServerInspect(stdout = '') {
+  const lines = stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  const hostname = parseHostname(stdout)
+  const unameLine = lines.find((line) => /Linux|Darwin|Ubuntu|Rocky|CentOS|Debian/i.test(line)) || ''
+  const uptimeLine = lines.find((line) => line.includes('load average') || line.includes('load averages')) || ''
+  const memoryLine = lines.find((line) => line.startsWith('Mem:')) || ''
+  const cpuUsageLine = lines.find((line) => line.startsWith('CPU_USAGE')) || ''
+  const memoryUsageLine = lines.find((line) => line.startsWith('MEM_USAGE')) || ''
+  const cpuLine = lines.find((line) => line.startsWith('CPU(s):')) || ''
+  const archLine = lines.find((line) => line.startsWith('Architecture:')) || ''
+  const modelLine = lines.find((line) => line.startsWith('Model name:')) || ''
+
+  return {
+    hostname: hostname || '-',
+    os: parseOs(unameLine),
+    kernel: parseKernel(unameLine),
+    arch: archLine ? valueAfterColon(archLine) : '-',
+    cpu: cpuLine ? `${valueAfterColon(cpuLine)} Core` : modelLine ? valueAfterColon(modelLine) : '-',
+    cpuUsage: parseTaggedPercent(cpuUsageLine),
+    memoryUsage: parseTaggedPercent(memoryUsageLine),
+    memory: parseMemory(memoryLine),
+    load: parseLoad(uptimeLine),
+    uptime: parseUptime(uptimeLine)
+  }
+}
+
+function parseOs(unameLine) {
+  if (!unameLine) return '-'
+  const parts = unameLine.split(/\s+/)
+  return parts[0] || '-'
+}
+
+function parseKernel(unameLine) {
+  if (!unameLine) return '-'
+  const parts = unameLine.split(/\s+/)
+  return parts[2] || parts[1] || '-'
+}
+
+function parseLoad(uptimeLine) {
+  const match = uptimeLine.match(/load averages?:\s*([0-9.,\s]+)/i)
+  if (match) return match[1].split(',')[0].trim()
+  return '-'
+}
+
+function parseUptime(uptimeLine) {
+  const match = uptimeLine.match(/up\s+(.+?),\s+\d+\s+users?/i)
+  if (match) return match[1].trim()
+  const compact = uptimeLine.match(/up\s+(.+?),\s+load averages?/i)
+  return compact ? compact[1].trim() : '-'
+}
+
+function parseMemory(memoryLine) {
+  if (!memoryLine) return '-'
+  const parts = memoryLine.split(/\s+/)
+  return parts[1] || '-'
+}
+
+function valueAfterColon(line) {
+  return line.split(':').slice(1).join(':').trim()
+}
+
+function parseTaggedPercent(line) {
+  const match = line.match(/([0-9]+(?:\.[0-9]+)?)/)
+  return match ? Number(match[1]) : null
+}
+
+function normalizePercent(value) {
+  if (typeof value !== 'number' || Number.isNaN(value)) return 0
+  return Math.max(0, Math.min(100, value))
+}
+
+function formatPercent(value) {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '-'
+  return `${Math.round(value)}%`
+}
+
+function makeInitialUsageHistory(cpu = 0, memory = 0) {
+  return {
+    cpu: Array.from({ length: 24 }, (_, index) => Math.max(0, normalizePercent(cpu) - (23 - index) * 0.2)),
+    memory: Array.from({ length: 24 }, (_, index) => Math.max(0, normalizePercent(memory) - (23 - index) * 0.12))
+  }
+}
+
+function linePath(points = []) {
+  const safePoints = points.length ? points : makeInitialUsageHistory().cpu
+  const step = safePoints.length > 1 ? 100 / (safePoints.length - 1) : 100
+  return safePoints
+    .map((point, index) => {
+      const x = Number((index * step).toFixed(2))
+      const y = Number((52 - normalizePercent(point) * 0.48).toFixed(2))
+      return `${index === 0 ? 'M' : 'L'} ${x} ${y}`
+    })
+    .join(' ')
+}
+
+function promptFor(server) {
+  if (!server?.id) return '[not-connected]$'
+  return `[${server.username || 'user'}@${server.host || 'host'} ~]$`
+}
+
+function parseHostname(stdout = '') {
+  return stdout.split(/\r?\n/).map((line) => line.trim()).find(Boolean) || ''
+}
+
+function isDemoServer(server) {
+  return ['prod-1', 'test-1'].includes(server.id) || ['prod-api-01', 'test-web-01'].includes(server.name)
+}
+
+function isDemoResource(resource) {
+  return ['mysql-prod', 'redis-prod'].includes(resource.id) || ['order_mysql', 'cache_redis', 'app_cache'].includes(resource.name)
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function verifyServerReachability(server, onAttempt) {
+  const total = 3
+  let lastResult = { ok: false, message: 'SSH unavailable' }
+  for (let attempt = 1; attempt <= total; attempt += 1) {
+    onAttempt?.(attempt, total, lastResult.message)
+    lastResult = await window.opsFlow.testSsh({ ...server, readyTimeout: 8000 })
+    if (lastResult?.ok) return { ...lastResult, attempts: attempt }
+    if (attempt < total) await wait(attempt * 1500)
+  }
+  return { ...lastResult, ok: false, attempts: total }
+}
+
+async function copyText(value, notify) {
+  const text = String(value ?? '').trim()
+  if (!text || text === '-') {
+    notify?.('error', 'Nothing to copy.')
+    return
+  }
+
+  try {
+    if (window.opsFlow?.writeClipboardText) {
+      await window.opsFlow.writeClipboardText(text)
+    } else if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      throw new Error('Clipboard API is unavailable.')
+    }
+    notify?.('success', 'Copied')
+  } catch (error) {
+    notify?.('error', `Copy failed: ${error.message || 'clipboard is unavailable'}`)
+  }
+}
+
+function joinRemotePath(current, child) {
+  if (current === '/') return `/${child}`
+  return `${current}/${child}`
+}
+
+function time() {
+  return new Date().toLocaleTimeString('zh-CN', { hour12: false })
+}
+
+createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+)
+

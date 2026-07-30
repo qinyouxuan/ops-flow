@@ -1,0 +1,123 @@
+{
+  "name": "ops-flow",
+  "version": "0.2.1",
+  "private": true,
+  "description": "A lightweight visual SSH/SFTP operations and deployment workflow desktop tool.",
+  "author": {
+    "name": "秦屿",
+    "email": "734052482@qq.com"
+  },
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qinyouxuan/ops-flow.git"
+  },
+  "homepage": "https://github.com/qinyouxuan/ops-flow#readme",
+  "bugs": {
+    "url": "https://github.com/qinyouxuan/ops-flow/issues"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win nsis zip",
+    "dist:win:signed": "npm run build && electron-builder --win nsis zip -c.win.signAndEditExecutable=true -c.forceCodeSigning=true",
+    "dist:win:zip": "npm run build && electron-builder --win zip",
+    "verify:source": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-source.ps1",
+    "verify:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1",
+    "verify:release:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -RequireSignature",
+    "audit:prod": "npm audit --omit=dev --registry=https://registry.npmjs.org",
+    "preview": "electron-vite preview",
+    "lint": "eslint ."
+  },
+  "build": {
+    "appId": "com.opsflow.plus",
+    "productName": "Ops Flow Plus",
+    "copyright": "Copyright © 2026 秦屿",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "SOURCE_CODE.md",
+        "to": "SOURCE_CODE.md"
+      },
+      {
+        "from": "THIRD_PARTY_NOTICES.md",
+        "to": "THIRD_PARTY_NOTICES.md"
+      },
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "src/main/damengLegacyWorker.cjs",
+        "to": "damengLegacyWorker.cjs"
+      }
+    ],
+    "asar": true,
+    "win": {
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": true,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Ops Flow Plus"
+    }
+  },
+  "dependencies": {
+    "electron-store": "^11.0.2",
+    "lucide-react": "^0.468.0",
+    "mssql": "^12.7.0",
+    "mysql2": "^3.23.1",
+    "oracledb": "^7.0.1",
+    "pg": "^8.13.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "reactflow": "^11.11.4",
+    "redis": "^4.7.0",
+    "ssh2": "^1.16.0",
+    "write-excel-file": "^4.1.1",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^39.8.5",
+    "electron-builder": "26.15.7",
+    "electron-vite": "^3.1.0",
+    "eslint": "^9.17.0",
+    "globals": "^14.0.0",
+    "vite": "^6.4.3"
+  }
+}
