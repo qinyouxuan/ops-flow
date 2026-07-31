@@ -3591,6 +3591,10 @@ html[data-theme="dark"] .backup-restore-warning {
   line-height: 1.35;
 }
 
+.workflow-list button > strong {
+  font-size: 14px;
+}
+
 .workflow-list span {
   color: #64748b;
   font-size: 13px;
@@ -3624,6 +3628,10 @@ html[data-theme="dark"] .backup-restore-warning {
 .workflow-detail-title strong,
 .workflow-detail-title span {
   display: block;
+}
+
+.workflow-detail-title strong {
+  font-size: 14px;
 }
 
 .workflow-detail-title span {
@@ -5667,6 +5675,25 @@ body.is-resizing-row {
   overflow: hidden;
   color: #334155;
   text-overflow: ellipsis;
+}
+
+.result-table td.copyable-result-cell {
+  cursor: copy;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.result-table td.copyable-result-cell:hover {
+  background: #eff6ff;
+}
+
+.result-table td.copyable-result-cell:focus-visible {
+  outline: none;
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 2px #60a5fa;
+}
+
+.result-table td.copyable-result-cell:active {
+  background: #dbeafe;
 }
 
 .resource-strip {

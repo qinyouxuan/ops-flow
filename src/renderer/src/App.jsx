@@ -822,6 +822,7 @@ const I18N_MESSAGES = {
     'database.resizeSql': '拖动调整 SQL 和结果区域高度',
     'database.result': '结果',
     'database.emptySqlResult': '运行 SQL 后在这里查看结果。',
+    'database.copyCell': '单击复制单元格内容',
     'database.table.renameTitle': '重命名表',
     'database.table.addTitle': '添加表',
     'database.table.renameDescription': '此处只修改表名；字段请在字段编辑器中修改。',
@@ -2244,6 +2245,7 @@ export default function App() {
   }, [databases])
 
   useEffect(() => {
+    if (activeModule !== 'database') return undefined
     databaseMetadataRequestRef.current = { tables: '', columns: '' }
     setSelectedDbTable(null)
     setSelectedDbColumn(null)
@@ -2255,7 +2257,7 @@ export default function App() {
       refreshDatabaseTables(database)
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [selectedDatabaseId])
+  }, [activeModule, selectedDatabaseId])
 
   useEffect(() => {
     const repaired = ensureUniqueResourceIds(redisStores, 'redis')
@@ -8458,7 +8460,6 @@ export default function App() {
                     onDuplicate={duplicateDatabase}
                     onDelete={deleteDatabase}
                     onRefreshTables={refreshDatabaseTables}
-                    onCheckPrivileges={checkDatabasePrivileges}
                     onOpenTable={loadTableColumns}
                     onExportTables={exportDatabaseTables}
                     onOpenBackup={openDatabaseBackup}
@@ -15244,7 +15245,7 @@ function TableDialog({ mode, form, onChange, onClose, onSave }) {
   )
 }
 
-function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, servers, selectedTable, selectedColumn, privileges, columns, loading, privilegeLoading, sqlScript, sqlFileInfo, sqlRunning, sqlExecutionTaskId, sqlResult, onAdd, onCreateDatabase, onSelectDatabase, onSelectColumn, onEdit, onDuplicate, onDelete, onRefreshTables, onCheckPrivileges, onOpenTable, onExportTables, onOpenBackup, onSqlChange, onSelectSqlFile, onClearSqlFile, onRunSql, onCancelSql, onSqlFileOptionChange, onCopy, onAddTable, onEditTable, onDeleteTable, onAddColumn, onEditColumn, onDeleteColumn }) {
+function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, servers, selectedTable, selectedColumn, privileges, columns, loading, privilegeLoading, sqlScript, sqlFileInfo, sqlRunning, sqlExecutionTaskId, sqlResult, onAdd, onCreateDatabase, onSelectDatabase, onSelectColumn, onEdit, onDuplicate, onDelete, onRefreshTables, onOpenTable, onExportTables, onOpenBackup, onSqlChange, onSelectSqlFile, onClearSqlFile, onRunSql, onCancelSql, onSqlFileOptionChange, onCopy, onAddTable, onEditTable, onDeleteTable, onAddColumn, onEditColumn, onDeleteColumn }) {
   const { t } = useI18n()
   const tables = selectedDatabase?.tables || []
   const [addMenuOpen, setAddMenuOpen] = useState(false)
@@ -15442,9 +15443,7 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
           <button title={t('database.editConnection', 'Edit connection')} onClick={() => onEdit(selectedDatabase)} disabled={!selectedDatabase}><SquarePen size={15} />{t('common.edit', 'Edit')}</button>
           <button title={t('database.duplicateConnection', 'Copy connection')} onClick={() => onDuplicate(selectedDatabase)} disabled={!selectedDatabase}><Copy size={15} />{t('common.copy', 'Copy')}</button>
           <button title={t('database.deleteConnection', 'Delete connection')} onClick={() => onDelete(selectedDatabase)} disabled={!selectedDatabase}><Trash2 size={15} />{t('database.deleteConnectionShort', 'Delete connection')}</button>
-          <button title={t('database.refreshTables', 'Refresh tables')} onClick={() => onRefreshTables(selectedDatabase)} disabled={!connectionAvailable || !selectedDatabase || loading}><RefreshCw size={15} />{t('common.refresh', 'Refresh')}</button>
           <button title="内置逻辑备份" onClick={() => onOpenBackup(selectedExportTables)} disabled={!connectionAvailable || !selectedDatabase || loading}><Save size={15} />备份</button>
-          <button title={t('database.checkPrivileges', 'Check privileges')} onClick={() => onCheckPrivileges(selectedDatabase)} disabled={!connectionAvailable || !selectedDatabase || privilegeLoading}><ShieldCheck size={15} />{privilegeLoading ? t('database.checking', 'Checking') : t('database.privileges', 'Privileges')}</button>
         </div>
       </div>
       <div className={`privilege-strip ${privileges?.ok === false ? 'error' : privileges ? '' : 'empty'}`}>
@@ -15690,13 +15689,13 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
           <strong>{t('database.result', 'Result')}</strong>
           <span>{resultSummary(sqlResult)}</span>
         </div>
-        <SqlResultView result={sqlResult} />
+        <SqlResultView result={sqlResult} onCopy={onCopy} />
       </div>
     </div>
   )
 }
 
-function SqlResultView({ result }) {
+function SqlResultView({ result, onCopy }) {
   const { t } = useI18n()
   if (!result) return <pre>{t('database.emptySqlResult', 'Run SQL to show result here.')}</pre>
   if (typeof result === 'string') return <pre>{result}</pre>
@@ -15720,9 +15719,29 @@ function SqlResultView({ result }) {
         <tbody>
           {result.rows.map((row, index) => (
             <tr key={index}>
-              {columns.map((column) => (
-                <td key={column}>{formatCellValue(row?.[column])}</td>
-              ))}
+              {columns.map((column) => {
+                const value = formatCellValue(row?.[column])
+                const copyHint = t('database.copyCell', 'Click to copy cell value')
+                return (
+                  <td
+                    key={column}
+                    className="copyable-result-cell"
+                    title={`${value}\n${copyHint}`}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${column}: ${value}. ${copyHint}`}
+                    onClick={() => onCopy(value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        onCopy(value)
+                      }
+                    }}
+                  >
+                    {value}
+                  </td>
+                )
+              })}
             </tr>
           ))}
         </tbody>

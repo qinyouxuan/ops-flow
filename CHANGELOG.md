@@ -15,6 +15,11 @@
   explicit fixed jump-server association and open tunnels on demand
 - Corrected runtime detection so process-only matches do not misidentify Java
   and other components
+- Kept the database toolbar usable on smaller Windows displays by removing
+  redundant manual refresh and privilege actions; table metadata and privileges
+  continue to refresh automatically
+- Reduced long workflow-name typography so deployment workflow titles no
+  longer crowd or clip the list and detail panels
 
 ### Improved
 
