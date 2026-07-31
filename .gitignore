@@ -1,4 +1,5 @@
 node_modules
+.npm-cache
 dist
 out
 release
@@ -14,6 +15,9 @@ release
 id_rsa*
 id_ed25519*
 /ops-flow.zip
+/ops-flow.json
+/design-qa.md
+/runtime-icon-verification.png
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

@@ -14,7 +14,7 @@ export default [
   },
   js.configs.recommended,
   {
-    files: ['**/*.{js,mjs,jsx}'],
+    files: ['**/*.{cjs,js,mjs,jsx}'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
@@ -36,7 +36,13 @@ export default [
     }
   },
   {
-    files: ['**/*.{js,mjs}'],
+    files: ['**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs'
+    }
+  },
+  {
+    files: ['**/*.{cjs,js,mjs}'],
     rules: {
       'no-unused-vars': ['warn', {
         argsIgnorePattern: '^_',

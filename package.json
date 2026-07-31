@@ -1,11 +1,11 @@
 {
   "name": "ops-flow",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "A lightweight visual SSH/SFTP operations and deployment workflow desktop tool.",
   "author": {
     "name": "秦屿",
-    "email": "1829941918@qq.com"
+    "email": "734052482@qq.com"
   },
   "license": "MPL-2.0",
   "repository": {
@@ -16,6 +16,9 @@
   "bugs": {
     "url": "https://github.com/qinyouxuan/ops-flow/issues"
   },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -24,8 +27,10 @@
     "dist:win": "npm run build && electron-builder --win nsis zip",
     "dist:win:signed": "npm run build && electron-builder --win nsis zip -c.win.signAndEditExecutable=true -c.forceCodeSigning=true",
     "dist:win:zip": "npm run build && electron-builder --win zip",
+    "verify:source": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-source.ps1",
     "verify:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1",
     "verify:release:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -RequireSignature",
+    "audit:prod": "npm audit --omit=dev --registry=https://registry.npmjs.org",
     "preview": "electron-vite preview",
     "lint": "eslint ."
   },
@@ -52,11 +57,20 @@
       {
         "from": "THIRD_PARTY_NOTICES.md",
         "to": "THIRD_PARTY_NOTICES.md"
+      },
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "src/main/damengLegacyWorker.cjs",
+        "to": "damengLegacyWorker.cjs"
       }
     ],
     "asar": true,
     "win": {
-      "signAndEditExecutable": false,
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": true,
       "target": [
         {
           "target": "nsis",
@@ -81,29 +95,29 @@
     }
   },
   "dependencies": {
-    "electron-store": "^10.0.1",
+    "electron-store": "^11.0.2",
     "lucide-react": "^0.468.0",
     "mssql": "^12.7.0",
-    "mysql2": "^3.11.5",
-    "oracledb": "^7.0.0",
+    "mysql2": "^3.23.1",
+    "oracledb": "^7.0.1",
     "pg": "^8.13.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "reactflow": "^11.11.4",
     "redis": "^4.7.0",
     "ssh2": "^1.16.0",
-    "xlsx": "^0.18.5",
+    "write-excel-file": "^4.1.1",
     "xterm": "^5.3.0",
     "xterm-addon-fit": "^0.8.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@vitejs/plugin-react": "^4.3.4",
-    "electron": "^33.2.1",
-    "electron-builder": "^24.13.3",
-    "electron-vite": "^2.3.0",
+    "electron": "^39.8.5",
+    "electron-builder": "26.15.7",
+    "electron-vite": "^3.1.0",
     "eslint": "^9.17.0",
     "globals": "^14.0.0",
-    "vite": "^5.4.11"
+    "vite": "^6.4.3"
   }
 }

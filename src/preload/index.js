@@ -3,6 +3,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('opsFlow', {
+  getAppVersion: () => ipcRenderer.invoke('app:get-version'),
+  getDamengDriverStatus: () => ipcRenderer.invoke('dameng-driver:status'),
+  selectDamengDriver: () => ipcRenderer.invoke('dameng-driver:select'),
+  clearDamengDriver: () => ipcRenderer.invoke('dameng-driver:clear'),
+  selectDamengLegacyNode: () => ipcRenderer.invoke('dameng-driver:select-legacy-node'),
+  clearDamengLegacyNode: () => ipcRenderer.invoke('dameng-driver:clear-legacy-node'),
+  setDamengLegacyMode: (enabled) => ipcRenderer.invoke('dameng-driver:set-legacy-mode', enabled),
   getStore: (key) => ipcRenderer.invoke('store:get', key),
   setStore: (key, value) => ipcRenderer.invoke('store:set', key, value),
   getConfigSecurityStatus: () => ipcRenderer.invoke('config:security-status'),
@@ -96,13 +103,23 @@ contextBridge.exposeInMainWorld('opsFlow', {
   deleteRemoteItem: (config, path, type) => ipcRenderer.invoke('sftp:delete', config, path, type),
   deletePrivilegedRemoteItem: (config, path, type, privilege) => ipcRenderer.invoke('sftp:privileged-delete', config, path, type, privilege),
   testDatabase: (config) => ipcRenderer.invoke('db:test', config),
+  getDatabaseCreateOptions: (config) => ipcRenderer.invoke('db:create-options', config),
+  createDatabase: (config, request) => ipcRenderer.invoke('db:create-database', config, request),
   inspectDatabase: (config) => ipcRenderer.invoke('db:inspect', config),
   inspectDatabaseColumns: (config, table) => ipcRenderer.invoke('db:columns', config, table),
   inspectDatabasePrivileges: (config) => ipcRenderer.invoke('db:privileges', config),
   execDatabase: (config, sql) => ipcRenderer.invoke('db:exec', config, sql),
   execDatabaseScript: (config, sql, options) => ipcRenderer.invoke('db:exec-script', config, sql, options),
+  execDatabaseScriptFile: (config, options) => ipcRenderer.invoke('db:exec-script-file', config, options),
   cancelDatabaseScript: (taskId) => ipcRenderer.invoke('db:cancel-script', taskId),
   exportDatabaseTables: (config, tables, format) => ipcRenderer.invoke('db:export', config, tables, format),
+  backupDatabase: (config, options) => ipcRenderer.invoke('db:backup', config, options),
+  cancelDatabaseBackup: (operationId) => ipcRenderer.invoke('db:backup-cancel', operationId),
+  onDatabaseBackupProgress: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('database:backup-progress', listener)
+    return () => ipcRenderer.removeListener('database:backup-progress', listener)
+  },
   testRedis: (config) => ipcRenderer.invoke('redis:test', config),
   inspectRedis: (config) => ipcRenderer.invoke('redis:inspect', config),
   inspectRedisDatabases: (config) => ipcRenderer.invoke('redis:databases', config),
@@ -110,5 +127,20 @@ contextBridge.exposeInMainWorld('opsFlow', {
   readRedisKey: (config, database, key) => ipcRenderer.invoke('redis:key', config, database, key),
   deleteRedisKey: (config, database, key) => ipcRenderer.invoke('redis:key-delete', config, database, key),
   flushRedisDatabase: (config, database) => ipcRenderer.invoke('redis:flushdb', config, database),
+  backupRedisDatabase: (config, database, options) => ipcRenderer.invoke('redis:backup', config, database, options),
+  cancelRedisBackup: (operationId) => ipcRenderer.invoke('redis:backup-cancel', operationId),
+  selectRedisBackup: () => ipcRenderer.invoke('redis:select-backup'),
+  restoreRedisDatabase: (config, database, options) => ipcRenderer.invoke('redis:restore', config, database, options),
+  cancelRedisRestore: (operationId) => ipcRenderer.invoke('redis:restore-cancel', operationId),
+  onRedisBackupProgress: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('redis:backup-progress', listener)
+    return () => ipcRenderer.removeListener('redis:backup-progress', listener)
+  },
+  onRedisRestoreProgress: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('redis:restore-progress', listener)
+    return () => ipcRenderer.removeListener('redis:restore-progress', listener)
+  },
   execRedis: (config, command) => ipcRenderer.invoke('redis:exec', config, command)
 })

@@ -12,11 +12,18 @@
 - [ ] No edition-specific or obsolete licensing copy remains.
 - [ ] No private driver or dependency with restricted redistribution is
       included.
+- [ ] The Dameng compatibility worker (`damengLegacyWorker.cjs`) is present in
+      packaged resources, while
+      the vendor `dmdb` package and any local Node.js runtime remain excluded.
 
 ## Security
 
 - [ ] No `.env`, private key, certificate, database password, server password,
       real server address or encrypted configuration backup is tracked.
+- [ ] Screenshots use a disposable demo environment and contain no real host,
+      account, path, database, Redis, log, backup or local-user information.
+- [ ] Electron user-data files such as `ops-flow.json` are not copied into the
+      repository, source archive or release assets.
 - [ ] The signing certificate and password are supplied only through protected
       local storage or CI secrets.
 - [ ] Remote-operation examples use clearly fictional names and addresses.
@@ -27,16 +34,36 @@
 npm.cmd ci
 npm.cmd run lint
 npm.cmd run build
+npm.cmd run audit:prod
+npm.cmd run verify:source
+```
+
+For a signed release:
+
+```powershell
 npm.cmd run dist:win:signed
 npm.cmd run verify:release:signed
 ```
 
-- [ ] The installer and packaged application both have valid Authenticode
-      signatures.
+For an unsigned individual/open-source release:
+
+```powershell
+npm.cmd run dist:win
+npm.cmd run verify:release
+```
+
+- [ ] When a trusted certificate is available, the installer and packaged
+      application both have valid Authenticode signatures.
+- [ ] When publishing without Authenticode signing, the release description
+      clearly states that the binaries are unsigned and might trigger Windows
+      SmartScreen, and links to the matching source tag and SHA-256 checksums.
 - [ ] A clean Windows test machine can install, launch and uninstall the app.
 - [ ] Configuration export/import is tested with a temporary password.
 - [ ] SSH, SFTP, database, Redis and workflow smoke tests use non-production
       targets.
+- [ ] Normal Dameng mode and isolated legacy compatibility mode are tested
+      separately; closing a database operation also terminates its compatibility
+      child process.
 - [ ] `SHA256SUMS.txt` matches every released installer and ZIP package.
 
 ## GitHub release

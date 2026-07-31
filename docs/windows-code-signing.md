@@ -4,6 +4,12 @@ Code signing identifies the publisher and lets Windows verify that an
 installer or executable has not been modified after signing. It does not
 replace SHA-256 checksums, source publication or malware scanning.
 
+Authenticode signing is recommended for public Windows binaries, but it is not
+a requirement of MPL-2.0 or of publishing the source code. An individual
+open-source release may be distributed unsigned when the release page clearly
+discloses that fact, links to the matching source tag and publishes SHA-256
+checksums. Windows may still show an Unknown publisher or SmartScreen warning.
+
 ## Certificate choice
 
 For public releases, use a Windows Authenticode code-signing certificate from
@@ -18,9 +24,16 @@ known.
 
 ## Secret handling
 
-Never place a `.pfx`, `.p12`, private key or certificate password in this
-repository. The project `.gitignore` excludes common certificate and private
-key formats, but that is only a last line of defense.
+Never place a `.pfx`, `.p12`, private key, hardware-token PIN or certificate
+password in this repository. The project `.gitignore` excludes common
+certificate and private key formats, but that is only a last line of defense.
+
+Current publicly trusted code-signing certificates normally keep their private
+key in a compliant hardware token, HSM or managed signing service. The PFX flow
+below applies only when the certificate provider supplies a compliant
+file-based credential. Hardware-token and cloud-signing products require the
+provider's driver or signing adapter and should select the issued certificate
+from the Windows certificate store by its exact subject or thumbprint.
 
 For a local signed build, set process-scoped environment variables:
 
@@ -56,14 +69,14 @@ npm.cmd run verify:release:signed
 For an individual file, Windows PowerShell can inspect the signature:
 
 ```powershell
-Get-AuthenticodeSignature ".\release\Ops Flow Plus Setup 0.2.0.exe" |
+Get-AuthenticodeSignature ".\release\Ops Flow Plus Setup 0.2.1.exe" |
   Format-List Status,StatusMessage,SignerCertificate,TimeStamperCertificate
 ```
 
 If the Windows SDK is installed, SignTool provides an additional check:
 
 ```powershell
-signtool verify /pa /v ".\release\Ops Flow Plus Setup 0.2.0.exe"
+signtool verify /pa /v ".\release\Ops Flow Plus Setup 0.2.1.exe"
 ```
 
 Only publish when the signature status is valid, the signer is the expected

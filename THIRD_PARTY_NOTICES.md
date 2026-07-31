@@ -19,7 +19,7 @@ owned by this project.
 | React Flow | MIT |
 | node-redis | MIT |
 | ssh2 | MIT |
-| SheetJS Community Edition (`xlsx`) | Apache-2.0 |
+| write-excel-file | MIT |
 | xterm.js and xterm-addon-fit | MIT |
 
 These packages may include transitive dependencies under additional
@@ -37,10 +37,19 @@ relicensed by this project.
 
 The vendor `dmdb` Node.js driver is not included in the public dependency lock
 or public application package because its vendor license restricts
-redistribution. The source retains an optional runtime integration point.
-Anyone creating a DM-enabled build must obtain the driver from its vendor,
-review and accept the vendor license, and ensure that their intended use and
-distribution are permitted.
+redistribution. The application can load an unmodified external `dmdb` package
+from a folder explicitly selected by the user. It stores only that local path;
+it does not copy the driver, add it to configuration exports, or redistribute
+it. Users must obtain the driver lawfully, review and accept the vendor license,
+and ensure that their use is permitted.
+
+For explicitly enabled legacy-server compatibility, Ops Flow can start the
+user-installed driver in a separate user-selected or auto-detected Node.js
+runtime. The application enables the OpenSSL legacy provider only when that
+runtime needs it. No Node.js runtime or vendor driver is copied into the
+application by this feature. The runtime path,
+compatibility preference and driver path remain local and are excluded from
+configuration exports.
 
 ## No endorsement
 

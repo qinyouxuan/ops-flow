@@ -11,7 +11,7 @@ https://github.com/qinyouxuan/ops-flow
 If the corresponding source package or tag is temporarily unavailable,
 contact the maintainer:
 
-- Email: 1829941918@qq.com
+- Email: 734052482@qq.com
 
 When redistributing an executable build, keep this file and `LICENSE`
 with the application, and make the corresponding source code available
