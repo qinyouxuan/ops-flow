@@ -29,6 +29,15 @@ contextBridge.exposeInMainWorld('opsFlow', {
   selectSqlFile: () => ipcRenderer.invoke('dialog:select-sql-file'),
   statLocalPath: (path) => ipcRenderer.invoke('fs:stat-local-path', path),
   testSsh: (config) => ipcRenderer.invoke('ssh:test', config),
+  listSshTunnels: () => ipcRenderer.invoke('ssh-tunnel:list'),
+  testSshTunnel: (tunnel, sshConfig) => ipcRenderer.invoke('ssh-tunnel:test', tunnel, sshConfig),
+  startSshTunnel: (tunnel, sshConfig) => ipcRenderer.invoke('ssh-tunnel:start', tunnel, sshConfig),
+  stopSshTunnel: (tunnelId) => ipcRenderer.invoke('ssh-tunnel:stop', tunnelId),
+  onSshTunnelStatus: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('ssh-tunnel:status', listener)
+    return () => ipcRenderer.removeListener('ssh-tunnel:status', listener)
+  },
   execSsh: (config, command) => ipcRenderer.invoke('ssh:exec', config, command),
   execSshStream: (config, command, executionId, privilege) => ipcRenderer.invoke('ssh:exec-stream', config, command, executionId, privilege),
   execSshPrivileged: (config, command, privilege) => ipcRenderer.invoke('ssh:exec-privileged', config, command, privilege),

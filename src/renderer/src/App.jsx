@@ -135,6 +135,7 @@ const I18N_MESSAGES = {
     'settings.security.servers': '服务器',
     'settings.security.databases': '数据库',
     'settings.security.redis': 'Redis',
+    'settings.security.tunnels': 'SSH 隧道',
     'settings.security.workflows': '工作流',
     'settings.security.transferTasks': '传输记录',
     'settings.security.credentialsIncluded': '包含凭据',
@@ -159,12 +160,37 @@ const I18N_MESSAGES = {
     'settings.security.stage.backingUp': '创建当前配置回滚备份',
     'settings.security.stage.writingImport': '写入新配置',
     'topbar.transfers': '传输',
+    'topbar.tunnels': '隧道',
     'topbar.connect': '连接',
     'topbar.connecting': '连接中',
     'topbar.edit': '编辑',
     'topbar.disconnect': '断开',
     'topbar.remove': '移除',
     'topbar.settings': '设置',
+    'tunnel.title': 'SSH 本地隧道',
+    'tunnel.description': '把内网端口映射到本机，供达梦、Oracle、DBeaver 等外部客户端连接。',
+    'tunnel.add': '添加隧道',
+    'tunnel.empty': '暂无隧道配置。点击“添加隧道”创建本地端口转发。',
+    'tunnel.name': '名称',
+    'tunnel.sshServer': 'SSH 服务器',
+    'tunnel.localPort': '本地端口',
+    'tunnel.targetHost': '目标主机',
+    'tunnel.targetPort': '目标端口',
+    'tunnel.localEndpoint': '外部客户端连接地址',
+    'tunnel.routeHint': '目标地址由所选 SSH 服务器访问；该服务器可以继续使用已配置的跳板链。',
+    'tunnel.localOnlyHint': '安全限制：仅监听 127.0.0.1，不会向局域网或公网开放端口。',
+    'tunnel.start': '启动',
+    'tunnel.stop': '停止',
+    'tunnel.starting': '启动中',
+    'tunnel.running': '运行中',
+    'tunnel.stopped': '未启动',
+    'tunnel.edit': '编辑',
+    'tunnel.delete': '删除',
+    'tunnel.save': '保存配置',
+    'tunnel.test': '测试连接',
+    'tunnel.testing': '测试中',
+    'tunnel.testSuccess': '连接测试成功：SSH 路径可以访问目标端口。',
+    'tunnel.testHint': '测试验证 SSH 登录、跳板链和目标端口；本地端口占用会在启动隧道时检查。',
     'tab.backupRecovery': '备份恢复',
     'backup.title': '备份与恢复',
     'help.title': '帮助与关于',
@@ -196,6 +222,8 @@ const I18N_MESSAGES = {
     'help.features.terminal.text': '连接成功后提供交互式 SSH 终端，适合临时排查、执行一次性命令和查看实时输出。可把常用命令保存为带名称、标签和备注的模板；点击模板只粘贴到当前命令行，不自动发送回车。',
     'help.features.jump.title': 'SSH 跳板连接内网服务器',
     'help.features.jump.text': '先添加并测试具有公网 IP 的服务器，连接方式保持“直接连接”；再添加内网服务器，主机填写跳板机可访问的内网 IP，并选择前一步保存的服务器作为 SSH 跳板。内网服务器仍填写自身的 SSH 用户和密码或私钥。连接路径为 Ops Flow → 公网跳板机 → 内网服务器，终端、SFTP、工作流、部署和主机管理都会自动复用这条链路。跳板机需允许 TCP 转发，且必须能访问目标内网地址和 SSH 端口。',
+    'help.features.tunnel.title': '供外部客户端使用的 SSH 隧道',
+    'help.features.tunnel.text': '点击顶部“隧道”，选择一台已保存的 SSH 服务器，设置本地端口以及由该服务器访问的目标主机和端口。“测试连接”会验证 SSH 登录、跳板链和目标端口。启动后，达梦管理工具、Oracle SQL Developer、DBeaver 等外部客户端可连接 127.0.0.1:本地端口。隧道会复用所选服务器的跳板链，但独立于命令终端运行；为防止意外暴露数据库，基础版只监听本机 127.0.0.1，退出 Ops Flow 后自动停止。',
     'help.features.files.title': '远程文件',
     'help.features.files.text': '通过 SFTP 浏览、搜索、上传、下载、编辑、重命名、备份和删除远程文件。最近路径和收藏路径按服务器保存，可快速切换目录；权限不足时可临时启用 sudo 或 su 特权访问。',
     'help.features.database.title': '数据库管理',
@@ -297,7 +325,7 @@ const I18N_MESSAGES = {
     'help.safety.rollback.title': '回滚能力的边界',
     'help.safety.rollback.text': '工作流回滚依赖预先配置的回滚节点；SQL 回滚依赖数据库事务；文件备份依赖保存前创建的副本。这些能力都不是整机快照。DDL 隐式提交、已经完成的远程命令、外部脚本副作用和网络中断可能无法自动恢复。',
     'help.safety.configMigration.title': '加密配置导出与迁移',
-    'help.safety.configMigration.text': '设置中的“配置安全”可把服务器、数据库、Redis、工作流、备份恢复目标和常用命令导出为加密文件。是否包含连接凭据和历史记录由导出选项控制；导入时先解密预览，确认后覆盖本机配置，并自动创建一份同密码的导入前回滚备份。请通过不同渠道传递备份文件和密码。',
+    'help.safety.configMigration.text': '设置中的“配置安全”可把服务器、SSH 隧道、数据库、Redis、工作流、备份恢复目标和常用命令导出为加密文件。是否包含连接凭据和历史记录由导出选项控制；导入时先解密预览，确认后覆盖本机配置，并自动创建一份同密码的导入前回滚备份。请通过不同渠道传递备份文件和密码。',
     'help.faq.title': '常见问题',
     'help.faq.readonly.q': '为什么按钮显示只读或不可用？',
     'help.faq.readonly.a': '常见原因包括未连接服务器、权限不足、防火墙控制器未确认或冲突，以及规则包含来源地址、状态匹配、多端口等复杂条件。',
@@ -705,7 +733,7 @@ const I18N_MESSAGES = {
     'toast.confirmOperation': '请先确认此操作。',
     'toast.enterPackageUrl': '请先输入可下载的安装包 URL。',
     'toast.uploadPackagePath': '请上传安装包或输入远程路径。',
-    'confirm.removeServer': '移除服务器“{name}”？\n\n关联这台服务器的 SSH 数据库和 Redis 连接也会被移除；直接连接会保留。以它作为跳板的 {jumpCount} 台服务器将无法连接，直到重新选择跳板。',
+    'confirm.removeServer': '移除服务器“{name}”？\n\n关联这台服务器的 SSH 数据库和 Redis 连接也会被移除；直接连接会保留。引用它的 {tunnelCount} 条本地隧道会停止并需要重新选择 SSH 服务器。以它作为跳板的 {jumpCount} 台服务器将无法连接，直到重新选择跳板。',
     'confirm.deleteWorkflow': '删除工作流“{name}”？\n\n此操作无法撤销。',
     'confirm.deleteCron': '删除此定时任务？\n{line}',
     'confirm.deletePath': '删除 {path}？',
@@ -1491,6 +1519,14 @@ const emptyServerForm = {
   jumpServerId: ''
 }
 
+const emptySshTunnelForm = {
+  name: '',
+  sshServerId: '',
+  localPort: 5231,
+  targetHost: '',
+  targetPort: 5236
+}
+
 const emptyDatabaseForm = {
   name: '',
   engine: 'mysql',
@@ -1776,6 +1812,9 @@ export default function App() {
   const [servers, setServers] = useState([])
   const [databases, setDatabases] = useState([])
   const [redisStores, setRedisStores] = useState([])
+  const [sshTunnels, setSshTunnels] = useState([])
+  const [sshTunnelStatuses, setSshTunnelStatuses] = useState({})
+  const [sshTunnelDialogOpen, setSshTunnelDialogOpen] = useState(false)
   const [selectedServerId, setSelectedServerId] = useState('')
   const [activeModule, setActiveModule] = useState('command')
   const [command, setCommand] = useState(defaultCommand)
@@ -1786,6 +1825,7 @@ export default function App() {
   const [remotePath, setRemotePath] = useState('/')
   const [remoteServerId, setRemoteServerId] = useState('')
   const [remoteItems, setRemoteItems] = useState([])
+  const [remoteLoadError, setRemoteLoadError] = useState({ serverId: '', message: '' })
   const [remoteSort, setRemoteSort] = useState({ key: 'name', direction: 'asc' })
   const [pendingRemoteFocusName, setPendingRemoteFocusName] = useState('')
   const [remoteFilesScrollTop, setRemoteFilesScrollTop] = useState(0)
@@ -1915,6 +1955,7 @@ export default function App() {
   const shellRecoveryRef = useRef(new Set())
   const serverInspectInFlightRef = useRef(new Set())
   const transferPanelTimerRef = useRef(null)
+  const previousSshTunnelStatusesRef = useRef({})
   const activeTransferIdsRef = useRef(new Set())
   const transferSessionHasErrorRef = useRef(false)
   const databaseTableDeleteCancelRef = useRef(new Set())
@@ -1949,6 +1990,12 @@ export default function App() {
     })
     window.opsFlow.getStore('commandSnippets').then((savedSnippets) => {
       setCommandSnippets(normalizeCommandSnippets(savedSnippets))
+    })
+    window.opsFlow.getStore('sshTunnels').then((savedTunnels) => {
+      setSshTunnels(normalizeSshTunnelConfigs(savedTunnels))
+    })
+    window.opsFlow.listSshTunnels().then((runningTunnels) => {
+      setSshTunnelStatuses(Object.fromEntries((runningTunnels || []).map((item) => [item.id, item])))
     })
     loadState().then((saved) => {
       if (!saved) return
@@ -1988,6 +2035,24 @@ export default function App() {
       }
     })
   }, [])
+
+  useEffect(() => {
+    return window.opsFlow.onSshTunnelStatus((status) => {
+      if (!status?.id) return
+      setSshTunnelStatuses((current) => ({ ...current, [status.id]: status }))
+    })
+  }, [])
+
+  useEffect(() => {
+    const previous = previousSshTunnelStatusesRef.current
+    for (const [id, status] of Object.entries(sshTunnelStatuses)) {
+      if (previous[id]?.status === 'running' && status?.status === 'error') {
+        const tunnel = sshTunnels.find((item) => item.id === id)
+        showToast('error', `隧道“${tunnel?.name || id}”已断开：${status.message || 'SSH 连接已关闭'}`)
+      }
+    }
+    previousSshTunnelStatusesRef.current = sshTunnelStatuses
+  }, [sshTunnelStatuses])
 
   useEffect(() => {
     const media = window.matchMedia?.('(prefers-color-scheme: dark)')
@@ -2632,6 +2697,114 @@ export default function App() {
     })
   }, [activeModule, selectedServer.id, selectedServer.status])
 
+  const persistSshTunnels = (nextTunnels) => {
+    const normalized = normalizeSshTunnelConfigs(nextTunnels)
+    setSshTunnels(normalized)
+    return window.opsFlow.setStore('sshTunnels', normalized)
+  }
+
+  const saveSshTunnel = async (draft, editingId = '') => {
+    const name = String(draft.name || '').trim()
+    const sshServerId = String(draft.sshServerId || '').trim()
+    const targetHost = String(draft.targetHost || '').trim()
+    const localPort = Number(draft.localPort)
+    const targetPort = Number(draft.targetPort)
+    if (!name || !sshServerId || !targetHost) return { ok: false, message: '名称、SSH 服务器和目标主机不能为空。' }
+    if (!servers.some((server) => server.id === sshServerId)) return { ok: false, message: '所选 SSH 服务器不存在。' }
+    if (!Number.isInteger(localPort) || localPort < 1 || localPort > 65535) return { ok: false, message: '本地端口必须在 1～65535 之间。' }
+    if (!Number.isInteger(targetPort) || targetPort < 1 || targetPort > 65535) return { ok: false, message: '目标端口必须在 1～65535 之间。' }
+    const portConflict = sshTunnels.find((item) => item.id !== editingId && Number(item.localPort) === localPort)
+    if (portConflict) return { ok: false, message: `本地端口 ${localPort} 已被隧道“${portConflict.name}”配置使用。` }
+
+    if (editingId) await window.opsFlow.stopSshTunnel(editingId)
+    const nextTunnel = {
+      id: editingId || makeId('ssh-tunnel'),
+      name,
+      sshServerId,
+      localHost: '127.0.0.1',
+      localPort,
+      targetHost,
+      targetPort
+    }
+    const nextTunnels = editingId
+      ? sshTunnels.map((item) => (item.id === editingId ? nextTunnel : item))
+      : [...sshTunnels, nextTunnel]
+    await persistSshTunnels(nextTunnels)
+    setSshTunnelStatuses((current) => ({
+      ...current,
+      [nextTunnel.id]: { id: nextTunnel.id, status: 'stopped', message: '' }
+    }))
+    return { ok: true, tunnel: nextTunnel }
+  }
+
+  const testSshTunnel = async (draft) => {
+    const sshServer = servers.find((server) => server.id === String(draft.sshServerId || ''))
+    const targetHost = String(draft.targetHost || '').trim()
+    const targetPort = Number(draft.targetPort)
+    if (!sshServer) return { ok: false, message: '请选择一个有效的 SSH 服务器。' }
+    if (!targetHost) return { ok: false, message: '请输入目标主机。' }
+    if (!Number.isInteger(targetPort) || targetPort < 1 || targetPort > 65535) return { ok: false, message: '目标端口必须在 1～65535 之间。' }
+    try {
+      return await window.opsFlow.testSshTunnel({ targetHost, targetPort }, sshServer)
+    } catch (error) {
+      return { ok: false, message: error.message || '连接测试失败。' }
+    }
+  }
+
+  const startSshTunnel = async (tunnel) => {
+    const sshServer = servers.find((server) => server.id === tunnel.sshServerId)
+    if (!sshServer) {
+      const result = { ok: false, id: tunnel.id, status: 'error', message: '所选 SSH 服务器不存在，请编辑隧道配置。' }
+      setSshTunnelStatuses((current) => ({ ...current, [tunnel.id]: result }))
+      return result
+    }
+    setSshTunnelStatuses((current) => ({
+      ...current,
+      [tunnel.id]: { id: tunnel.id, status: 'connecting', message: '正在建立 SSH 隧道…' }
+    }))
+    let result
+    try {
+      result = await window.opsFlow.startSshTunnel(tunnel, sshServer)
+    } catch (error) {
+      result = { ok: false, id: tunnel.id, status: 'error', message: error.message || '无法启动隧道。' }
+    }
+    setSshTunnelStatuses((current) => ({ ...current, [tunnel.id]: result }))
+    if (result.status === 'stopped') {
+      appendLog(`SSH tunnel start canceled: ${tunnel.name}`)
+      return result
+    }
+    const started = result.ok && result.status === 'running'
+    appendLog(started
+      ? `SSH tunnel started: 127.0.0.1:${tunnel.localPort} -> ${tunnel.targetHost}:${tunnel.targetPort}`
+      : `SSH tunnel failed: ${result.message}`)
+    showToast(started ? 'success' : 'error', started
+      ? `隧道已启动：127.0.0.1:${tunnel.localPort}`
+      : `隧道启动失败：${result.message}`)
+    return result
+  }
+
+  const stopSshTunnel = async (tunnel) => {
+    let result
+    try {
+      result = await window.opsFlow.stopSshTunnel(tunnel.id)
+    } catch (error) {
+      result = { ok: false, id: tunnel.id, status: 'error', message: error.message || '无法停止隧道。' }
+    }
+    setSshTunnelStatuses((current) => ({ ...current, [tunnel.id]: result }))
+    appendLog(`SSH tunnel stopped: ${tunnel.name}`)
+    return result
+  }
+
+  const deleteSshTunnel = async (tunnel) => {
+    await window.opsFlow.stopSshTunnel(tunnel.id)
+    await persistSshTunnels(sshTunnels.filter((item) => item.id !== tunnel.id))
+    setSshTunnelStatuses((current) => {
+      const next = { ...current }
+      delete next[tunnel.id]
+      return next
+    })
+  }
+
   const openAddServer = () => {
     setServerForm(emptyServerForm)
     setEditingServerId('')
@@ -2944,36 +3117,33 @@ export default function App() {
     persist({ servers: connectingServers, databases, redisStores })
 
     try {
-      const result = await window.opsFlow.testSsh(selectedServer)
-      if (!result.ok) {
-        const nextServer = markServerConnectionFailed(selectedServer, result.message)
-        const nextServers = connectingServers.map((server) => (server.id === nextServer.id ? nextServer : server))
-        setServers(nextServers)
-        persist({ servers: nextServers, databases, redisStores })
-        setRemoteItems([])
-        setSelectedRemoteItem(null)
-        appendLog(`Connect failed: ${result.message}`)
-        appendTerminal(`Connection failed: ${result.message}`)
-        showToast('error', `Connection failed: ${result.message}`)
-        return
-      }
-
-      const inspected = await inspectServer({ silent: true })
-      const connectedServer = { ...(inspected?.server || selectedServer), status: 'connected', lastError: '' }
-      const nextServers = connectingServers.map((server) => (server.id === connectedServer.id ? connectedServer : server))
-      setServers(nextServers)
-      persist({ servers: nextServers, databases, redisStores })
-      updateResourceHistory(connectedServer, true)
-      const shellResult = await openTerminalShell(connectedServer)
+      const shellResult = await openTerminalShell(selectedServer)
       if (!shellResult.ok) {
-        const failedServer = markServerConnectionFailed(connectedServer, shellResult.message)
-        const failedServers = nextServers.map((server) => (server.id === failedServer.id ? failedServer : server))
+        const failedServer = markServerConnectionFailed(selectedServer, shellResult.message)
+        const failedServers = connectingServers.map((server) => (server.id === failedServer.id ? failedServer : server))
         setServers(failedServers)
         persist({ servers: failedServers, databases, redisStores })
+        setRemoteItems([])
+        setSelectedRemoteItem(null)
         appendLog(`Terminal failed: ${shellResult.message}`)
+        appendTerminal(`Connection failed: ${shellResult.message}`)
         showToast('error', `Terminal failed: ${shellResult.message}`)
         return
       }
+
+      const provisionalServer = { ...selectedServer, status: 'connected', lastError: '' }
+      const provisionalServers = connectingServers.map((server) => (server.id === provisionalServer.id ? provisionalServer : server))
+      setServers(provisionalServers)
+      persist({ servers: provisionalServers, databases, redisStores })
+
+      // The terminal transport is now available. Inspection and SFTP reuse it
+      // as additional SSH channels instead of opening more TCP connections.
+      const inspected = await inspectServer({ silent: true })
+      const connectedServer = { ...(inspected?.server || provisionalServer), status: 'connected', lastError: '' }
+      const nextServers = provisionalServers.map((server) => (server.id === connectedServer.id ? connectedServer : server))
+      setServers(nextServers)
+      persist({ servers: nextServers, databases, redisStores })
+      updateResourceHistory(connectedServer, true)
       const targetPath = remotePath || '/'
       loadRemoteDirectory(targetPath, connectedServer)
       appendLog(`Connected: ${selectedServer.name}`)
@@ -3023,17 +3193,21 @@ export default function App() {
     }
     const linkedDatabaseCount = databases.filter((item) => resourceUsesSsh(item) && item.serverId === selectedServer.id).length
     const linkedRedisCount = redisStores.filter((item) => resourceUsesSsh(item) && item.serverId === selectedServer.id).length
+    const linkedTunnelCount = sshTunnels.filter((item) => serverRouteIncludes(item.sshServerId, selectedServer.id, servers)).length
     const linkedJumpCount = servers.filter((item) => item.jumpServerId === selectedServer.id).length
     const confirmed = window.confirm(t(
       'confirm.removeServer',
-      'Remove server "{name}"?\n\nSSH database and Redis connections linked to this server will also be removed. Direct connections are kept. {jumpCount} server(s) using it as a jump server will become unavailable until another jump server is selected.',
-      { name: selectedServer.name, databaseCount: linkedDatabaseCount, redisCount: linkedRedisCount, jumpCount: linkedJumpCount }
+      'Remove server "{name}"?\n\nSSH database and Redis connections linked to this server will also be removed. Direct connections are kept. {tunnelCount} local tunnel(s) will stop and need another SSH server. {jumpCount} server(s) using it as a jump server will become unavailable until another jump server is selected.',
+      { name: selectedServer.name, databaseCount: linkedDatabaseCount, redisCount: linkedRedisCount, tunnelCount: linkedTunnelCount, jumpCount: linkedJumpCount }
     ))
     if (!confirmed) {
       appendLog('Remove server canceled')
       return
     }
     stopShellForServer(selectedServer.id)
+    sshTunnels
+      .filter((tunnel) => serverRouteIncludes(tunnel.sshServerId, selectedServer.id, servers))
+      .forEach((tunnel) => window.opsFlow.stopSshTunnel(tunnel.id))
     const nextServers = servers.filter((server) => server.id !== selectedServer.id)
     const nextDatabases = databases.filter((item) => !resourceUsesSsh(item) || item.serverId !== selectedServer.id)
     const nextRedisStores = redisStores.filter((item) => !resourceUsesSsh(item) || item.serverId !== selectedServer.id)
@@ -5424,6 +5598,10 @@ export default function App() {
     const requestId = remoteDirectoryRequestRef.current + 1
     remoteDirectoryRequestRef.current = requestId
     const privilege = options.privileged === false ? null : (options.privilege || getRemotePrivilege(server))
+    setRemoteServerId(requestServerId)
+    setRemotePath(path)
+    if (remoteServerId !== requestServerId) setRemoteItems([])
+    setRemoteLoadError({ serverId: requestServerId, message: '' })
     setIsRemoteLoading(true)
 
     try {
@@ -5433,6 +5611,7 @@ export default function App() {
       if (selectedServerIdLiveRef.current !== requestServerId || remoteDirectoryRequestRef.current !== requestId) return
       if (!result.ok) {
         appendLog(`Remote directory failed: ${result.message}`)
+        setRemoteLoadError({ serverId: requestServerId, message: result.message || 'Failed to load remote directory' })
         if (isRemotePermissionFailure(result.message)) {
           rememberRemotePermissionFailure(path, result.message)
         } else {
@@ -5441,6 +5620,7 @@ export default function App() {
         return
       }
       setRemotePermissionError(null)
+      setRemoteLoadError({ serverId: requestServerId, message: '' })
       const resolvedPath = result.path || path
       setRemotePath(resolvedPath)
       setRemoteServerId(requestServerId)
@@ -5451,6 +5631,7 @@ export default function App() {
       if (selectedServerIdLiveRef.current !== requestServerId || remoteDirectoryRequestRef.current !== requestId) return
       const message = error?.message || 'Failed to load remote directory'
       appendLog(`Remote directory failed: ${message}`)
+      setRemoteLoadError({ serverId: requestServerId, message })
       showToast('error', message)
     } finally {
       if (selectedServerIdLiveRef.current === requestServerId && remoteDirectoryRequestRef.current === requestId) {
@@ -7982,6 +8163,13 @@ export default function App() {
                 <TransferPopover transfers={transferTasks} onClear={clearTransferTasks} onCancelTask={cancelTransferTask} onRetryRollback={retryWorkflowRollback} />
               )}
             </div>
+            <button
+              className={sshTunnelDialogOpen ? 'selected' : ''}
+              title={t('topbar.tunnels', 'SSH tunnels')}
+              onClick={() => setSshTunnelDialogOpen(true)}
+            >
+              <Cable size={16} />{t('topbar.tunnels', 'Tunnels')}
+            </button>
             <button className="connect-button" onClick={connectServer} disabled={!selectedServer.id || isTestingServer}>
               <Power size={16} />{isTestingServer ? t('topbar.connecting', 'Connecting') : t('topbar.connect', 'Connect')}
             </button>
@@ -8028,6 +8216,7 @@ export default function App() {
               transferring={isFileTransferRunning}
               privilege={remotePrivilege.enabled && remotePrivilege.serverId === selectedServer.id ? remotePrivilege : null}
               permissionError={remotePermissionError}
+              loadError={remoteLoadError.serverId === selectedServer.id ? remoteLoadError.message : ''}
               pathHistory={selectedRemotePathHistory}
               onOpen={openRemoteItem}
               onOpenDirectory={openRemoteDirectory}
@@ -8618,6 +8807,20 @@ export default function App() {
           </div>
         </section>
       </main>
+      {sshTunnelDialogOpen && (
+        <SshTunnelDialog
+          tunnels={sshTunnels}
+          statuses={sshTunnelStatuses}
+          servers={servers}
+          onSave={saveSshTunnel}
+          onTest={testSshTunnel}
+          onStart={startSshTunnel}
+          onStop={stopSshTunnel}
+          onDelete={deleteSshTunnel}
+          onCopy={(value) => copyText(value, showToast)}
+          onClose={() => setSshTunnelDialogOpen(false)}
+        />
+      )}
       {isServerDialogOpen && (
         <ServerDialog
           form={serverForm}
@@ -9444,6 +9647,7 @@ function SettingsDialog({ language, themeMode, section, onLanguageChange, onThem
                         <span><strong>{importPreview.summary?.servers || 0}</strong>{t('settings.security.servers', 'Servers')}</span>
                         <span><strong>{importPreview.summary?.databases || 0}</strong>{t('settings.security.databases', 'Databases')}</span>
                         <span><strong>{importPreview.summary?.redisStores || 0}</strong>{t('settings.security.redis', 'Redis')}</span>
+                        <span><strong>{importPreview.summary?.sshTunnels || 0}</strong>{t('settings.security.tunnels', 'SSH tunnels')}</span>
                         <span><strong>{importPreview.summary?.workflows || 0}</strong>{t('settings.security.workflows', 'Workflows')}</span>
                         <span><strong>{importPreview.summary?.transferTasks || 0}</strong>{t('settings.security.transferTasks', 'Transfers')}</span>
                       </div>
@@ -9481,6 +9685,7 @@ function SettingsDialog({ language, themeMode, section, onLanguageChange, onThem
                 <div className="help-card-grid">
                   <HelpTextBlock title={t('help.features.terminal.title', 'Command terminal')} text={t('help.features.terminal.text', 'Use the interactive SSH terminal for troubleshooting, one-off commands and live output. The terminal follows the selected server and prompts you to reconnect after disconnection.')} />
                   <HelpTextBlock title={t('help.features.jump.title', 'SSH jump server for private hosts')} text={t('help.features.jump.text', 'First save and test a public SSH server using Direct connection. Add the private server with an address reachable from that server, select the saved server as its SSH jump server, and enter the private server own SSH credentials. Terminal, SFTP, workflows, deployment and host management automatically reuse the route Ops Flow → public jump server → private server. The jump server must allow TCP forwarding and be able to reach the target SSH port.')} />
+                  <HelpTextBlock title={t('help.features.tunnel.title', 'SSH tunnels for external clients')} text={t('help.features.tunnel.text', 'Open Tunnels from the top toolbar, select a saved SSH server, and configure a local port plus a destination host and port reachable from that server. Test connection verifies SSH login, the jump chain and the destination port. Start the tunnel, then connect Dameng tools, Oracle SQL Developer, DBeaver or another external client to 127.0.0.1:local-port. The tunnel runs independently from the command terminal, and listeners are restricted to 127.0.0.1 until Ops Flow exits.')} />
                   <HelpTextBlock title={t('help.features.files.title', 'Remote files')} text={t('help.features.files.text', 'Browse SFTP directories, go to the parent folder, refresh, upload, download, edit, rename or delete files. Sort by file name or filter names in real time; clearing the search restores the full list.')} />
                   <HelpTextBlock title={t('help.features.database.title', 'Database management')} text={t('help.features.database.text', 'Manage database connections, inspect tables, fields and data, run SQL, and export query results. Independent table and field searches make large schemas easier to navigate.')} />
                   <HelpTextBlock title={t('help.features.redis.title', 'Redis management')} text={t('help.features.redis.text', 'Manage Redis connections, load and inspect keys, and delete confirmed keys. Search and refresh help investigate cache, queue and temporary state data.')} />
@@ -9566,7 +9771,7 @@ function SettingsDialog({ language, themeMode, section, onLanguageChange, onThem
                   <HelpTextBlock title={t('help.safety.controller.title', 'Firewall controllers')} text={t('help.safety.controller.text', 'Avoid managing firewalld, UFW, nftables and iptables at the same time. If a controller conflict, insufficient permission, duplicate rule or complex iptables condition is detected, verify it manually on the server first.')} />
                   <HelpTextBlock title={t('help.safety.data.title', 'Data and system changes')} text={t('help.safety.data.text', 'Deleting tables, columns or Redis keys, running SQL, stopping services, editing cron, and installing or uninstalling software may be irreversible. Confirm the server, database, object, command and rollback path first.')} />
                   <HelpTextBlock title={t('help.safety.rollback.title', 'Rollback boundaries')} text={t('help.safety.rollback.text', 'Workflow rollback requires configured rollback nodes, SQL rollback requires a database transaction, and file recovery requires a backup copy. None is a machine snapshot. Implicit DDL commits, completed remote commands, external side effects and network loss may prevent automatic recovery.')} />
-                  <HelpTextBlock title={t('help.safety.configMigration.title', 'Encrypted configuration export and migration')} text={t('help.safety.configMigration.text', 'Configuration security can export servers, databases, Redis, workflows, backup targets and saved commands as an encrypted file. Export options control credentials and history. Import first decrypts a preview, then replaces local configuration and creates an encrypted pre-import rollback backup using the same password. Transfer the file and password through separate channels.')} />
+                  <HelpTextBlock title={t('help.safety.configMigration.title', 'Encrypted configuration export and migration')} text={t('help.safety.configMigration.text', 'Configuration security can export servers, SSH tunnels, databases, Redis, workflows, backup targets and saved commands as an encrypted file. Export options control credentials and history. Import first decrypts a preview, then replaces local configuration and creates an encrypted pre-import rollback backup using the same password. Transfer the file and password through separate channels.')} />
                 </div>
               </article>
             )}
@@ -9947,6 +10152,184 @@ function WorkflowRunDialog({ workflow, servers, config, onChange, onToggleServer
             <CirclePlay size={15} />
             {needsConnection ? t('workflow.runAndConnect', 'Run and connect') : t('workflow.runNow', 'Run workflow')}
           </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function SshTunnelDialog({ tunnels, statuses, servers, onSave, onTest, onStart, onStop, onDelete, onCopy, onClose }) {
+  const { t } = useI18n()
+  const [editorId, setEditorId] = useState(null)
+  const [draft, setDraft] = useState(emptySshTunnelForm)
+  const [notice, setNotice] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+
+  const openAdd = () => {
+    setEditorId('')
+    setDraft({ ...emptySshTunnelForm, sshServerId: servers[0]?.id || '' })
+    setNotice(null)
+  }
+  const openEdit = (tunnel) => {
+    setEditorId(tunnel.id)
+    setDraft({ ...tunnel })
+    setNotice(null)
+  }
+  const updateDraft = (key, value) => {
+    setDraft((current) => ({ ...current, [key]: value }))
+    setNotice(null)
+  }
+  const save = async () => {
+    setSaving(true)
+    try {
+      const result = await onSave(draft, editorId)
+      if (!result.ok) {
+        setNotice({ type: 'error', text: result.message })
+        return
+      }
+      setEditorId(null)
+      setNotice(null)
+    } finally {
+      setSaving(false)
+    }
+  }
+  const test = async () => {
+    setTesting(true)
+    setNotice({ type: 'info', text: t('tunnel.testHint', 'Testing SSH login, jump chain and destination port. Local port availability is checked when the tunnel starts.') })
+    try {
+      const result = await onTest(draft)
+      setNotice(result.ok
+        ? { type: 'success', text: `${t('tunnel.testSuccess', 'Connection test succeeded: the SSH route can reach the destination port.')} ${Number(result.elapsedMs) > 0 ? `(${result.elapsedMs} ms)` : ''}`.trim() }
+        : { type: 'error', text: `连接测试失败：${result.message || '目标不可达。'}` })
+    } finally {
+      setTesting(false)
+    }
+  }
+  const remove = async (tunnel) => {
+    if (!window.confirm(`删除隧道配置“${tunnel.name}”？\n\n只会删除本机配置，不会修改服务器或数据库。`)) return
+    await onDelete(tunnel)
+    if (editorId === tunnel.id) setEditorId(null)
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <section className="ssh-tunnel-dialog">
+        <div className="dialog-title">
+          <div>
+            <strong>{t('tunnel.title', 'SSH local tunnels')}</strong>
+            <span>{t('tunnel.description', 'Forward private ports to this computer for external database clients.')}</span>
+          </div>
+          <button type="button" onClick={onClose}><X size={18} /></button>
+        </div>
+
+        <div className="ssh-tunnel-body">
+          <div className="ssh-tunnel-toolbar">
+            <p><ShieldCheck size={15} />{t('tunnel.localOnlyHint', 'Security: listeners are restricted to 127.0.0.1 and are not exposed to the network.')}</p>
+            <button type="button" onClick={openAdd} disabled={!servers.length || editorId !== null}>
+              <Plus size={15} />{t('tunnel.add', 'Add tunnel')}
+            </button>
+          </div>
+
+          {!servers.length && (
+            <div className="dialog-notice info">请先保存至少一台 SSH 服务器，再创建本地隧道。</div>
+          )}
+
+          <div className="ssh-tunnel-list">
+            {tunnels.length ? tunnels.map((tunnel) => {
+              const status = statuses[tunnel.id] || { status: 'stopped', message: '' }
+              const running = status.status === 'running'
+              const connecting = status.status === 'connecting'
+              const sshServer = servers.find((server) => server.id === tunnel.sshServerId)
+              const statusLabel = running
+                ? t('tunnel.running', 'Running')
+                : connecting
+                  ? t('tunnel.starting', 'Starting')
+                  : status.status === 'error'
+                    ? status.message || 'Error'
+                    : t('tunnel.stopped', 'Stopped')
+              return (
+                <article key={tunnel.id} className={`ssh-tunnel-item ${status.status || 'stopped'}`}>
+                  <div className="ssh-tunnel-main">
+                    <span className="ssh-tunnel-status-dot" />
+                    <div>
+                      <strong title={tunnel.name}>{tunnel.name}</strong>
+                      <small title={sshServer ? `${sshServer.username}@${sshServer.host}:${sshServer.port}` : ''}>
+                        {sshServer ? `SSH · ${sshServer.name}` : 'SSH 服务器已删除'}
+                      </small>
+                    </div>
+                  </div>
+                  <div className="ssh-tunnel-route">
+                    <button type="button" title="复制本地连接地址" onClick={() => onCopy(`127.0.0.1:${tunnel.localPort}`)}>
+                      <code>127.0.0.1:{tunnel.localPort}</code><Copy size={13} />
+                    </button>
+                    <span>→</span>
+                    <code title={`${tunnel.targetHost}:${tunnel.targetPort}`}>{tunnel.targetHost}:{tunnel.targetPort}</code>
+                  </div>
+                  <div className="ssh-tunnel-state" title={status.message || statusLabel}>{statusLabel}</div>
+                  <div className="ssh-tunnel-actions">
+                    {running || connecting ? (
+                      <button type="button" onClick={() => onStop(tunnel)}><CircleStop size={14} />{t('tunnel.stop', 'Stop')}</button>
+                    ) : (
+                      <button type="button" className="tunnel-start-button" onClick={() => onStart(tunnel)} disabled={!sshServer}>
+                        <CirclePlay size={14} />{t('tunnel.start', 'Start')}
+                      </button>
+                    )}
+                    <button type="button" onClick={() => openEdit(tunnel)} disabled={connecting || editorId !== null}>
+                      <SquarePen size={14} />{t('tunnel.edit', 'Edit')}
+                    </button>
+                    <button type="button" className="tunnel-delete-button" onClick={() => remove(tunnel)} disabled={connecting} title={t('tunnel.delete', 'Delete')}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </article>
+              )
+            }) : (
+              <div className="ssh-tunnel-empty"><Cable size={24} />{t('tunnel.empty', 'No tunnels configured. Add one to create local port forwarding.')}</div>
+            )}
+          </div>
+
+          {editorId !== null && (
+            <section className="ssh-tunnel-editor">
+              <div className="ssh-tunnel-editor-heading">
+                <strong>{editorId ? t('tunnel.edit', 'Edit tunnel') : t('tunnel.add', 'Add tunnel')}</strong>
+                <span>{t('tunnel.routeHint', 'The destination is reached from the selected SSH server, including its configured jump chain.')}</span>
+              </div>
+              <div className="server-form ssh-tunnel-form">
+                <Field label={t('tunnel.name', 'Name')}>
+                  <input value={draft.name || ''} onChange={(event) => updateDraft('name', event.target.value)} placeholder="达梦生产库" autoFocus />
+                </Field>
+                <Field label={t('tunnel.sshServer', 'SSH server')}>
+                  <select value={draft.sshServerId || ''} onChange={(event) => updateDraft('sshServerId', event.target.value)}>
+                    <option value="">请选择 SSH 服务器</option>
+                    {servers.map((server) => (
+                      <option key={server.id} value={server.id}>{server.name} · {server.username}@{server.host}:{server.port}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label={t('tunnel.localPort', 'Local port')}>
+                  <input type="number" min="1" max="65535" value={draft.localPort} onChange={(event) => updateDraft('localPort', event.target.value)} />
+                  <small>{t('tunnel.localEndpoint', 'External client endpoint')}: 127.0.0.1:{draft.localPort || '-'}</small>
+                </Field>
+                <Field label={t('tunnel.targetHost', 'Destination host')}>
+                  <input value={draft.targetHost || ''} onChange={(event) => updateDraft('targetHost', event.target.value)} placeholder="内网数据库地址" />
+                </Field>
+                <Field label={t('tunnel.targetPort', 'Destination port')}>
+                  <input type="number" min="1" max="65535" value={draft.targetPort} onChange={(event) => updateDraft('targetPort', event.target.value)} placeholder="5236" />
+                </Field>
+              </div>
+              {notice && <div className={`dialog-notice ${notice.type}`}>{notice.text}</div>}
+              <div className="dialog-actions">
+                <button type="button" onClick={() => { setEditorId(null); setNotice(null) }} disabled={saving || testing}>{t('common.cancel', 'Cancel')}</button>
+                <button type="button" onClick={test} disabled={saving || testing}>
+                  <CheckCircle2 size={15} />{testing ? t('tunnel.testing', 'Testing') : t('tunnel.test', 'Test connection')}
+                </button>
+                <button type="button" className="solid-button" onClick={save} disabled={saving || testing}>
+                  <Save size={15} />{saving ? t('common.saving', 'Saving') : t('tunnel.save', 'Save configuration')}
+                </button>
+              </div>
+            </section>
+          )}
         </div>
       </section>
     </div>
@@ -12665,7 +13048,7 @@ const defaultRemoteFileColumnWidths = remoteFileColumns.reduce((widths, column) 
   return widths
 }, {})
 
-function RemoteFilesPanel({ serverId, path, items, sort, scrollTop = 0, focusedItemName, selectedItem, loading, transferring, privilege, permissionError, pathHistory = { recent: [], favorites: [] }, onOpen, onOpenDirectory, onOpenPath, onCopyPath, onToggleFavorite, onClearRecentPaths, onSort, onFocusHandled, onScroll, onParent, onCreateFile, onCreateDirectory, onRename, onUpload, onDownload, onEditFile, onDelete, onRefresh, onGlobalSearch, onCancelGlobalSearch, onOpenPrivilege, onExitPrivilege }) {
+function RemoteFilesPanel({ serverId, path, items, sort, scrollTop = 0, focusedItemName, selectedItem, loading, transferring, privilege, permissionError, loadError = '', pathHistory = { recent: [], favorites: [] }, onOpen, onOpenDirectory, onOpenPath, onCopyPath, onToggleFavorite, onClearRecentPaths, onSort, onFocusHandled, onScroll, onParent, onCreateFile, onCreateDirectory, onRename, onUpload, onDownload, onEditFile, onDelete, onRefresh, onGlobalSearch, onCancelGlobalSearch, onOpenPrivilege, onExitPrivilege }) {
   const { t } = useI18n()
   const breadcrumbs = buildRemoteBreadcrumbs(path)
   const [isPathTextMode, setIsPathTextMode] = useState(false)
@@ -13196,6 +13579,8 @@ function RemoteFilesPanel({ serverId, path, items, sort, scrollTop = 0, focusedI
                 <td className="remote-empty-row" colSpan="6">
                   {globalSearch.error
                     ? globalSearch.error
+                    : loadError
+                    ? loadError
                     : normalizedNameQuery
                     ? t('remote.noMatches', 'No matching files.')
                     : t('remote.connectPrompt', 'Connect to a server to load files.')}
@@ -15437,8 +15822,6 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
           <div
             className="db-action-menu"
             ref={addMenuRef}
-            onMouseEnter={() => setAddMenuOpen(true)}
-            onMouseLeave={() => setAddMenuOpen(false)}
           >
             <button
               type="button"
@@ -18338,6 +18721,32 @@ function ResourceStrip({ items }) {
   )
 }
 
+function normalizeSshTunnelConfigs(items) {
+  if (!Array.isArray(items)) return []
+  const usedIds = new Set()
+  return items.flatMap((item) => {
+    const localPort = Number(item?.localPort)
+    const targetPort = Number(item?.targetPort)
+    const targetHost = String(item?.targetHost || '').trim()
+    const sshServerId = String(item?.sshServerId || '').trim()
+    if (!Number.isInteger(localPort) || localPort < 1 || localPort > 65535) return []
+    if (!Number.isInteger(targetPort) || targetPort < 1 || targetPort > 65535) return []
+    if (!targetHost || !sshServerId) return []
+    let id = String(item?.id || '').trim()
+    if (!id || usedIds.has(id)) id = makeId('ssh-tunnel')
+    usedIds.add(id)
+    return [{
+      id,
+      name: String(item?.name || '').trim() || `${targetHost}:${targetPort}`,
+      sshServerId,
+      localHost: '127.0.0.1',
+      localPort,
+      targetHost,
+      targetPort
+    }]
+  })
+}
+
 async function loadState() {
   const rawResources = await window.opsFlow.getStore('resources')
   const storedServers = await window.opsFlow.getStore('servers')
@@ -18488,6 +18897,19 @@ function isServerAvailableAsJump(candidateId, editingServerId, servers = []) {
     currentId = String(byId.get(currentId)?.jumpServerId || '')
   }
   return true
+}
+
+function serverRouteIncludes(serverId, routeServerId, servers = []) {
+  const byId = new Map(servers.map((item) => [String(item.id || ''), item]))
+  const visited = new Set()
+  let currentId = String(serverId || '')
+  const targetId = String(routeServerId || '')
+  while (currentId && !visited.has(currentId)) {
+    if (currentId === targetId) return true
+    visited.add(currentId)
+    currentId = String(byId.get(currentId)?.jumpServerId || '')
+  }
+  return false
 }
 
 function buildDatabaseFromForm(form) {
@@ -20445,13 +20867,15 @@ function wait(ms) {
 }
 
 async function verifyServerReachability(server, onAttempt) {
-  const total = 3
+  const total = 2
   let lastResult = { ok: false, message: 'SSH unavailable' }
   for (let attempt = 1; attempt <= total; attempt += 1) {
+    // Avoid turning a transport reset into a burst of new logins. Some SSH
+    // gateways temporarily throttle a source after a reset or connection spike.
+    await wait(attempt * 4000)
     onAttempt?.(attempt, total, lastResult.message)
-    lastResult = await window.opsFlow.testSsh({ ...server, readyTimeout: 8000 })
+    lastResult = await window.opsFlow.testSsh({ ...server, readyTimeout: 10000 })
     if (lastResult?.ok) return { ...lastResult, attempts: attempt }
-    if (attempt < total) await wait(attempt * 1500)
   }
   return { ...lastResult, ok: false, attempts: total }
 }

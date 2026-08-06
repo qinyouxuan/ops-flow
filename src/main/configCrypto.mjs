@@ -162,6 +162,7 @@ export function summarizeConfig(config) {
     servers: arrayLength(value.servers),
     databases: arrayLength(value.databases),
     redisStores: arrayLength(value.redisStores || value.redis),
+    sshTunnels: arrayLength(value.sshTunnels),
     workflows: arrayLength(value.workflows),
     backupRecoveryProfiles: arrayLength(value.backupRecoveryProfiles),
     deployConfigs: Array.isArray(value.deployConfigs)

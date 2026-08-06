@@ -38,6 +38,7 @@ const databaseBackupSessions = new Map()
 const redisBackupSessions = new Map()
 const redisRestoreSessions = new Map()
 const fileTransferSessions = new Map()
+const sshTunnelSessions = new Map()
 const pendingConfigImports = new Map()
 const damengLegacyWorkers = new Set()
 
@@ -66,6 +67,7 @@ const store = new Store({
     databases: [],
     redisStores: [],
     redis: [],
+    sshTunnels: [],
     workflows: []
   }
 })
@@ -154,7 +156,7 @@ function migrateLocalCredentials() {
 function prepareImportedConfig(config) {
   const normalized = sanitizeConfigObject(config)
   for (const key of DAMENG_LOCAL_STORE_KEYS) delete normalized[key]
-  for (const key of ['resources', 'servers', 'databases', 'redisStores', 'redis', 'workflows']) {
+  for (const key of ['resources', 'servers', 'databases', 'redisStores', 'redis', 'sshTunnels', 'workflows']) {
     if (normalized[key] !== undefined && !Array.isArray(normalized[key])) {
       throw new Error(`配置字段 ${key} 的格式不正确。`)
     }
@@ -165,6 +167,7 @@ function prepareImportedConfig(config) {
     databases: [],
     redisStores: [],
     redis: [],
+    sshTunnels: [],
     workflows: [],
     ...normalized
   }
@@ -294,12 +297,13 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   workflowPrivilegeCredentials.clear()
   databaseScriptSessions.clear()
+  for (const tunnelId of [...sshTunnelSessions.keys()]) stopManagedSshTunnel(tunnelId, false)
   for (const worker of damengLegacyWorkers) worker.terminate()
   damengLegacyWorkers.clear()
   for (const session of fileTransferSessions.values()) {
     session.canceled = true
     session.sftp?.end()
-    session.client?.end()
+    if (!session.sharedConnection) session.client?.end()
   }
   fileTransferSessions.clear()
 })
@@ -561,6 +565,7 @@ ipcMain.handle('config:apply-import', (event, request = {}) => {
     sendConfigOperationProgress(event, operationId, 'apply', 'writing')
     store.store = protectConfigForLocalStorage(pending.config)
     for (const [key, value] of Object.entries(localDamengSettings)) store.set(key, value)
+    for (const tunnelId of [...sshTunnelSessions.keys()]) stopManagedSshTunnel(tunnelId)
   } catch (error) {
     store.store = previousRawStore
     throw error
@@ -710,6 +715,46 @@ ipcMain.handle('ssh:test', async (_event, config) => {
   return withSshClient(config, async () => ({ ok: true, message: 'SSH connected' }))
 })
 
+ipcMain.handle('ssh-tunnel:list', (event) => {
+  return [...sshTunnelSessions.values()].map((session) => {
+    session.webContents = event.sender
+    return managedSshTunnelStatus(session)
+  })
+})
+
+ipcMain.handle('ssh-tunnel:start', async (event, tunnel, sshConfig) => {
+  return startManagedSshTunnel(event.sender, tunnel, sshConfig)
+})
+
+ipcMain.handle('ssh-tunnel:test', async (_event, tunnel = {}, sshConfig = {}) => {
+  const targetHost = String(tunnel.targetHost || '').trim()
+  const targetPort = Number(tunnel.targetPort)
+  if (!sshConfig?.host || !sshConfig?.username) return { ok: false, message: 'Saved SSH server is missing or incomplete' }
+  if (!targetHost || targetHost.length > 253 || /[\u0000\r\n]/.test(targetHost)) return { ok: false, message: 'Destination host is invalid' }
+  if (!Number.isInteger(targetPort) || targetPort < 1 || targetPort > 65535) return { ok: false, message: 'Destination port must be between 1 and 65535' }
+
+  const startedAt = Date.now()
+  return withSshClient({ ...sshConfig, readyTimeout: 15000 }, async (client) => {
+    let stream = null
+    try {
+      stream = await openSshForwardStream(client, targetHost, targetPort, 12000)
+      return {
+        ok: true,
+        message: `SSH route can reach ${targetHost}:${targetPort}`,
+        elapsedMs: Date.now() - startedAt
+      }
+    } finally {
+      if (stream && !stream.destroyed) stream.destroy()
+    }
+  })
+})
+
+ipcMain.handle('ssh-tunnel:stop', async (_event, tunnelId) => {
+  const id = String(tunnelId || '')
+  stopManagedSshTunnel(id)
+  return { ok: true, id, status: 'stopped' }
+})
+
 ipcMain.handle('ssh:exec', async (_event, config, command) => {
   return withSshClient(config, (client) => execCommand(client, wrapInteractiveCommand(command), { pty: true }))
 })
@@ -829,7 +874,7 @@ ipcMain.handle('ssh:shell:stop', async (_event, sessionId) => {
   return { ok: true }
 })
 
-ipcMain.handle('ssh:inspect', async (_event, config) => {
+ipcMain.handle('ssh:inspect', async (event, config) => {
   const command = [
     'hostname',
     'uname -a',
@@ -841,11 +886,11 @@ ipcMain.handle('ssh:inspect', async (_event, config) => {
     'lscpu | head -20'
   ].join('\n')
 
-  return withSshClient(config, (client) => execCommand(client, command))
+  return withActiveShellClient(event.sender, config, (client) => execCommand(client, command))
 })
 
-ipcMain.handle('sftp:list', async (_event, config, targetPath = '/') => {
-  return withSshClient(config, (client) => listRemoteDirectory(client, targetPath))
+ipcMain.handle('sftp:list', async (event, config, targetPath = '/') => {
+  return withActiveShellClient(event.sender, config, (client) => listRemoteDirectory(client, targetPath))
 })
 
 ipcMain.handle('sftp:privileged-list', async (event, config, targetPath = '/', privilege = {}) => {
@@ -900,7 +945,10 @@ ipcMain.handle('sftp:upload', async (event, config, targetDirectory = '/', optio
     webContents: event.sender
   }
   prepareFileTransferSession(progress, null)
-  let result = await withSshClient(config, (client) => uploadRemoteFile(client, localPath, remotePath, progress))
+  let result = await withActiveShellClient(event.sender, config, (client, connection) => {
+    progress.sharedConnection = connection.shared
+    return uploadRemoteFile(client, localPath, remotePath, progress)
+  })
   result = settlePendingFileTransfer(progress, result)
   if (result.canceled && result.partialRemotePath) {
     void cleanupCanceledRemoteUpload(config, result.partialRemotePath)
@@ -956,11 +1004,12 @@ ipcMain.handle('sftp:upload-path', async (event, config, localPath, remotePath) 
     webContents: event.sender
   }
   prepareFileTransferSession(progress, null)
-  let result = await withSshClient(config, (client) => (
-    stats.isDirectory()
+  let result = await withActiveShellClient(event.sender, config, (client, connection) => {
+    progress.sharedConnection = connection.shared
+    return stats.isDirectory()
       ? uploadRemoteDirectory(client, localPath, targetRemotePath, progress)
       : uploadRemoteFile(client, localPath, targetRemotePath, progress)
-  ))
+  })
   result = settlePendingFileTransfer(progress, result)
   if (result.canceled && result.partialRemotePath) {
     void cleanupCanceledRemoteUpload(config, result.partialRemotePath)
@@ -980,13 +1029,14 @@ ipcMain.handle('sftp:download', async (event, config, remotePath) => {
   }
 
   const transferId = `download-${Date.now()}-${Math.random().toString(16).slice(2)}`
-  return withSshClient(config, (client) => downloadRemoteFile(client, remotePath, picked.filePath, {
+  return withActiveShellClient(event.sender, config, (client, connection) => downloadRemoteFile(client, remotePath, picked.filePath, {
     id: transferId,
     type: 'download',
     name: posix.basename(remotePath),
     localPath: picked.filePath,
     remotePath,
-    webContents: event.sender
+    webContents: event.sender,
+    sharedConnection: connection.shared
   }))
 })
 
@@ -1016,13 +1066,14 @@ ipcMain.handle('sftp:download-files', async (event, config, remotePaths = [], pr
     const localPath = makeUniqueLocalDownloadPath(targetDirectory, posix.basename(remotePath), reservedPaths)
     const result = privilege
       ? await downloadPrivilegedRemotePath(event.sender, config, remotePath, localPath, privilege)
-      : await withSshClient(config, (client) => downloadRemoteFile(client, remotePath, localPath, {
+      : await withActiveShellClient(event.sender, config, (client, connection) => downloadRemoteFile(client, remotePath, localPath, {
           id: `download-${Date.now()}-${Math.random().toString(16).slice(2)}`,
           type: 'download',
           name: posix.basename(remotePath),
           localPath,
           remotePath,
-          webContents: event.sender
+          webContents: event.sender,
+          sharedConnection: connection.shared
         }))
     results.push({ ...result, remotePath, localPath })
   }
@@ -1045,13 +1096,14 @@ ipcMain.handle('sftp:download-path', async (event, config, remotePath, localPath
   if (!remotePath || !localPath) return { ok: false, message: 'Remote path and local path are required' }
   mkdirSync(dirname(localPath), { recursive: true })
   const transferId = `download-${Date.now()}-${Math.random().toString(16).slice(2)}`
-  return withSshClient(config, (client) => downloadRemoteFile(client, remotePath, localPath, {
+  return withActiveShellClient(event.sender, config, (client, connection) => downloadRemoteFile(client, remotePath, localPath, {
     id: transferId,
     type: 'download',
     name: posix.basename(remotePath),
     localPath,
     remotePath,
-    webContents: event.sender
+    webContents: event.sender,
+    sharedConnection: connection.shared
   }))
 })
 
@@ -1074,47 +1126,47 @@ ipcMain.handle('sftp:transfer-cancel', async (event, transferId) => {
     // The SSH connection below is also closed as a fallback.
   }
   try {
-    session.client?.end()
+    if (!session.sharedConnection) session.client?.end()
   } catch {
     // The transfer callback will still settle the task.
   }
   return { ok: true, message: 'Transfer canceled' }
 })
 
-ipcMain.handle('sftp:read-file', async (_event, config, remotePath) => {
-  return withSshClient(config, (client) => readRemoteTextFile(client, remotePath))
+ipcMain.handle('sftp:read-file', async (event, config, remotePath) => {
+  return withActiveShellClient(event.sender, config, (client) => readRemoteTextFile(client, remotePath))
 })
 
 ipcMain.handle('sftp:privileged-read-file', async (event, config, remotePath, privilege = {}) => {
   return readPrivilegedRemoteTextFile(event.sender, config, remotePath, privilege)
 })
 
-ipcMain.handle('sftp:write-file', async (_event, config, remotePath, content) => {
-  return withSshClient(config, (client) => writeRemoteTextFile(client, remotePath, content))
+ipcMain.handle('sftp:write-file', async (event, config, remotePath, content) => {
+  return withActiveShellClient(event.sender, config, (client) => writeRemoteTextFile(client, remotePath, content))
 })
 
-ipcMain.handle('sftp:create-file', async (_event, config, parentPath, name) => {
+ipcMain.handle('sftp:create-file', async (event, config, parentPath, name) => {
   try {
     const targetPath = buildNewRemoteItemPath(parentPath, name)
-    return withSshClient(config, (client) => createRemoteFile(client, targetPath))
+    return withActiveShellClient(event.sender, config, (client) => createRemoteFile(client, targetPath))
   } catch (error) {
     return { ok: false, message: error.message }
   }
 })
 
-ipcMain.handle('sftp:create-directory', async (_event, config, parentPath, name) => {
+ipcMain.handle('sftp:create-directory', async (event, config, parentPath, name) => {
   try {
     const targetPath = buildNewRemoteItemPath(parentPath, name)
-    return withSshClient(config, (client) => createRemoteDirectory(client, targetPath))
+    return withActiveShellClient(event.sender, config, (client) => createRemoteDirectory(client, targetPath))
   } catch (error) {
     return { ok: false, message: error.message }
   }
 })
 
-ipcMain.handle('sftp:rename', async (_event, config, sourcePath, newName) => {
+ipcMain.handle('sftp:rename', async (event, config, sourcePath, newName) => {
   try {
     const paths = buildRenamedRemoteItemPaths(sourcePath, newName)
-    return withSshClient(config, (client) => renameRemoteItem(client, paths.sourcePath, paths.targetPath))
+    return withActiveShellClient(event.sender, config, (client) => renameRemoteItem(client, paths.sourcePath, paths.targetPath))
   } catch (error) {
     return { ok: false, message: error.message }
   }
@@ -1155,8 +1207,8 @@ ipcMain.handle('sftp:copy-file-backup', async (event, config, remotePath, privil
   return copyRemoteFileBackup(event.sender, config, remotePath, privilege)
 })
 
-ipcMain.handle('sftp:write-binary-file', async (_event, config, remotePath, contentBase64) => {
-  return withSshClient(config, (client) => writeRemoteBufferFile(client, remotePath, Buffer.from(contentBase64 || '', 'base64')))
+ipcMain.handle('sftp:write-binary-file', async (event, config, remotePath, contentBase64) => {
+  return withActiveShellClient(event.sender, config, (client) => writeRemoteBufferFile(client, remotePath, Buffer.from(contentBase64 || '', 'base64')))
 })
 
 ipcMain.handle('sftp:delete', async (event, config, remotePath, type) => {
@@ -1172,7 +1224,10 @@ ipcMain.handle('sftp:delete', async (event, config, remotePath, type) => {
     webContents: event.sender
   }
   emitTransferProgress(progress, { transferred: 0, total: 1, status: 'running', currentPath: remotePath })
-  return withSshClient(config, (client) => deleteRemoteItem(client, remotePath, type, progress))
+  return withActiveShellClient(event.sender, config, (client, connection) => {
+    progress.sharedConnection = connection.shared
+    return deleteRemoteItem(client, remotePath, type, progress)
+  })
 })
 
 ipcMain.handle('sftp:privileged-delete', async (event, config, remotePath, type, privilege = {}) => {
@@ -1992,6 +2047,221 @@ function withSshClient(config, task) {
   })
 }
 
+function normalizeManagedSshTunnel(tunnel = {}) {
+  const id = String(tunnel.id || '').trim()
+  const localPort = Number(tunnel.localPort)
+  const targetHost = String(tunnel.targetHost || '').trim()
+  const targetPort = Number(tunnel.targetPort)
+  if (!id) throw new Error('Tunnel ID is missing')
+  if (!Number.isInteger(localPort) || localPort < 1 || localPort > 65535) {
+    throw new Error('Local port must be between 1 and 65535')
+  }
+  if (!targetHost || targetHost.length > 253 || /[\u0000\r\n]/.test(targetHost)) {
+    throw new Error('Destination host is invalid')
+  }
+  if (!Number.isInteger(targetPort) || targetPort < 1 || targetPort > 65535) {
+    throw new Error('Destination port must be between 1 and 65535')
+  }
+  return {
+    id,
+    name: String(tunnel.name || '').trim() || `${targetHost}:${targetPort}`,
+    sshServerId: String(tunnel.sshServerId || '').trim(),
+    localHost: '127.0.0.1',
+    localPort,
+    targetHost,
+    targetPort
+  }
+}
+
+function managedSshTunnelStatus(session) {
+  return {
+    id: session.id,
+    status: session.status,
+    message: session.message || '',
+    localHost: session.localHost,
+    localPort: session.localPort,
+    targetHost: session.targetHost,
+    targetPort: session.targetPort
+  }
+}
+
+function notifyManagedSshTunnel(session) {
+  if (!session.webContents || session.webContents.isDestroyed()) return
+  session.webContents.send('ssh-tunnel:status', managedSshTunnelStatus(session))
+}
+
+function stopManagedSshTunnel(tunnelId, notify = true) {
+  const session = sshTunnelSessions.get(String(tunnelId || ''))
+  if (!session) return false
+  session.closing = true
+  sshTunnelSessions.delete(session.id)
+  for (const socket of session.sockets) socket.destroy()
+  session.sockets.clear()
+  for (const stream of session.streams) stream.destroy()
+  session.streams.clear()
+  if (session.server) {
+    try {
+      session.server.close()
+    } catch {
+      // The listener may still be between creation and the listen callback.
+    }
+  }
+  session.client?.end()
+  session.finish?.({ ok: true, id: session.id, status: 'stopped', message: '' })
+  if (notify) {
+    session.status = 'stopped'
+    session.message = ''
+    notifyManagedSshTunnel(session)
+  }
+  return true
+}
+
+function listenForManagedSshTunnel(session) {
+  return new Promise((resolve, reject) => {
+    const server = createServer((socket) => {
+      session.sockets.add(socket)
+      socket.setNoDelay(true)
+      socket.pause()
+      let sshStream = null
+      const closePair = () => {
+        session.sockets.delete(socket)
+        if (sshStream) session.streams.delete(sshStream)
+        if (!socket.destroyed) socket.destroy()
+        if (sshStream && !sshStream.destroyed) sshStream.destroy()
+      }
+
+      socket.on('error', closePair)
+      socket.on('close', closePair)
+      session.client.forwardOut(
+        '127.0.0.1',
+        Number(socket.remotePort || 0),
+        session.targetHost,
+        session.targetPort,
+        (error, stream) => {
+          if (error || session.closing) {
+            closePair()
+            return
+          }
+          sshStream = stream
+          session.streams.add(stream)
+          stream.on('error', closePair)
+          stream.on('close', closePair)
+          socket.pipe(stream).pipe(socket)
+          socket.resume()
+        }
+      )
+    })
+
+    session.server = server
+    const onStartupError = (error) => reject(error)
+    server.once('error', onStartupError)
+    server.listen(session.localPort, session.localHost, () => {
+      server.removeListener('error', onStartupError)
+      resolve()
+    })
+  })
+}
+
+function startManagedSshTunnel(webContents, tunnel, sshConfig) {
+  return new Promise((resolve) => {
+    let normalized
+    try {
+      normalized = normalizeManagedSshTunnel(tunnel)
+      if (!sshConfig?.host || !sshConfig?.username) throw new Error('Saved SSH server is missing or incomplete')
+    } catch (error) {
+      resolve({ ok: false, status: 'error', message: error.message })
+      return
+    }
+
+    const existing = sshTunnelSessions.get(normalized.id)
+    if (existing?.status === 'running' || existing?.status === 'connecting') {
+      resolve({ ok: true, ...managedSshTunnelStatus(existing) })
+      return
+    }
+    if (existing) stopManagedSshTunnel(normalized.id, false)
+
+    const session = {
+      ...normalized,
+      status: 'connecting',
+      message: 'Connecting to SSH server…',
+      webContents,
+      client: new Client(),
+      server: null,
+      sockets: new Set(),
+      streams: new Set(),
+      closing: false,
+      settled: false
+    }
+    sshTunnelSessions.set(session.id, session)
+    notifyManagedSshTunnel(session)
+
+    const finish = (result) => {
+      if (session.settled) return
+      session.settled = true
+      resolve(result)
+    }
+    session.finish = finish
+    const fail = (error) => {
+      if (session.closing || sshTunnelSessions.get(session.id) !== session) return
+      const rawMessage = error?.message || String(error || 'Tunnel failed')
+      const message = error?.code === 'EADDRINUSE'
+        ? `Local port 127.0.0.1:${session.localPort} is already in use`
+        : rawMessage
+      session.status = 'error'
+      session.message = message
+      notifyManagedSshTunnel(session)
+      finish({ ok: false, ...managedSshTunnelStatus(session) })
+      stopManagedSshTunnel(session.id, false)
+    }
+
+    session.client
+      .once('ready', async () => {
+        try {
+          await listenForManagedSshTunnel(session)
+          if (session.closing) {
+            if (session.server?.listening) session.server.close()
+            return
+          }
+          session.server.on('error', fail)
+          session.status = 'running'
+          session.message = ''
+          notifyManagedSshTunnel(session)
+          finish({ ok: true, ...managedSshTunnelStatus(session) })
+        } catch (error) {
+          fail(error)
+        }
+      })
+      .on('error', fail)
+      .on('close', () => {
+        if (!session.closing) fail(new Error('SSH connection closed; the local tunnel has stopped'))
+      })
+
+    connectSshClient(session.client, sshConfig).catch(fail)
+  })
+}
+
+function activeShellSessionFor(webContents, config) {
+  if (!webContents || webContents.isDestroyed()) return null
+  const sessionId = shellSessionsByWebContents.get(webContents.id)
+  const session = sessionId ? shellSessions.get(sessionId) : null
+  if (!session?.client || !session?.stream) return null
+  const requestedServerId = String(config?.id || '')
+  if (!requestedServerId || session.serverId !== requestedServerId) return null
+  return session
+}
+
+async function withActiveShellClient(webContents, config, task) {
+  const session = activeShellSessionFor(webContents, config)
+  if (!session) {
+    return withSshClient(config, (client) => task(client, { shared: false }))
+  }
+  try {
+    return await task(session.client, { shared: true, sessionId: session.id })
+  } catch (error) {
+    return { ok: false, message: error.message }
+  }
+}
+
 async function connectSshClient(client, config, shouldAbort = () => false) {
   const prepared = await prepareSshConnection(config)
   let cleanedUp = false
@@ -2108,7 +2378,7 @@ async function openPreparedSshClient(config, visitedServerIds) {
   }
 }
 
-function openSshForwardStream(client, targetHost, targetPort) {
+function openSshForwardStream(client, targetHost, targetPort, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     if (!targetHost) {
       reject(new Error('target host is required'))
@@ -2122,8 +2392,8 @@ function openSshForwardStream(client, targetHost, targetPort) {
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
-      reject(new Error('opening the SSH forwarding channel timed out after 30 seconds'))
-    }, 30000)
+      reject(new Error(`opening the SSH forwarding channel timed out after ${Math.ceil(timeoutMs / 1000)} seconds`))
+    }, timeoutMs)
     client.forwardOut('127.0.0.1', 0, targetHost, targetPort, (error, stream) => {
       if (settled) {
         if (stream && !stream.destroyed) stream.destroy()
@@ -2499,7 +2769,13 @@ function startShellSession(webContents, config, size = {}) {
               return
             }
 
-            shellSessions.set(sessionId, { client, stream, webContentsId: webContents.id })
+            shellSessions.set(sessionId, {
+              id: sessionId,
+              client,
+              stream,
+              webContentsId: webContents.id,
+              serverId: String(config?.id || '')
+            })
             shellSessionsByWebContents.set(webContents.id, sessionId)
             webContents.once('destroyed', () => closeShellSession(sessionId))
 
@@ -3412,6 +3688,7 @@ function prepareFileTransferSession(progress, client, sftp = null) {
       transferred: 0,
       client: null,
       sftp: null,
+      sharedConnection: false,
       currentRemotePath: '',
       cancelTransfer: null
     }
@@ -3420,6 +3697,7 @@ function prepareFileTransferSession(progress, client, sftp = null) {
   session.progress = progress
   session.client = client || session.client
   session.sftp = sftp || session.sftp
+  session.sharedConnection = Boolean(progress?.sharedConnection)
   return session
 }
 
@@ -3429,6 +3707,7 @@ function finishFileTransferSession(progress, session) {
   session.cancelTransfer = null
   session.sftp = null
   session.client = null
+  session.sharedConnection = false
 }
 
 function settlePendingFileTransfer(progress, result = {}) {

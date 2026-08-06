@@ -7,6 +7,17 @@
 - Added saved SSH jump servers for terminal, SFTP, workflows, deployment and
   host-management connections to private servers without public IP addresses.
   Multi-hop chains, cycle validation and automatic tunnel cleanup are included.
+- Added persistent localhost-only SSH tunnels for external database clients.
+  Saved tunnels support manual start and stop, jump chains, port-conflict
+  reporting, connection testing, concurrent local clients and automatic cleanup
+  when the app exits.
+
+### Improved
+
+- Reused the active terminal SSH transport for host inspection and standard
+  SFTP operations, reducing connection bursts on rate-limited SSH gateways.
+  Remote-file failures now remain visible, and reconnect checks use delayed,
+  lower-frequency attempts after a transport reset.
 
 ## 0.2.1 - 2026-07-27
 

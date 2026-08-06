@@ -6642,6 +6642,265 @@ body.is-resizing-column {
   box-shadow: 0 22px 60px rgba(15, 23, 42, 0.28);
 }
 
+.ssh-tunnel-dialog {
+  display: grid;
+  grid-template-rows: 64px minmax(0, 1fr);
+  width: min(1080px, calc(100vw - 48px));
+  max-height: min(780px, calc(100vh - 48px));
+  overflow: hidden;
+  color: #1f2937;
+  background: #ffffff;
+  border: 1px solid #d8dee8;
+  border-radius: 10px;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.28);
+}
+
+.ssh-tunnel-body {
+  min-height: 0;
+  padding: 16px 18px 18px;
+  overflow-y: auto;
+}
+
+.ssh-tunnel-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.ssh-tunnel-toolbar p {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.ssh-tunnel-toolbar p svg {
+  flex: 0 0 auto;
+  color: #0f766e;
+}
+
+.ssh-tunnel-toolbar > button,
+.ssh-tunnel-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 11px;
+  color: #334155;
+  background: #ffffff;
+  border: 1px solid #dce3ed;
+  border-radius: 7px;
+}
+
+.ssh-tunnel-toolbar > button {
+  color: #ffffff;
+  background: #0f766e;
+  border-color: #0f766e;
+}
+
+.ssh-tunnel-toolbar button:disabled,
+.ssh-tunnel-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.ssh-tunnel-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ssh-tunnel-item {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(280px, 1.25fr) minmax(100px, 0.65fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 64px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.ssh-tunnel-main {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.ssh-tunnel-main > div {
+  display: grid;
+  min-width: 0;
+}
+
+.ssh-tunnel-main strong,
+.ssh-tunnel-main small,
+.ssh-tunnel-state {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ssh-tunnel-main strong {
+  color: #1f2937;
+  font-size: 13px;
+}
+
+.ssh-tunnel-main small {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.ssh-tunnel-status-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  background: #94a3b8;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.14);
+}
+
+.ssh-tunnel-item.running .ssh-tunnel-status-dot {
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+.ssh-tunnel-item.connecting .ssh-tunnel-status-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.16);
+}
+
+.ssh-tunnel-item.error .ssh-tunnel-status-dot {
+  background: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14);
+}
+
+.ssh-tunnel-route {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #94a3b8;
+}
+
+.ssh-tunnel-route code {
+  overflow: hidden;
+  color: #334155;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ssh-tunnel-route > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 6px 8px;
+  color: #0f766e;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 6px;
+}
+
+.ssh-tunnel-state {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.ssh-tunnel-item.running .ssh-tunnel-state {
+  color: #047857;
+}
+
+.ssh-tunnel-item.error .ssh-tunnel-state {
+  color: #b91c1c;
+}
+
+.ssh-tunnel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.ssh-tunnel-actions .tunnel-start-button {
+  color: #047857;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.ssh-tunnel-actions .tunnel-delete-button {
+  width: 34px;
+  padding: 0;
+  color: #b91c1c;
+  background: #fff7f7;
+  border-color: #fecaca;
+}
+
+.ssh-tunnel-empty {
+  display: grid;
+  min-height: 130px;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  padding: 24px;
+  color: #94a3b8;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.ssh-tunnel-editor {
+  margin-top: 14px;
+  overflow: hidden;
+  background: #f8fafc;
+  border: 1px solid #dce3ed;
+  border-radius: 9px;
+}
+
+.ssh-tunnel-editor-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 16px 0;
+}
+
+.ssh-tunnel-editor-heading strong {
+  color: #1f2937;
+  font-size: 14px;
+}
+
+.ssh-tunnel-editor-heading span {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.ssh-tunnel-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 14px 16px;
+}
+
+.ssh-tunnel-form .field:nth-child(2) {
+  grid-column: span 2;
+}
+
+.ssh-tunnel-editor .dialog-notice {
+  margin-bottom: 12px;
+}
+
+.ssh-tunnel-editor .dialog-actions {
+  padding: 12px 16px 14px;
+}
+
 .file-preview-dialog {
   display: flex;
   flex-direction: column;
@@ -8876,6 +9135,56 @@ html[data-theme="dark"] .danger-confirm-warning {
 
 html[data-theme="dark"] .danger-confirm-target strong {
   color: #f8fafc !important;
+}
+
+html[data-theme="dark"] .ssh-tunnel-dialog,
+html[data-theme="dark"] .ssh-tunnel-item {
+  color: var(--dark-text);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+}
+
+html[data-theme="dark"] .ssh-tunnel-editor,
+html[data-theme="dark"] .ssh-tunnel-empty {
+  background: #111b2d;
+  border-color: var(--dark-border-soft);
+}
+
+html[data-theme="dark"] .ssh-tunnel-main strong,
+html[data-theme="dark"] .ssh-tunnel-route code,
+html[data-theme="dark"] .ssh-tunnel-editor-heading strong {
+  color: var(--dark-text);
+}
+
+html[data-theme="dark"] .ssh-tunnel-main small,
+html[data-theme="dark"] .ssh-tunnel-state,
+html[data-theme="dark"] .ssh-tunnel-toolbar p,
+html[data-theme="dark"] .ssh-tunnel-editor-heading span {
+  color: var(--dark-text-muted);
+}
+
+html[data-theme="dark"] .ssh-tunnel-route > button {
+  color: #5eead4;
+  background: #12352f;
+  border-color: #196d60;
+}
+
+html[data-theme="dark"] .ssh-tunnel-actions button {
+  color: #dbe7f3;
+  background: #172033;
+  border-color: #334155;
+}
+
+html[data-theme="dark"] .ssh-tunnel-actions .tunnel-start-button {
+  color: #6ee7b7;
+  background: #12352f;
+  border-color: #196d60;
+}
+
+html[data-theme="dark"] .ssh-tunnel-actions .tunnel-delete-button {
+  color: #fca5a5;
+  background: #3a1d25;
+  border-color: #7f1d2d;
 }
 
 html[data-theme="dark"] :is(
