@@ -1958,7 +1958,6 @@ ipcMain.handle('redis:restore-cancel', async (_event, operationId) => {
 function withSshClient(config, task) {
   return new Promise((resolve) => {
     const client = new Client()
-    const connection = buildSshConnection(config)
     let settled = false
     let ready = false
     const finish = (result) => {
@@ -1987,7 +1986,154 @@ function withSshClient(config, task) {
           finish({ ok: false, message: ready ? 'SSH connection closed during the remote operation' : 'SSH connection closed before authentication completed' })
         }
       })
-      .connect(connection)
+    connectSshClient(client, config).catch((error) => {
+      finish({ ok: false, message: error.message, code: error.code || '' })
+    })
+  })
+}
+
+async function connectSshClient(client, config, shouldAbort = () => false) {
+  const prepared = await prepareSshConnection(config)
+  let cleanedUp = false
+  const cleanup = () => {
+    if (cleanedUp) return
+    cleanedUp = true
+    prepared.cleanup()
+  }
+  if (shouldAbort()) {
+    cleanup()
+    throw new Error('SSH connection canceled')
+  }
+  client.once('close', cleanup)
+  client.once('error', cleanup)
+  try {
+    client.connect(prepared.connection)
+  } catch (error) {
+    cleanup()
+    throw error
+  }
+}
+
+async function prepareSshConnection(config, visitedServerIds = new Set()) {
+  const connection = buildSshConnection(config)
+  const jumpServerId = String(config?.jumpServerId || '').trim()
+  if (!jumpServerId) return { connection, cleanup: () => {} }
+
+  const currentServerId = String(config?.id || '').trim()
+  const nextVisitedServerIds = new Set(visitedServerIds)
+  if (currentServerId) {
+    if (nextVisitedServerIds.has(currentServerId)) {
+      throw new Error(`SSH jump chain contains a cycle at server "${config.name || currentServerId}".`)
+    }
+    nextVisitedServerIds.add(currentServerId)
+  }
+  if (nextVisitedServerIds.has(jumpServerId)) {
+    throw new Error('SSH jump chain contains a cycle. Edit the server and choose a different jump server.')
+  }
+  if (nextVisitedServerIds.size >= 8) {
+    throw new Error('SSH jump chain is too deep. At most 8 saved servers are allowed in one chain.')
+  }
+
+  const jumpConfig = resolveSavedSshServer(jumpServerId)
+  if (!jumpConfig) {
+    throw new Error('The configured SSH jump server is missing. Edit this server and select an available jump server.')
+  }
+
+  const upstream = await openPreparedSshClient(jumpConfig, nextVisitedServerIds)
+  try {
+    const socket = await openSshForwardStream(
+      upstream.client,
+      String(config.host || '').trim(),
+      Number(config.port || 22)
+    )
+    let cleanedUp = false
+    return {
+      connection: { ...connection, sock: socket },
+      cleanup: () => {
+        if (cleanedUp) return
+        cleanedUp = true
+        if (!socket.destroyed) socket.destroy()
+        upstream.close()
+      }
+    }
+  } catch (error) {
+    upstream.close()
+    throw new Error(`SSH jump server "${jumpConfig.name || jumpConfig.host}" cannot reach ${config.host}:${Number(config.port || 22)}: ${error.message}`)
+  }
+}
+
+function resolveSavedSshServer(serverId) {
+  const servers = readStoreValue('servers')
+  return Array.isArray(servers) ? servers.find((server) => String(server?.id || '') === serverId) || null : null
+}
+
+async function openPreparedSshClient(config, visitedServerIds) {
+  const prepared = await prepareSshConnection(config, visitedServerIds)
+  const client = new Client()
+  let closed = false
+  const close = () => {
+    if (closed) return
+    closed = true
+    try {
+      client.end()
+    } catch {
+      // The upstream client may already be closed after a forwarding failure.
+    }
+    prepared.cleanup()
+  }
+
+  try {
+    await new Promise((resolve, reject) => {
+      let authenticated = false
+      const fail = (error) => {
+        if (authenticated) return
+        reject(error instanceof Error ? error : new Error(String(error || 'SSH jump connection failed')))
+      }
+      client
+        .once('ready', () => {
+          authenticated = true
+          resolve()
+        })
+        .once('error', fail)
+        .once('close', () => fail(new Error('SSH jump connection closed before authentication completed')))
+        .connect(prepared.connection)
+    })
+    // Keep a listener installed so a later transport error cannot become an
+    // unhandled EventEmitter error while the downstream connection is active.
+    client.on('error', () => {})
+    return { client, close }
+  } catch (error) {
+    close()
+    throw new Error(`SSH jump server "${config.name || config.host}" connection failed: ${error.message}`)
+  }
+}
+
+function openSshForwardStream(client, targetHost, targetPort) {
+  return new Promise((resolve, reject) => {
+    if (!targetHost) {
+      reject(new Error('target host is required'))
+      return
+    }
+    if (!Number.isInteger(targetPort) || targetPort < 1 || targetPort > 65535) {
+      reject(new Error('target SSH port must be between 1 and 65535'))
+      return
+    }
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      reject(new Error('opening the SSH forwarding channel timed out after 30 seconds'))
+    }, 30000)
+    client.forwardOut('127.0.0.1', 0, targetHost, targetPort, (error, stream) => {
+      if (settled) {
+        if (stream && !stream.destroyed) stream.destroy()
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      if (error) reject(error)
+      else resolve(stream)
+    })
   })
 }
 
@@ -2218,7 +2364,16 @@ function execStreamingCommand(webContents, config, command, requestedExecutionId
           message: canceled ? 'Command canceled' : error.message
         })
       })
-      .connect(buildSshConnection(config))
+    connectSshClient(client, config, () => settled || canceled).catch((error) => {
+      finish({
+        ok: false,
+        canceled,
+        code: null,
+        stdout,
+        stderr,
+        message: canceled ? 'Command canceled' : error.message
+      })
+    })
   })
 }
 
@@ -2254,7 +2409,7 @@ function buildStreamingPrivilegeCommand(command, mode = 'normal', promptToken = 
 }
 
 function workflowPrivilegeKey(config = {}, mode = 'normal') {
-  return [config.host || '', Number(config.port || 22), config.username || '', mode].join(':')
+  return [config.jumpServerId || 'direct', config.host || '', Number(config.port || 22), config.username || '', mode].join(':')
 }
 
 function formatPrivilegeFailure(result = {}, mode = 'sudo') {
@@ -2374,7 +2529,12 @@ function startShellSession(webContents, config, size = {}) {
         notifyClose('SSH transport closed.', 'transport')
         cleanup()
       })
-      .connect(buildSshConnection(config))
+    connectSshClient(client, config).catch((error) => {
+      cleanup()
+      send('ssh:shell:error', { message: error.message })
+      notifyClose(error.message, 'error')
+      finish({ ok: false, message: error.message })
+    })
   })
 }
 

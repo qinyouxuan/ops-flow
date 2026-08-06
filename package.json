@@ -1,6 +1,6 @@
 {
   "name": "ops-flow",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "A lightweight visual SSH/SFTP operations and deployment workflow desktop tool.",
   "author": {

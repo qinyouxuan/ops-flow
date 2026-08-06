@@ -183,7 +183,7 @@ const I18N_MESSAGES = {
     'help.support.title': '当前支持范围',
     'help.support.text': '桌面客户端支持 Windows。SSH、SFTP、命令、部署、服务、运行环境、备份恢复和主机管理目前以 Linux 远程服务器为目标；数据库和 Redis 可通过直连或 Linux SSH 转发访问。Windows Server 远程部署和服务管理尚未完整支持。',
     'help.quick.server.title': '1. 添加服务器',
-    'help.quick.server.text': '点击左侧“添加服务器”，填写地址、SSH 端口、用户名和认证信息。先测试连接，成功后再保存。',
+    'help.quick.server.text': '点击左侧“添加服务器”，填写地址、SSH 端口、用户名和认证信息。内网服务器可选择一台已保存的 SSH 跳板服务器。先测试连接，成功后再保存。',
     'help.quick.connect.title': '2. 建立连接',
     'help.quick.connect.text': '从左侧选择服务器并点击“连接”。连接成功后，基本信息、远程文件和各功能模块才会加载。',
     'help.quick.module.title': '3. 选择功能',
@@ -194,6 +194,8 @@ const I18N_MESSAGES = {
     'help.features.intro': '功能按日常运维路径划分：先连接服务器，再根据任务进入命令、文件、数据、自动化、安全检查或系统管理模块。每个模块会尽量先展示当前状态，再执行会改变服务器的操作。',
     'help.features.terminal.title': '命令终端',
     'help.features.terminal.text': '连接成功后提供交互式 SSH 终端，适合临时排查、执行一次性命令和查看实时输出。可把常用命令保存为带名称、标签和备注的模板；点击模板只粘贴到当前命令行，不自动发送回车。',
+    'help.features.jump.title': 'SSH 跳板连接内网服务器',
+    'help.features.jump.text': '先添加并测试具有公网 IP 的服务器，连接方式保持“直接连接”；再添加内网服务器，主机填写跳板机可访问的内网 IP，并选择前一步保存的服务器作为 SSH 跳板。内网服务器仍填写自身的 SSH 用户和密码或私钥。连接路径为 Ops Flow → 公网跳板机 → 内网服务器，终端、SFTP、工作流、部署和主机管理都会自动复用这条链路。跳板机需允许 TCP 转发，且必须能访问目标内网地址和 SSH 端口。',
     'help.features.files.title': '远程文件',
     'help.features.files.text': '通过 SFTP 浏览、搜索、上传、下载、编辑、重命名、备份和删除远程文件。最近路径和收藏路径按服务器保存，可快速切换目录；权限不足时可临时启用 sudo 或 su 特权访问。',
     'help.features.database.title': '数据库管理',
@@ -303,6 +305,8 @@ const I18N_MESSAGES = {
     'help.faq.ports.a': '防火墙规则和程序监听是两个独立状态。端口已放行但没有程序监听时服务仍不可用；程序正在监听但未放行时，外部连接仍可能被拦截。',
     'help.faq.inspect.q': '为什么巡检信息为空或提示需要权限？',
     'help.faq.inspect.a': '请先连接服务器，再选择合适的服务权限并重新巡检。某些发行版缺少对应命令时，部分检测项也可能显示未知。',
+    'help.faq.jump.q': '为什么 SSH 跳板服务器无法连接内网目标？',
+    'help.faq.jump.a': '先登录跳板机并测试 nc -vz -w 5 内网IP 22。超时表示跳板机到目标的路由、防火墙、VLAN、安全组或 SSH 服务存在问题；“Channel open failure”还可能表示跳板机 sshd 禁止 TCP 转发，请检查 AllowTcpForwarding yes。目标是私网地址时，跳板机必须位于同一内网/VPC，或已通过 VPN、专线等方式与目标网络互通。',
     'help.faq.search.q': '当前目录搜索和全局搜索有什么区别？',
     'help.faq.search.a': '当前目录搜索只筛选已加载的列表；全局搜索从根目录递归访问子目录，最多保留 500 条并按每页 10 条显示。清空或关闭搜索可恢复原列表，两种搜索都不会修改文件。',
     'help.faq.globalPermission.q': '为什么全局搜索提示结果可能不完整？',
@@ -701,7 +705,7 @@ const I18N_MESSAGES = {
     'toast.confirmOperation': '请先确认此操作。',
     'toast.enterPackageUrl': '请先输入可下载的安装包 URL。',
     'toast.uploadPackagePath': '请上传安装包或输入远程路径。',
-    'confirm.removeServer': '移除服务器“{name}”？\n\n关联这台服务器的 SSH 数据库和 Redis 连接也会被移除；直接连接会保留。',
+    'confirm.removeServer': '移除服务器“{name}”？\n\n关联这台服务器的 SSH 数据库和 Redis 连接也会被移除；直接连接会保留。以它作为跳板的 {jumpCount} 台服务器将无法连接，直到重新选择跳板。',
     'confirm.deleteWorkflow': '删除工作流“{name}”？\n\n此操作无法撤销。',
     'confirm.deleteCron': '删除此定时任务？\n{line}',
     'confirm.deletePath': '删除 {path}？',
@@ -731,6 +735,9 @@ const I18N_MESSAGES = {
     'server.field.host': '主机',
     'server.field.port': '端口',
     'server.field.username': '用户名',
+    'server.field.jumpServer': 'SSH 跳板服务器',
+    'server.jump.direct': '直接连接（不使用跳板）',
+    'server.jump.help': '目标地址和端口从跳板服务器所在网络访问，适用于没有公网 IP 的内网服务器。跳板服务器需允许 TCP 转发。',
     'server.field.auth': '认证方式',
     'server.field.password': '密码',
     'server.field.passphrase': '密钥口令',
@@ -1480,7 +1487,8 @@ const emptyServerForm = {
   privateKey: '',
   passphrase: '',
   env: 'dev',
-  authType: 'password'
+  authType: 'password',
+  jumpServerId: ''
 }
 
 const emptyDatabaseForm = {
@@ -2670,6 +2678,13 @@ export default function App() {
       showToast('error', 'Server save failed')
       return
     }
+    const jumpError = validateServerJumpSelection(server, editingServerId, servers)
+    if (jumpError) {
+      appendLog(`Server save failed: ${jumpError}`)
+      setServerNotice({ type: 'error', text: jumpError })
+      showToast('error', 'Server save failed')
+      return
+    }
 
     if (editingServerId) {
       const previous = servers.find((item) => item.id === editingServerId)
@@ -2730,6 +2745,12 @@ export default function App() {
     if (!server.host || !server.username) {
       appendLog('Connection test skipped: host and username are required')
       setServerNotice({ type: 'error', text: 'Host and username are required.' })
+      return
+    }
+    const jumpError = validateServerJumpSelection(server, editingServerId, servers)
+    if (jumpError) {
+      appendLog(`Connection test skipped: ${jumpError}`)
+      setServerNotice({ type: 'error', text: jumpError })
       return
     }
 
@@ -3002,10 +3023,11 @@ export default function App() {
     }
     const linkedDatabaseCount = databases.filter((item) => resourceUsesSsh(item) && item.serverId === selectedServer.id).length
     const linkedRedisCount = redisStores.filter((item) => resourceUsesSsh(item) && item.serverId === selectedServer.id).length
+    const linkedJumpCount = servers.filter((item) => item.jumpServerId === selectedServer.id).length
     const confirmed = window.confirm(t(
       'confirm.removeServer',
-      'Remove server "{name}"?\n\nSSH database and Redis connections linked to this server will also be removed. Direct connections are kept.',
-      { name: selectedServer.name, databaseCount: linkedDatabaseCount, redisCount: linkedRedisCount }
+      'Remove server "{name}"?\n\nSSH database and Redis connections linked to this server will also be removed. Direct connections are kept. {jumpCount} server(s) using it as a jump server will become unavailable until another jump server is selected.',
+      { name: selectedServer.name, databaseCount: linkedDatabaseCount, redisCount: linkedRedisCount, jumpCount: linkedJumpCount }
     ))
     if (!confirmed) {
       appendLog('Remove server canceled')
@@ -8600,6 +8622,8 @@ export default function App() {
         <ServerDialog
           form={serverForm}
           mode={editingServerId ? 'edit' : 'add'}
+          servers={servers}
+          editingServerId={editingServerId}
           isTesting={isTestingServer}
           notice={serverNotice}
           onClose={() => {
@@ -9443,7 +9467,7 @@ function SettingsDialog({ language, themeMode, section, onLanguageChange, onThem
                   <span>{t('help.support.text', 'The desktop client supports Windows. SSH, SFTP, commands, deployment, services, runtimes, backup/recovery and host management currently target remote Linux servers. Databases and Redis can be reached directly or through a Linux SSH connection. Full Windows Server deployment and service management are not yet supported.')}</span>
                 </div>
                 <div className="help-step-list">
-                  <HelpTextBlock title={t('help.quick.server.title', '1. Add a server')} text={t('help.quick.server.text', 'Click Add server in the left sidebar, enter the address, SSH port, username and authentication details. Test the connection before saving.')} />
+                  <HelpTextBlock title={t('help.quick.server.title', '1. Add a server')} text={t('help.quick.server.text', 'Click Add server in the left sidebar, enter the address, SSH port, username and authentication details. For a private server, select a saved SSH jump server. Test the connection before saving.')} />
                   <HelpTextBlock title={t('help.quick.connect.title', '2. Connect')} text={t('help.quick.connect.text', 'Select a server on the left and click Connect. Basic information, remote files and all feature modules load after the connection succeeds.')} />
                   <HelpTextBlock title={t('help.quick.module.title', '3. Choose a feature')} text={t('help.quick.module.text', 'Use Command for ad hoc tasks; Database and Redis for data maintenance; Workflow for repeatable tasks; Audit for checks; and Deployer or Host Management for system-level work.')} />
                   <HelpTextBlock title={t('help.quick.verify.title', '4. Verify the result')} text={t('help.quick.verify.text', 'Review page results, tool logs and server output. For deletion, restart, deployment or firewall changes, verify the target server and parameters again.')} />
@@ -9456,6 +9480,7 @@ function SettingsDialog({ language, themeMode, section, onLanguageChange, onThem
                 <p className="help-lead">{t('help.features.intro', 'Features follow a daily operations flow: connect to a server, then choose command, file, data, automation, audit, deployment or host-management tools. Each module shows the current state before actions that change the server.')}</p>
                 <div className="help-card-grid">
                   <HelpTextBlock title={t('help.features.terminal.title', 'Command terminal')} text={t('help.features.terminal.text', 'Use the interactive SSH terminal for troubleshooting, one-off commands and live output. The terminal follows the selected server and prompts you to reconnect after disconnection.')} />
+                  <HelpTextBlock title={t('help.features.jump.title', 'SSH jump server for private hosts')} text={t('help.features.jump.text', 'First save and test a public SSH server using Direct connection. Add the private server with an address reachable from that server, select the saved server as its SSH jump server, and enter the private server own SSH credentials. Terminal, SFTP, workflows, deployment and host management automatically reuse the route Ops Flow → public jump server → private server. The jump server must allow TCP forwarding and be able to reach the target SSH port.')} />
                   <HelpTextBlock title={t('help.features.files.title', 'Remote files')} text={t('help.features.files.text', 'Browse SFTP directories, go to the parent folder, refresh, upload, download, edit, rename or delete files. Sort by file name or filter names in real time; clearing the search restores the full list.')} />
                   <HelpTextBlock title={t('help.features.database.title', 'Database management')} text={t('help.features.database.text', 'Manage database connections, inspect tables, fields and data, run SQL, and export query results. Independent table and field searches make large schemas easier to navigate.')} />
                   <HelpTextBlock title={t('help.features.redis.title', 'Redis management')} text={t('help.features.redis.text', 'Manage Redis connections, load and inspect keys, and delete confirmed keys. Search and refresh help investigate cache, queue and temporary state data.')} />
@@ -9552,6 +9577,7 @@ function SettingsDialog({ language, themeMode, section, onLanguageChange, onThem
                   <HelpFaq question={t('help.faq.readonly.q', 'Why is an action read-only or disabled?')} answer={t('help.faq.readonly.a', 'Typical causes are no server connection, insufficient permissions, an unknown or conflicting firewall controller, or a rule with complex source, state or multi-port conditions.')} />
                   <HelpFaq question={t('help.faq.ports.q', 'Why do allowed ports and listening ports differ?')} answer={t('help.faq.ports.a', 'Firewall rules and process listeners are independent. An allowed port without a listener has no service; a listener without an allowed rule may still be blocked from external access.')} />
                   <HelpFaq question={t('help.faq.inspect.q', 'Why is inspection data empty or permission required?')} answer={t('help.faq.inspect.a', 'Connect the server first, choose an appropriate service privilege, and inspect again. Some distributions may also lack a command required by a particular check.')} />
+                  <HelpFaq question={t('help.faq.jump.q', 'Why can the SSH jump server not connect to the private target?')} answer={t('help.faq.jump.a', 'Log in to the jump server and test nc -vz -w 5 PRIVATE_IP 22. A timeout points to routing, firewall, VLAN, security-group or target SSH-service issues. Channel open failure can also mean that the jump sshd disables TCP forwarding; check AllowTcpForwarding yes. A private target must share a reachable network/VPC with the jump server or be connected through a VPN or private link.')} />
                   <HelpFaq question={t('help.faq.search.q', 'What is the difference between current-directory and global search?')} answer={t('help.faq.search.a', 'Current-directory search filters only the loaded list. Global search recursively scans from the root, retains up to 500 results, and shows 10 per page. Closing either search restores the original list, and neither changes files.')} />
                   <HelpFaq question={t('help.faq.globalPermission.q', 'Why does global search say results may be incomplete?')} answer={t('help.faq.globalPermission.a', 'The search identity cannot enter some directories. Privileged search often expands coverage, but sudoers, SELinux, mount options and server policy can still limit access. Do not treat results as a complete inventory while permission errors are reported.')} />
                   <HelpFaq question={t('help.faq.privilegePassword.q', 'Which password does sudo or su use, and why am I not always asked again?')} answer={t('help.faq.privilegePassword.a', 'sudo normally uses the current SSH user password; su uses the root password. A verified credential is reused in memory for the same server, SSH user and privilege method during this app session, then cleared when the app exits.')} />
@@ -9927,7 +9953,7 @@ function WorkflowRunDialog({ workflow, servers, config, onChange, onToggleServer
   )
 }
 
-function ServerDialog({ form, mode, isTesting, notice, onClose, onSave, onTest, onDuplicate }) {
+function ServerDialog({ form, mode, servers = [], editingServerId, isTesting, notice, onClose, onSave, onTest, onDuplicate }) {
   const { t } = useI18n()
   const isEdit = mode === 'edit'
   const [draft, setDraft] = useState(form)
@@ -9939,6 +9965,8 @@ function ServerDialog({ form, mode, isTesting, notice, onClose, onSave, onTest, 
   const updateDraft = (key, value) => {
     setDraft((current) => ({ ...current, [key]: value }))
   }
+
+  const jumpServers = servers.filter((server) => isServerAvailableAsJump(server.id, editingServerId, servers))
 
   return (
     <div className="modal-backdrop">
@@ -9965,6 +9993,15 @@ function ServerDialog({ form, mode, isTesting, notice, onClose, onSave, onTest, 
           </Field>
           <Field label={t('server.field.username', 'Username')}>
             <input value={draft.username} onChange={(event) => updateDraft('username', event.target.value)} placeholder="root" />
+          </Field>
+          <Field label={t('server.field.jumpServer', 'SSH jump server')} className="field-wide">
+            <select value={draft.jumpServerId || ''} onChange={(event) => updateDraft('jumpServerId', event.target.value)}>
+              <option value="">{t('server.jump.direct', 'Direct connection (no jump server)')}</option>
+              {jumpServers.map((server) => (
+                <option key={server.id} value={server.id}>{server.name} · {server.username}@{server.host}:{server.port}</option>
+              ))}
+            </select>
+            <small className="server-jump-help">{t('server.jump.help', 'The target host and port are reached from the jump server network. Use this for private servers without a public IP. The jump server must allow TCP forwarding.')}</small>
           </Field>
           <Field label={t('server.field.auth', 'Auth')}>
             <select value={draft.authType} onChange={(event) => updateDraft('authType', event.target.value)}>
@@ -18382,6 +18419,7 @@ function buildServerFromForm(form) {
     host: form.host.trim(),
     port: Number(form.port || 22),
     username: form.username.trim(),
+    jumpServerId: form.jumpServerId || '',
     env: form.env?.trim() || 'dev',
     status: 'disconnected',
     load: '-',
@@ -18416,8 +18454,40 @@ function buildFormFromServer(server) {
     privateKey: server.privateKey || '',
     passphrase: server.passphrase || '',
     env: server.env || 'dev',
-    authType
+    authType,
+    jumpServerId: server.jumpServerId || ''
   }
+}
+
+function validateServerJumpSelection(server, editingServerId, servers = []) {
+  const jumpServerId = String(server.jumpServerId || '')
+  if (!jumpServerId) return ''
+  const targetId = String(editingServerId || server.id || '')
+  const byId = new Map(servers.map((item) => [String(item.id || ''), item]))
+  if (!byId.has(jumpServerId)) return '请选择一个仍然存在的 SSH 跳板服务器。'
+
+  const visited = new Set(targetId ? [targetId] : [])
+  let currentId = jumpServerId
+  while (currentId) {
+    if (visited.has(currentId)) return 'SSH 跳板链不能形成循环，请选择其他跳板服务器。'
+    visited.add(currentId)
+    currentId = String(byId.get(currentId)?.jumpServerId || '')
+  }
+  return ''
+}
+
+function isServerAvailableAsJump(candidateId, editingServerId, servers = []) {
+  if (!candidateId || candidateId === editingServerId) return false
+  if (!editingServerId) return true
+  const byId = new Map(servers.map((item) => [String(item.id || ''), item]))
+  const visited = new Set()
+  let currentId = String(candidateId)
+  while (currentId && !visited.has(currentId)) {
+    if (currentId === editingServerId) return false
+    visited.add(currentId)
+    currentId = String(byId.get(currentId)?.jumpServerId || '')
+  }
+  return true
 }
 
 function buildDatabaseFromForm(form) {

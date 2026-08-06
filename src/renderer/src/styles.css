@@ -7793,6 +7793,12 @@ body.is-resizing-column {
   padding: 18px;
 }
 
+.server-jump-help {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .database-socket-field {
   grid-column: 1 / -1;
 }

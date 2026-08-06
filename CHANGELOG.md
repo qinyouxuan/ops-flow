@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 - 2026-08-06
+
+### Added
+
+- Added saved SSH jump servers for terminal, SFTP, workflows, deployment and
+  host-management connections to private servers without public IP addresses.
+  Multi-hop chains, cycle validation and automatic tunnel cleanup are included.
+
 ## 0.2.1 - 2026-07-27
 
 ### Fixed
