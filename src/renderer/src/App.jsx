@@ -225,7 +225,7 @@ const I18N_MESSAGES = {
     'help.features.tunnel.title': '供外部客户端使用的 SSH 隧道',
     'help.features.tunnel.text': '点击顶部“隧道”，选择一台已保存的 SSH 服务器，设置本地端口以及由该服务器访问的目标主机和端口。“测试连接”会验证 SSH 登录、跳板链和目标端口。启动后，达梦管理工具、Oracle SQL Developer、DBeaver 等外部客户端可连接 127.0.0.1:本地端口。隧道会复用所选服务器的跳板链，但独立于命令终端运行；为防止意外暴露数据库，基础版只监听本机 127.0.0.1，退出 Ops Flow 后自动停止。',
     'help.features.files.title': '远程文件',
-    'help.features.files.text': '通过 SFTP 浏览、搜索、上传、下载、编辑、重命名、备份和删除远程文件。最近路径和收藏路径按服务器保存，可快速切换目录；权限不足时可临时启用 sudo 或 su 特权访问。',
+    'help.features.files.text': '通过 SFTP 浏览、搜索、上传、下载、编辑、重命名、备份和删除远程文件。终端执行简单的 cd 命令后，左侧文件区会自动切换到对应目录；最近路径和收藏路径按服务器保存，可快速切换目录；权限不足时可临时启用 sudo 或 su 特权访问。',
     'help.features.database.title': '数据库管理',
     'help.features.database.text': '维护数据库连接，查看表和字段，执行 SQL 或选择本地 SQL/GZIP 文件批量运行；大型脚本会流式执行。内置逻辑备份无需另装命令行客户端，可把表结构、数据、索引、外键、视图、触发器和存储程序保存到本机。',
     'help.features.redis.title': 'Redis 管理',
@@ -245,7 +245,7 @@ const I18N_MESSAGES = {
     'help.files.title': '远程文件、搜索与特权访问',
     'help.files.intro': '远程文件区域默认以当前 SSH 用户通过 SFTP 操作。搜索范围和权限范围不同，使用前先确认当前路径、特权状态以及结果是否完整。',
     'help.files.browse.title': '浏览、复制与文件操作',
-    'help.files.browse.text': '单击目录进入，使用“上级目录”返回；工具栏可新建文件夹、新建文本文件、上传、下载、删除、刷新和启用特权访问。同名目标不会覆盖；新建文件成功后直接进入编辑器。普通目录列表中单击名称复制当前显示的文件名；全局结果显示并复制完整路径。编辑器支持 Ctrl+F 查找、高亮、上一处/下一处及单个或全部替换，保存前可在同目录创建时间戳备份。',
+    'help.files.browse.text': '单击目录进入，使用“上级目录”返回；在右侧终端执行 cd、cd ..、cd -、cd ~ 或带引号的目录路径后，左侧文件区会自动解析并打开实际目录。使用方向键修改过或包含管道、重定向、命令替换的复杂 cd 命令不会自动同步，以免误判。工具栏可新建文件夹、新建文本文件、上传、下载、删除、刷新和启用特权访问。同名目标不会覆盖；新建文件成功后直接进入编辑器。普通目录列表中单击名称复制当前显示的文件名；全局结果显示并复制完整路径。编辑器支持 Ctrl+F 查找、高亮、上一处/下一处及单个或全部替换，保存前可在同目录创建时间戳备份。',
     'help.files.paths.title': '最近路径与收藏路径',
     'help.files.paths.text': '路径栏的时钟按钮显示当前服务器最近成功打开的目录和收藏目录。最近记录自动去重并保留最近 20 条；星标可收藏或取消收藏当前路径。记录按服务器隔离，点击路径会直接打开；清空最近记录不会删除收藏。',
     'help.files.commands.title': '常用命令',
@@ -299,7 +299,7 @@ const I18N_MESSAGES = {
     'help.data.title': '数据库、SQL 文件与统一状态',
     'help.data.intro': '数据库和传输类任务会把进度、成功、失败和取消状态集中到顶部“传输”。重要数据操作前仍应使用数据库自身的备份和恢复机制。',
     'help.data.database.title': '数据库对象与 SQL 编辑器',
-    'help.data.database.text': '数据库和 Redis 连接是独立的全局资源，不随左侧当前服务器切换。直接连接不要求 SSH，127.0.0.1 表示运行 Ops Flow 的 Windows 电脑，也可填写其他可访问的数据库或 Redis 地址；SSH 模式需固定选择一台已保存服务器作为跳板，但不必先连接命令终端。MySQL SSH 模式还可选择 Unix Socket。达梦连接需要先在“设置 → 常规”选择用户自行取得的官方 dmdb 外部驱动；旧服务端若只能协商旧算法，可显式开启隔离运行的兼容模式。驱动、兼容开关和运行时路径不会进入配置备份。已保存连接可复制复用，表名和字段名支持模糊筛选，SQL 可直接运行或从本地文件加载后检查再执行。',
+    'help.data.database.text': '数据库和 Redis 连接是独立的全局资源，不随左侧当前服务器切换。直接连接不要求 SSH，127.0.0.1 表示运行 Ops Flow 的 Windows 电脑，也可填写其他可访问的数据库或 Redis 地址；SSH 模式需固定选择一台已保存服务器作为跳板，但不必先连接命令终端。MySQL SSH 模式还可选择 Unix Socket。达梦连接需要先在“设置 → 常规”选择用户自行取得的官方 dmdb 外部驱动；旧服务端若只能协商旧算法，可显式开启隔离运行的兼容模式。达梦表浏览默认只显示当前登录用户模式，可在数据表标题栏切换其他可访问模式；切换后表名显示和复制会自动包含模式名，程序生成的 SQL 也会使用完整限定表名。驱动、兼容开关和运行时路径不会进入配置备份。已保存连接可复制复用，表名和字段名支持模糊筛选，SQL 可直接运行或从本地文件加载后检查再执行。',
     'help.data.sqlFile.title': '2. 导入 SQL 或 GZIP 备份',
     'help.data.sqlFile.text': '先选择要写入的目标数据库连接；完整恢复建议使用空数据库或空模式。点击 SQL 区域右上角“执行脚本”，选择任意工具导出的 .sql 或 .sql.gz 文件；同目录存在 .sha256 时会先校验，没有校验文件也可以正常执行。小文件会加载到编辑器供检查；超过 10 MB 的脚本不会加载到界面，而由主进程分两遍流式扫描和执行，因此不受编辑器大小限制。脚本会按数据库方言拆分并顺序运行，支持 MySQL/MariaDB DELIMITER、PostgreSQL 美元引用、SQL Server GO，以及 Oracle/达梦的“/”块结束符。',
     'help.data.sqlRollback.title': '3. 异常回滚与停止并回滚',
@@ -818,6 +818,9 @@ const I18N_MESSAGES = {
     'database.checkingPrivileges': '正在检查权限...',
     'database.privilegesNotChecked': '尚未检查权限',
     'database.tables': '数据表',
+    'database.schema': '模式',
+    'database.currentSchema': '当前模式',
+    'database.schemaCopyHint': '当前显示其他模式，复制表名时会自动包含模式名。',
     'database.exportSql': '导出 SQL',
     'database.exportCsv': '导出 CSV',
     'database.noCreatePermission': '没有 CREATE 权限',
@@ -1944,6 +1947,10 @@ export default function App() {
   const shellSessionRef = useRef(null)
   const shellServerIdRef = useRef('')
   const shellSessionsRef = useRef({})
+  const shellDirectoriesRef = useRef({})
+  const shellDirectorySyncRef = useRef(0)
+  const shellInputCaptureRef = useRef({})
+  const shellDirectoryCommandRef = useRef({ key: '', timestamp: 0 })
   const connectingServerIdRef = useRef('')
   const terminalAutoOpenRef = useRef('')
   const intentionalShellCloseRef = useRef('')
@@ -1955,6 +1962,8 @@ export default function App() {
   const shellRecoveryRef = useRef(new Set())
   const serverInspectInFlightRef = useRef(new Set())
   const transferPanelTimerRef = useRef(null)
+  const transferTasksPersistTimerRef = useRef(null)
+  const pendingTransferTasksPersistRef = useRef([])
   const previousSshTunnelStatusesRef = useRef({})
   const activeTransferIdsRef = useRef(new Set())
   const transferSessionHasErrorRef = useRef(false)
@@ -2428,6 +2437,9 @@ export default function App() {
         showToast('error', 'Connect before pasting')
         return false
       }
+      const serverId = selectedServerIdLiveRef.current
+      captureSubmittedTerminalCommands(shellInputCaptureRef.current, serverId, text)
+        .forEach((submittedCommand) => void syncRemoteDirectoryFromShellCommand(serverId, submittedCommand))
       terminalRef.current?.focus()
       window.opsFlow.writeSshShell(sessionId, text)
       return true
@@ -2435,18 +2447,36 @@ export default function App() {
 
     const terminal = new Terminal({
       cursorBlink: true,
-      fontFamily: 'Consolas, "Cascadia Mono", monospace',
-      fontSize: 13,
-      fontWeight: 700,
-      lineHeight: 1.35,
+      fontFamily: '"Cascadia Mono", Consolas, "Liberation Mono", monospace',
+      fontSize: 14,
+      fontWeight: 400,
+      fontWeightBold: 600,
+      lineHeight: 1.3,
       convertEol: false,
       scrollback: 4000,
       scrollOnUserInput: true,
       theme: {
-        background: '#08111f',
-        foreground: '#f8fafc',
-        cursor: '#bae6fd',
-        selectionBackground: '#334155'
+        background: '#1e1f22',
+        foreground: '#cbd5e1',
+        cursor: '#93c5fd',
+        cursorAccent: '#1e1f22',
+        selectionBackground: '#3d515f',
+        black: '#2b2d30',
+        red: '#dc7a7a',
+        green: '#7fbd8d',
+        yellow: '#c9ad68',
+        blue: '#78a6d4',
+        magenta: '#ae91c2',
+        cyan: '#6daeb8',
+        white: '#cbd5e1',
+        brightBlack: '#64748b',
+        brightRed: '#ef8b8b',
+        brightGreen: '#9bcea6',
+        brightYellow: '#dcc47f',
+        brightBlue: '#93b8e3',
+        brightMagenta: '#c2a5d4',
+        brightCyan: '#89c5cd',
+        brightWhite: '#e2e8f0'
       }
     })
     const fitAddon = new FitAddon()
@@ -2478,9 +2508,16 @@ export default function App() {
       if (activeModuleRef.current !== 'command') return
       const sessionId = getShellSessionId(selectedServerIdLiveRef.current)
       if (sessionId) {
+        const serverId = selectedServerIdLiveRef.current
+        const submittedCommands = captureSubmittedTerminalCommands(shellInputCaptureRef.current, serverId, data)
+        if (!submittedCommands.length && /[\r\n]/.test(data)) {
+          const displayedCommand = readDisplayedTerminalCommand(terminal)
+          if (displayedCommand) submittedCommands.push(displayedCommand)
+        }
+        submittedCommands.forEach((submittedCommand) => void syncRemoteDirectoryFromShellCommand(serverId, submittedCommand))
         terminal.scrollToBottom()
         shellSessionRef.current = sessionId
-        shellServerIdRef.current = selectedServerIdLiveRef.current
+        shellServerIdRef.current = serverId
         window.opsFlow.writeSshShell(sessionId, data)
       } else {
         showToast('error', 'Click Connect to open the SSH terminal.')
@@ -2523,6 +2560,11 @@ export default function App() {
       if (!serverId) return
       appendTerminalOutputData(payload.data, serverId)
     })
+    const removeCommandListener = window.opsFlow.onSshShellCommand?.((payload) => {
+      const serverId = findShellServerId(payload.sessionId)
+      if (!serverId) return
+      void syncRemoteDirectoryFromShellCommand(serverId, payload.command)
+    })
     const removeCloseListener = window.opsFlow.onSshShellClose((payload) => {
       const serverId = findShellServerId(payload.sessionId)
       if (!serverId) {
@@ -2531,6 +2573,7 @@ export default function App() {
       }
       const wasIntentional = intentionalShellCloseRef.current === payload.sessionId
       delete shellSessionsRef.current[serverId]
+      delete shellDirectoriesRef.current[serverId]
       if (shellSessionRef.current === payload.sessionId) {
         shellSessionRef.current = null
         shellServerIdRef.current = ''
@@ -2593,6 +2636,7 @@ export default function App() {
 
     return () => {
       removeDataListener()
+      removeCommandListener?.()
       removeCloseListener()
       removeErrorListener()
     }
@@ -3032,6 +3076,7 @@ export default function App() {
         cols: terminalRef.current.cols,
         rows: terminalRef.current.rows
       })
+      void initializeShellDirectory(server)
       return { ok: true }
     }
 
@@ -3051,6 +3096,7 @@ export default function App() {
     shellSessionsRef.current[server.id] = result.sessionId
     shellSessionRef.current = result.sessionId
     shellServerIdRef.current = server.id
+    void initializeShellDirectory(server)
     terminalRef.current.focus()
     return result
   }
@@ -5588,6 +5634,53 @@ export default function App() {
     loadRemoteDirectory(nextPath)
   }
 
+  const initializeShellDirectory = async (server) => {
+    if (!server?.id || shellDirectoriesRef.current[server.id]?.home) {
+      return shellDirectoriesRef.current[server?.id] || null
+    }
+    const result = await window.opsFlow.resolveRemotePath?.(server, '.')
+    if (!result?.ok || !result.path?.startsWith('/')) return null
+    const directory = { home: result.path, current: result.path, previous: '' }
+    shellDirectoriesRef.current[server.id] = directory
+    return directory
+  }
+
+  const syncRemoteDirectoryFromShellCommand = async (serverId, command) => {
+    const directoryChange = parseShellDirectoryCommand(command)
+    if (!directoryChange) return
+    const commandKey = `${serverId}\u0000${command}`
+    const now = Date.now()
+    if (shellDirectoryCommandRef.current.key === commandKey && now - shellDirectoryCommandRef.current.timestamp < 1000) return
+    shellDirectoryCommandRef.current = { key: commandKey, timestamp: now }
+    appendLog(`Terminal directory command detected: ${command}`)
+    const server = serversLiveRef.current.find((item) => item.id === serverId)
+    if (!server || server.status !== 'connected') return
+    const directory = shellDirectoriesRef.current[serverId] || await initializeShellDirectory(server)
+    if (!directory) {
+      appendLog(`Terminal directory sync skipped: unable to resolve the SSH home directory for ${server.name}`)
+      return
+    }
+    const targetPath = resolveShellDirectoryTarget(directoryChange.target, directory)
+    if (!targetPath) return
+    const syncId = shellDirectorySyncRef.current + 1
+    shellDirectorySyncRef.current = syncId
+    const result = await window.opsFlow.resolveRemotePath?.(server, targetPath)
+    if (shellDirectorySyncRef.current !== syncId || selectedServerIdLiveRef.current !== serverId) return
+    if (!result?.ok || !result.path?.startsWith('/')) {
+      appendLog(`Terminal directory sync skipped: ${result?.message || `unable to resolve ${targetPath}`}`)
+      return
+    }
+    shellDirectoriesRef.current[serverId] = {
+      ...directory,
+      previous: directory.current,
+      current: result.path
+    }
+    remoteFilesScrollTopRef.current = 0
+    setRemoteFilesScrollTop(0)
+    await loadRemoteDirectory(result.path, server)
+    appendLog(`Remote files followed terminal directory: ${result.path}`)
+  }
+
   const loadRemoteDirectory = async (path = remotePath, server = selectedServer, options = {}) => {
     if (!server.id || server.status !== 'connected') {
       appendLog('Remote directory skipped: connect a server first')
@@ -5668,7 +5761,8 @@ export default function App() {
     try {
       const selection = await window.opsFlow.selectLocalPath?.({
         title: 'Select files to upload',
-        multiple: true
+        multiple: true,
+        historyKey: 'upload'
       })
       if (!selection?.ok || !selection.paths?.length) {
         if (selection?.canceled) appendLog('Upload canceled')
@@ -5702,6 +5796,7 @@ export default function App() {
         const lastResult = completed[completed.length - 1]
         const uploadedName = lastResult.remotePath ? remoteBasename(lastResult.remotePath) : ''
         if (uploadedName) setPendingRemoteFocusName(uploadedName)
+        setIsFileTransferRunning(false)
         await loadRemoteDirectory(remotePath)
         if (uploadedName) setSelectedRemoteItem({ name: uploadedName, type: 'file' })
         if (completed.length > 1) showToast('success', `${completed.length} files uploaded`)
@@ -6236,6 +6331,9 @@ export default function App() {
       ...database,
       id: editingDatabaseId || database.id,
       tables: preserveCachedTables ? previousDatabase.tables || [] : [],
+      schemas: preserveCachedTables ? previousDatabase.schemas || [] : [],
+      currentSchema: preserveCachedTables ? previousDatabase.currentSchema || '' : '',
+      activeSchema: preserveCachedTables ? previousDatabase.activeSchema || '' : '',
       status: 'saved'
     }
     const next = editingDatabaseId
@@ -6468,9 +6566,20 @@ export default function App() {
         showToast('error', result.message || 'Failed to refresh tables')
         return
       }
+      const normalizedTables = normalizeDbTables(result.tables)
+      const schemas = normalizeDbSchemas(result.schemas, normalizedTables)
+      const currentSchema = findDbSchema(schemas, result.currentSchema)
+        || findDbSchema(schemas, database.currentSchema)
+        || String(result.currentSchema || database.currentSchema || '').trim()
+      const activeSchema = database.engine === 'dm'
+        ? findDbSchema(schemas, database.activeSchema) || currentSchema || schemas[0] || ''
+        : ''
       const updatedDatabase = {
         ...database,
-        tables: normalizeDbTables(result.tables),
+        tables: normalizedTables,
+        schemas,
+        currentSchema,
+        activeSchema,
         status: 'connected'
       }
       const next = clearedDatabases.map((item) => (item.id === database.id ? updatedDatabase : item))
@@ -6481,6 +6590,21 @@ export default function App() {
     } finally {
       if (databaseMetadataRequestRef.current.tables === requestId) setIsTableLoading(false)
     }
+  }
+
+  const selectDatabaseSchema = (schema) => {
+    if (!selectedDatabase || selectedDatabase.engine !== 'dm') return
+    const activeSchema = findDbSchema(selectedDatabase.schemas, schema)
+    if (!activeSchema || activeSchema === selectedDatabase.activeSchema) return
+    const next = databases.map((item) => (
+      item.id === selectedDatabase.id ? { ...item, activeSchema } : item
+    ))
+    setDatabases(next)
+    setSelectedDbTable(null)
+    setSelectedDbColumn(null)
+    setTableColumns([])
+    persist({ servers, databases: next, redisStores })
+    appendLog(`Dameng schema selected: ${activeSchema}`)
   }
 
   const exportDatabaseTables = async (tables, format) => {
@@ -7605,6 +7729,7 @@ export default function App() {
     intentionalShellCloseRef.current = sessionId
     await window.opsFlow.stopSshShell(sessionId)
     delete shellSessionsRef.current[serverId]
+    delete shellDirectoriesRef.current[serverId]
     if (shellSessionRef.current === sessionId) {
       shellSessionRef.current = null
       shellServerIdRef.current = ''
@@ -7762,7 +7887,10 @@ export default function App() {
         ? current.map((item) => (item.id === payload.id ? nextTask : item))
         : [nextTask, ...current]
       const limited = next.slice(0, 50)
-      window.opsFlow.setStore('transferTasks', limited)
+      persistTransferTasks(
+        limited,
+        payload.type !== 'upload' || ['done', 'failed', 'cancelled', 'canceled'].includes(status)
+      )
       return limited
     })
     setTransferPanelOpen(true)
@@ -7774,9 +7902,27 @@ export default function App() {
     }
   }
 
+  function persistTransferTasks(tasks, immediate = false) {
+    pendingTransferTasksPersistRef.current = tasks
+    if (immediate) {
+      window.clearTimeout(transferTasksPersistTimerRef.current)
+      transferTasksPersistTimerRef.current = null
+      window.opsFlow.setStore('transferTasks', tasks)
+      return
+    }
+    if (transferTasksPersistTimerRef.current) return
+    transferTasksPersistTimerRef.current = window.setTimeout(() => {
+      transferTasksPersistTimerRef.current = null
+      window.opsFlow.setStore('transferTasks', pendingTransferTasksPersistRef.current)
+    }, 750)
+  }
+
   function clearTransferTasks() {
     window.clearTimeout(transferPanelTimerRef.current)
     transferPanelTimerRef.current = null
+    window.clearTimeout(transferTasksPersistTimerRef.current)
+    transferTasksPersistTimerRef.current = null
+    pendingTransferTasksPersistRef.current = []
     activeTransferIdsRef.current.clear()
     transferSessionHasErrorRef.current = false
     setTransferTasks([])
@@ -8671,6 +8817,7 @@ export default function App() {
                     onDuplicate={duplicateDatabase}
                     onDelete={deleteDatabase}
                     onRefreshTables={refreshDatabaseTables}
+                    onSelectSchema={selectDatabaseSchema}
                     onOpenTable={loadTableColumns}
                     onExportTables={exportDatabaseTables}
                     onOpenBackup={openDatabaseBackup}
@@ -9686,7 +9833,7 @@ function SettingsDialog({ language, themeMode, section, onLanguageChange, onThem
                   <HelpTextBlock title={t('help.features.terminal.title', 'Command terminal')} text={t('help.features.terminal.text', 'Use the interactive SSH terminal for troubleshooting, one-off commands and live output. The terminal follows the selected server and prompts you to reconnect after disconnection.')} />
                   <HelpTextBlock title={t('help.features.jump.title', 'SSH jump server for private hosts')} text={t('help.features.jump.text', 'First save and test a public SSH server using Direct connection. Add the private server with an address reachable from that server, select the saved server as its SSH jump server, and enter the private server own SSH credentials. Terminal, SFTP, workflows, deployment and host management automatically reuse the route Ops Flow → public jump server → private server. The jump server must allow TCP forwarding and be able to reach the target SSH port.')} />
                   <HelpTextBlock title={t('help.features.tunnel.title', 'SSH tunnels for external clients')} text={t('help.features.tunnel.text', 'Open Tunnels from the top toolbar, select a saved SSH server, and configure a local port plus a destination host and port reachable from that server. Test connection verifies SSH login, the jump chain and the destination port. Start the tunnel, then connect Dameng tools, Oracle SQL Developer, DBeaver or another external client to 127.0.0.1:local-port. The tunnel runs independently from the command terminal, and listeners are restricted to 127.0.0.1 until Ops Flow exits.')} />
-                  <HelpTextBlock title={t('help.features.files.title', 'Remote files')} text={t('help.features.files.text', 'Browse SFTP directories, go to the parent folder, refresh, upload, download, edit, rename or delete files. Sort by file name or filter names in real time; clearing the search restores the full list.')} />
+                  <HelpTextBlock title={t('help.features.files.title', 'Remote files')} text={t('help.features.files.text', 'Browse SFTP directories, go to the parent folder, refresh, upload, download, edit, rename or delete files. After a simple cd command runs in the terminal, the file browser automatically opens the corresponding directory. Sort by file name or filter names in real time; clearing the search restores the full list.')} />
                   <HelpTextBlock title={t('help.features.database.title', 'Database management')} text={t('help.features.database.text', 'Manage database connections, inspect tables, fields and data, run SQL, and export query results. Independent table and field searches make large schemas easier to navigate.')} />
                   <HelpTextBlock title={t('help.features.redis.title', 'Redis management')} text={t('help.features.redis.text', 'Manage Redis connections, load and inspect keys, and delete confirmed keys. Search and refresh help investigate cache, queue and temporary state data.')} />
                   <HelpTextBlock title={t('help.features.workflow.title', 'Workflow')} text={t('help.features.workflow.text', 'Combine command, file, database, Redis and scheduled-task steps into reusable flows for inspections, release checks and repeated maintenance, with a result for every step.')} />
@@ -9703,7 +9850,7 @@ function SettingsDialog({ language, themeMode, section, onLanguageChange, onThem
                 <h2>{t('help.files.title', 'Remote files, search and privileged access')}</h2>
                 <p className="help-lead">{t('help.files.intro', 'Remote files use SFTP as the current SSH user by default. Search scope and permission scope differ, so confirm the current path, privileged state, and whether results are complete.')}</p>
                 <div className="help-step-list">
-                  <HelpTextBlock title={t('help.files.browse.title', 'Browse, create, copy and edit files')} text={t('help.files.browse.text', 'Open directories and use the toolbar to create a folder or text file, upload, download, delete, refresh, or enable privileged access. Existing names are never overwritten, and a new file opens directly in the editor. A normal list copies the displayed file name; global results copy the full path. The editor supports Ctrl+F, highlighted matches, previous/next, replace one/all, and a timestamped backup before saving.')} />
+                  <HelpTextBlock title={t('help.files.browse.title', 'Browse, create, copy and edit files')} text={t('help.files.browse.text', 'Open directories and use the toolbar to create a folder or text file, upload, download, delete, refresh, or enable privileged access. Terminal commands such as cd, cd .., cd -, cd ~ and quoted directory paths automatically synchronize this browser after the path is resolved. Complex commands using history editing, pipes, redirection or command substitution are left unchanged without automatic synchronization. Existing names are never overwritten, and a new file opens directly in the editor. A normal list copies the displayed file name; global results copy the full path.')} />
                   <HelpTextBlock title={t('help.files.paths.title', 'Recent and favorite paths')} text={t('help.files.paths.text', 'The clock button in the path bar shows recently opened and favorite directories for the current server. Recent paths are de-duplicated and limited to 20. Use the star to add or remove a favorite; clearing recent paths does not remove favorites.')} />
                   <HelpTextBlock title={t('help.files.commands.title', 'Saved commands')} text={t('help.files.commands.text', 'Saved commands can include a name, command body, tags, notes and either global or current-server scope. Search and click an item to paste it into the active SSH command line. No Enter key is sent, so review the command and press Enter yourself.')} />
                   <HelpTextBlock title={t('help.files.localSearch.title', 'Filter the current directory')} text={t('help.files.localSearch.text', 'Open the name search and enter text to filter only items already loaded in the current directory. Clear the field, close search, or press Esc to restore the complete current list.')} />
@@ -9751,7 +9898,7 @@ function SettingsDialog({ language, themeMode, section, onLanguageChange, onThem
                 <h2>{t('help.data.title', 'Databases, SQL files and unified status')}</h2>
                 <p className="help-lead">{t('help.data.intro', 'Database and transfer tasks publish progress, success, failure and cancellation in Transfers. Important data changes still require the database own backup and restore strategy.')}</p>
                 <div className="help-step-list">
-                  <HelpTextBlock title={t('help.data.database.title', 'Database objects and SQL editor')} text={t('help.data.database.text', 'Connections can use the current server SSH tunnel or connect directly. Saved connections can be copied into a new connection to reuse transport, endpoint and account details. In SSH mode, TCP host and port are reached from the remote server’s perspective; MySQL can alternatively use an instance-specific Unix Socket path. Table and column names support fuzzy filtering, and SQL can be reviewed before execution.')} />
+                  <HelpTextBlock title={t('help.data.database.title', 'Database objects and SQL editor')} text={t('help.data.database.text', 'Connections can use the current server SSH tunnel or connect directly. Saved connections can be copied into a new connection to reuse transport, endpoint and account details. In SSH mode, TCP host and port are reached from the remote server’s perspective; MySQL can alternatively use an instance-specific Unix Socket path. Dameng table browsing defaults to the current login schema and provides a schema selector for other accessible schemas. Tables copied from another schema automatically include the schema-qualified SQL name. Table and column names support fuzzy filtering, and SQL can be reviewed before execution.')} />
                   <HelpTextBlock title={t('help.data.logicalBackup.title', '1. Export a database logical backup')} text={t('help.data.logicalBackup.text', 'Select a database connection, choose Backup, then select scope, content and plain or GZIP-compressed SQL output. Choose a local path to start. Progress, cancellation and results appear in the dialog and Transfers.')} />
                   <HelpTextBlock title={t('help.data.sqlFile.title', '2. Import an SQL or GZIP backup')} text={t('help.data.sqlFile.text', 'Select the target database first, preferably an empty database or schema for a full restore. Choose Run script and select an .sql or .sql.gz file. Small scripts can be reviewed in the editor; scripts larger than 10 MB are scanned and executed as streams without an editor size limit.')} />
                   <HelpTextBlock title={t('help.data.sqlRollback.title', '3. Rollback on error and Stop & rollback')} text={t('help.data.sqlRollback.text', 'Rollback on error/stop is enabled by default for a loaded SQL file. A failed batch rolls back the transaction. Stop & rollback waits for the current batch to finish, then rolls back at a safe boundary. Some MySQL, Oracle and DM DDL implicitly commits, and administration statements may be non-transactional, so a complete rollback cannot always be guaranteed.')} />
@@ -10991,11 +11138,21 @@ function WorkflowDialog({ mode, draft, moduleGroups, databases = [], redisStores
         setDatabaseMeta((current) => ({ ...current, [databaseId]: { ...(current[databaseId] || {}), error: result.message } }))
         return
       }
+      const normalizedTables = normalizeDbTables(result.tables)
+      const schemas = normalizeDbSchemas(result.schemas, normalizedTables)
+      const activeSchema = database.engine === 'dm'
+        ? findDbSchema(schemas, database.activeSchema)
+          || findDbSchema(schemas, result.currentSchema)
+          || schemas[0]
+          || ''
+        : ''
       setDatabaseMeta((current) => ({
         ...current,
         [databaseId]: {
           ...(current[databaseId] || {}),
-          tables: normalizeDbTables(result.tables)
+          tables: activeSchema
+            ? normalizedTables.filter((table) => table.schema === activeSchema)
+            : normalizedTables
         }
       }))
     } finally {
@@ -12661,6 +12818,137 @@ function remoteDirname(remotePath = '') {
 
 function remoteBasename(remotePath = '') {
   return String(remotePath || '').split('/').filter(Boolean).pop() || ''
+}
+
+function captureSubmittedTerminalCommands(captures, serverId, data) {
+  if (!serverId) return []
+  const submitted = []
+  const state = captures[serverId] || { value: '', valid: true, lastWasCarriageReturn: false }
+  const input = String(data || '')
+    .replaceAll('\u001b[200~', '')
+    .replaceAll('\u001b[201~', '')
+  for (const character of input) {
+    if (character === '\n' && state.lastWasCarriageReturn) {
+      state.lastWasCarriageReturn = false
+      continue
+    }
+    state.lastWasCarriageReturn = false
+    if (character === '\r' || character === '\n') {
+      if (state.valid && state.value.trim()) submitted.push(state.value.trim())
+      state.value = ''
+      state.valid = true
+      state.lastWasCarriageReturn = character === '\r'
+      continue
+    }
+    if (character === '\u0003') {
+      state.value = ''
+      state.valid = true
+      continue
+    }
+    if (character === '\u0015') {
+      state.value = ''
+      continue
+    }
+    if (character === '\u007f' || character === '\b') {
+      state.value = [...state.value].slice(0, -1).join('')
+      continue
+    }
+    if (character.charCodeAt(0) < 32 || character === '\u007f') {
+      state.valid = false
+      continue
+    }
+    if (state.valid) state.value += character
+  }
+  captures[serverId] = state
+  return submitted
+}
+
+function readDisplayedTerminalCommand(terminal) {
+  const buffer = terminal?.buffer?.active
+  const line = buffer?.getLine(buffer.cursorY)?.translateToString(true) || ''
+  const match = line.match(/(?:^|[$#>%]\s+)((?:builtin\s+)?cd(?:\s+.*)?)\s*$/)
+  return match?.[1]?.trim() || ''
+}
+
+function parseShellDirectoryCommand(command = '') {
+  const tokens = tokenizeSimpleShellCommand(command)
+  if (!tokens?.length) return null
+  if (tokens[0] === 'builtin') tokens.shift()
+  if (tokens[0] !== 'cd') return null
+  tokens.shift()
+  while (tokens[0] && /^-[LPe]+$/.test(tokens[0])) tokens.shift()
+  if (tokens[0] === '--') tokens.shift()
+  if (tokens.length > 1) return null
+  return { target: tokens[0] || '~' }
+}
+
+function tokenizeSimpleShellCommand(command = '') {
+  const tokens = []
+  let value = ''
+  let quote = ''
+  let escaped = false
+  const push = () => {
+    if (!value) return
+    tokens.push(value)
+    value = ''
+  }
+  for (const character of String(command).trim()) {
+    if (escaped) {
+      value += character
+      escaped = false
+      continue
+    }
+    if (character === '\\' && quote !== "'") {
+      escaped = true
+      continue
+    }
+    if (quote) {
+      if (character === quote) quote = ''
+      else value += character
+      continue
+    }
+    if (character === "'" || character === '"') {
+      quote = character
+      continue
+    }
+    if (/\s/.test(character)) {
+      push()
+      continue
+    }
+    if (';&|<>`'.includes(character)) return null
+    value += character
+  }
+  if (escaped || quote) return null
+  push()
+  return tokens
+}
+
+function resolveShellDirectoryTarget(target = '~', directory = {}) {
+  const home = String(directory.home || '')
+  const current = String(directory.current || home)
+  const previous = String(directory.previous || '')
+  let value = String(target || '~')
+  if (value === '-') return previous || ''
+  value = value
+    .replace(/^~(?=\/|$)/, home)
+    .replace(/^\$HOME(?=\/|$)/, home)
+    .replace(/^\$\{HOME\}(?=\/|$)/, home)
+    .replace(/^\$PWD(?=\/|$)/, current)
+    .replace(/^\$\{PWD\}(?=\/|$)/, current)
+    .replace(/^\$OLDPWD(?=\/|$)/, previous)
+    .replace(/^\$\{OLDPWD\}(?=\/|$)/, previous)
+  if (!value || /[$`]/.test(value)) return ''
+  return normalizePosixDirectory(value.startsWith('/') ? value : `${current}/${value}`)
+}
+
+function normalizePosixDirectory(value = '/') {
+  const parts = []
+  String(value).split('/').forEach((part) => {
+    if (!part || part === '.') return
+    if (part === '..') parts.pop()
+    else parts.push(part)
+  })
+  return `/${parts.join('/')}`
 }
 
 function normalizeWorkflowSelectedTables(config = {}) {
@@ -15667,9 +15955,24 @@ function TableDialog({ mode, form, onChange, onClose, onSave }) {
   )
 }
 
-function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, servers, selectedTable, selectedColumn, privileges, columns, loading, privilegeLoading, sqlScript, sqlFileInfo, sqlRunning, sqlExecutionTaskId, sqlResult, onAdd, onCreateDatabase, onSelectDatabase, onSelectColumn, onEdit, onDuplicate, onDelete, onRefreshTables, onOpenTable, onExportTables, onOpenBackup, onSqlChange, onSelectSqlFile, onClearSqlFile, onRunSql, onCancelSql, onSqlFileOptionChange, onCopy, onAddTable, onEditTable, onDeleteTable, onAddColumn, onEditColumn, onDeleteColumn }) {
+function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, servers, selectedTable, selectedColumn, privileges, columns, loading, privilegeLoading, sqlScript, sqlFileInfo, sqlRunning, sqlExecutionTaskId, sqlResult, onAdd, onCreateDatabase, onSelectDatabase, onSelectColumn, onEdit, onDuplicate, onDelete, onRefreshTables, onSelectSchema, onOpenTable, onExportTables, onOpenBackup, onSqlChange, onSelectSqlFile, onClearSqlFile, onRunSql, onCancelSql, onSqlFileOptionChange, onCopy, onAddTable, onEditTable, onDeleteTable, onAddColumn, onEditColumn, onDeleteColumn }) {
   const { t } = useI18n()
-  const tables = selectedDatabase?.tables || []
+  const allTables = selectedDatabase?.tables || []
+  const schemas = selectedDatabase?.engine === 'dm'
+    ? normalizeDbSchemas(selectedDatabase.schemas, allTables)
+    : []
+  const currentSchema = findDbSchema(schemas, selectedDatabase?.currentSchema)
+    || String(selectedDatabase?.currentSchema || '').trim()
+  const activeSchema = findDbSchema(schemas, selectedDatabase?.activeSchema)
+    || currentSchema
+    || schemas[0]
+    || ''
+  const showingOtherSchema = Boolean(activeSchema && currentSchema && activeSchema !== currentSchema)
+  const tables = useMemo(() => (
+    selectedDatabase?.engine === 'dm' && activeSchema
+      ? allTables.filter((table) => table.schema === activeSchema)
+      : allTables
+  ), [allTables, selectedDatabase?.engine, activeSchema])
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [checkedTables, setCheckedTables] = useState([])
   const [tableSearchOpen, setTableSearchOpen] = useState(false)
@@ -15712,6 +16015,11 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
     setColumnQuery('')
     setColumnSearchOpen(false)
   }, [selectedDatabase?.id])
+
+  useEffect(() => {
+    setCheckedTables([])
+    setTableQuery('')
+  }, [activeSchema])
 
   useEffect(() => {
     setColumnQuery('')
@@ -15892,6 +16200,18 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
           <div className="database-head">
             <strong>{t('database.tables', 'Tables')}</strong>
             <div className="column-actions table-actions">
+              {selectedDatabase?.engine === 'dm' && schemas.length > 0 && (
+                <label className="schema-picker" title={showingOtherSchema ? t('database.schemaCopyHint', 'Table copies include the selected schema.') : t('database.currentSchema', 'Current schema')}>
+                  <span>{t('database.schema', 'Schema')}</span>
+                  <select value={activeSchema} onChange={(event) => onSelectSchema(event.target.value)} disabled={loading}>
+                    {schemas.map((schema) => (
+                      <option key={schema} value={schema}>
+                        {schema}{schema === currentSchema ? ` · ${t('database.currentSchema', 'current')}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <span className="count-badge">{normalizedTableQuery ? `${visibleTables.length}/${tables.length}` : tables.length}</span>
               <InlineSearch
                 value={tableQuery}
@@ -15923,7 +16243,10 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
           </div>
           <div className="table-items">
             {visibleTables.length ? (
-              visibleTables.map((table) => (
+              visibleTables.map((table) => {
+                const displayName = showingOtherSchema ? `${table.schema}.${table.name}` : table.name
+                const copyValue = showingOtherSchema ? qualifiedTableName(selectedDatabase, table) : table.name
+                return (
                 <div
                   key={`${table.schema}.${table.name}`}
                   className={`table-item ${selectedTable?.schema === table.schema && selectedTable?.name === table.name ? 'selected' : ''}`}
@@ -15932,7 +16255,7 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
                     cancelCopy()
                     onOpenTable(table)
                   }}
-                  onClick={() => copyOnSingleClick(table.name)}
+                  onClick={() => copyOnSingleClick(copyValue)}
                 >
                   <input
                     type="checkbox"
@@ -15943,12 +16266,13 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
                   <Database size={15} />
                   <span
                     className="copyable-name"
-                    title={t('database.clickCopy', 'Click to copy: {value}', { value: table.name })}
+                    title={t('database.clickCopy', 'Click to copy: {value}', { value: copyValue })}
                   >
-                    {table.name}
+                    {displayName}
                   </span>
                 </div>
-              ))
+                )
+              })
             ) : normalizedTableQuery ? (
               <div className="table-empty">
                 <span>{t('database.noMatchingTables', 'No matching tables.')}</span>
@@ -20613,10 +20937,37 @@ function formatDatabaseOperationError(message = '') {
 }
 
 function normalizeDbTables(tables = []) {
-  return tables.map((table) => ({
-    schema: table.table_schema || table.TABLE_SCHEMA || table.schema || '-',
-    name: table.table_name || table.TABLE_NAME || table.name || '-'
+  const normalized = tables.map((table) => ({
+    schema: String(table.table_schema || table.TABLE_SCHEMA || table.schema || '-'),
+    name: String(table.table_name || table.TABLE_NAME || table.name || '-')
   }))
+  const unique = new Map()
+  normalized.forEach((table) => {
+    const key = `${table.schema}\u0000${table.name}`
+    if (!unique.has(key)) unique.set(key, table)
+  })
+  return [...unique.values()]
+}
+
+function normalizeDbSchemas(schemas = [], tables = []) {
+  const values = [
+    ...(Array.isArray(schemas) ? schemas : []),
+    ...(Array.isArray(tables) ? tables.map((table) => table.schema) : [])
+  ]
+  const unique = new Map()
+  values.forEach((schema) => {
+    const value = String(schema || '').trim()
+    if (!value || value === '-') return
+    const key = value.toLocaleUpperCase()
+    if (!unique.has(key)) unique.set(key, value)
+  })
+  return [...unique.values()]
+}
+
+function findDbSchema(schemas = [], candidate = '') {
+  const expected = String(candidate || '').trim().toLocaleUpperCase()
+  if (!expected) return ''
+  return (schemas || []).find((schema) => String(schema).toLocaleUpperCase() === expected) || ''
 }
 
 function normalizeDbColumns(columns = []) {

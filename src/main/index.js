@@ -38,6 +38,7 @@ const databaseBackupSessions = new Map()
 const redisBackupSessions = new Map()
 const redisRestoreSessions = new Map()
 const fileTransferSessions = new Map()
+const fileTransferProgressEmitTimes = new Map()
 const sshTunnelSessions = new Map()
 const pendingConfigImports = new Map()
 const damengLegacyWorkers = new Set()
@@ -597,6 +598,10 @@ ipcMain.handle('app:open-external', async (_event, value) => {
 
 ipcMain.handle('dialog:select-local-path', async (event, options = {}) => {
   const window = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow()
+  const rememberUploadDirectory = options.historyKey === 'upload'
+  const rememberedUploadDirectory = rememberUploadDirectory
+    ? String(store.get('lastLocalUploadDirectory', '') || '')
+    : ''
   const properties = options.directory
     ? ['openDirectory']
     : options.multiple
@@ -604,10 +609,19 @@ ipcMain.handle('dialog:select-local-path', async (event, options = {}) => {
       : ['openFile']
   const picked = await dialog.showOpenDialog(window, {
     title: options.title || (options.directory ? 'Select local directory' : 'Select local file'),
+    ...(rememberedUploadDirectory && existsSync(rememberedUploadDirectory)
+      ? { defaultPath: rememberedUploadDirectory }
+      : {}),
     properties
   })
   if (picked.canceled || !picked.filePaths.length) {
     return { ok: false, canceled: true, message: 'Selection canceled' }
+  }
+  if (rememberUploadDirectory) {
+    const selectedDirectory = options.directory ? picked.filePaths[0] : dirname(picked.filePaths[0])
+    if (selectedDirectory && existsSync(selectedDirectory)) {
+      store.set('lastLocalUploadDirectory', selectedDirectory)
+    }
   }
   return { ok: true, path: picked.filePaths[0], paths: picked.filePaths }
 })
@@ -855,10 +869,14 @@ ipcMain.handle('ssh:shell:start', async (event, config, size = {}) => {
   return startShellSession(event.sender, config, size)
 })
 
-ipcMain.handle('ssh:shell:write', async (_event, sessionId, data) => {
+ipcMain.handle('ssh:shell:write', async (event, sessionId, data) => {
   const session = shellSessions.get(sessionId)
   if (!session?.stream) return { ok: false, message: 'Terminal session is not connected' }
+  const submittedCommands = captureShellInput(session, data)
   session.stream.write(data)
+  submittedCommands.forEach((command) => {
+    if (!event.sender.isDestroyed()) event.sender.send('ssh:shell:command', { sessionId, command })
+  })
   return { ok: true }
 })
 
@@ -891,6 +909,10 @@ ipcMain.handle('ssh:inspect', async (event, config) => {
 
 ipcMain.handle('sftp:list', async (event, config, targetPath = '/') => {
   return withActiveShellClient(event.sender, config, (client) => listRemoteDirectory(client, targetPath))
+})
+
+ipcMain.handle('sftp:realpath', async (event, config, targetPath = '.') => {
+  return withActiveShellClient(event.sender, config, (client) => resolveRemoteDirectoryPath(client, targetPath))
 })
 
 ipcMain.handle('sftp:privileged-list', async (event, config, targetPath = '/', privilege = {}) => {
@@ -1333,7 +1355,26 @@ ipcMain.handle('db:inspect', async (_event, config) => {
       return { ok: true, tables: result.recordset }
     }
 
-    if (isOracleLikeEngine(config.engine)) {
+    if (config.engine === 'dm') {
+      const currentSchemaResult = await executeOracleLike(connection, config.engine, 'select USER as current_schema from dual')
+      const tableResult = await executeOracleLike(connection, config.engine, `
+        select OWNER as table_schema, TABLE_NAME as table_name
+        from ALL_TABLES
+        where OWNER not in ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'CTISYS', 'MDSYS', 'ORDSYS', 'XDB')
+        order by OWNER, TABLE_NAME
+      `)
+      const currentSchemaRow = currentSchemaResult.rows?.[0] || {}
+      const currentSchema = currentSchemaRow.current_schema
+        || currentSchemaRow.CURRENT_SCHEMA
+        || String(config.username || '').toUpperCase()
+      const schemas = [...new Set([
+        currentSchema,
+        ...(tableResult.rows || []).map((table) => table.table_schema || table.TABLE_SCHEMA)
+      ].filter(Boolean))]
+      return { ok: true, tables: tableResult.rows, schemas, currentSchema }
+    }
+
+    if (config.engine === 'oracle') {
       const result = await executeOracleLike(connection, config.engine, `
         select OWNER as table_schema, TABLE_NAME as table_name
         from ALL_TABLES
@@ -2825,12 +2866,58 @@ function closeShellSession(sessionId) {
   session.client?.end()
 }
 
+function captureShellInput(session, data) {
+  const submitted = []
+  const state = session.inputCapture || { value: '', valid: true, lastWasCarriageReturn: false }
+  const input = String(data || '')
+    .replaceAll('\u001b[200~', '')
+    .replaceAll('\u001b[201~', '')
+  for (const character of input) {
+    if (character === '\n' && state.lastWasCarriageReturn) {
+      state.lastWasCarriageReturn = false
+      continue
+    }
+    state.lastWasCarriageReturn = false
+    if (character === '\r' || character === '\n') {
+      if (state.valid && state.value.trim()) submitted.push(state.value.trim())
+      state.value = ''
+      state.valid = true
+      state.lastWasCarriageReturn = character === '\r'
+      continue
+    }
+    if (character === '\u0003') {
+      state.value = ''
+      state.valid = true
+      continue
+    }
+    if (character === '\u0015') {
+      state.value = ''
+      continue
+    }
+    if (character === '\u007f' || character === '\b') {
+      state.value = [...state.value].slice(0, -1).join('')
+      continue
+    }
+    if (character.charCodeAt(0) < 32 || character === '\u007f') {
+      state.valid = false
+      continue
+    }
+    if (state.valid) state.value += character
+  }
+  session.inputCapture = state
+  return submitted
+}
+
 function pasteClipboardToShell(webContents) {
   const sessionId = shellSessionsByWebContents.get(webContents.id)
   const session = shellSessions.get(sessionId)
   const text = clipboard.readText()
   if (!session?.stream || !text) return
+  const submittedCommands = captureShellInput(session, text)
   session.stream.write(text)
+  submittedCommands.forEach((command) => {
+    if (!webContents.isDestroyed()) webContents.send('ssh:shell:command', { sessionId, command })
+  })
 }
 
 function normalizePrivilegedRemotePath(remotePath, { allowRoot = true } = {}) {
@@ -3441,10 +3528,19 @@ function listRemoteDirectory(client, targetPath) {
           // Continue with owner lookup even if the SFTP channel already ended.
         }
         sftpSession = null
-        const owners = await getRemoteOwners(client, targetPath)
+        const visibleItems = list.filter((item) => item.filename !== '.' && item.filename !== '..')
+        const hasEmbeddedOwners = visibleItems.every((item) => {
+          const parts = item.longname?.trim().split(/\s+/) || []
+          return Boolean(
+            parts[2]
+            && parts[3]
+            && !/^\d+$/.test(parts[2])
+            && !/^\d+$/.test(parts[3])
+          )
+        })
+        const owners = hasEmbeddedOwners ? {} : await getRemoteOwners(client, targetPath)
         if (settled) return
-        const items = list
-          .filter((item) => item.filename !== '.' && item.filename !== '..')
+        const items = visibleItems
           .map((item) => ({
             name: item.filename,
             type: item.attrs?.isDirectory?.() ? 'dir' : 'file',
@@ -3459,6 +3555,52 @@ function listRemoteDirectory(client, targetPath) {
           })
 
         finish({ ok: true, path: targetPath, items })
+      })
+    })
+  })
+}
+
+function resolveRemoteDirectoryPath(client, targetPath = '.') {
+  return new Promise((resolve) => {
+    let settled = false
+    let sftpSession = null
+    const finish = (result) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try {
+        sftpSession?.end()
+      } catch {
+        // Ignore channel cleanup failures; the parent SSH connection remains active.
+      }
+      resolve(result)
+    }
+    const timer = setTimeout(() => {
+      finish({ ok: false, timedOut: true, path: targetPath, message: `Remote path resolution timed out: ${targetPath}` })
+    }, 10000)
+    client.sftp((error, sftp) => {
+      if (error) {
+        finish({ ok: false, path: targetPath, message: error.message })
+        return
+      }
+      sftpSession = sftp
+      sftp.realpath(targetPath || '.', (realpathError, resolvedPath) => {
+        if (realpathError) {
+          finish({ ok: false, path: targetPath, message: realpathError.message })
+          return
+        }
+        const path = resolvedPath || targetPath
+        sftp.stat(path, (statError, attrs) => {
+          if (statError) {
+            finish({ ok: false, path, message: statError.message })
+            return
+          }
+          if (!attrs?.isDirectory?.()) {
+            finish({ ok: false, path, message: `Remote path is not a directory: ${path}` })
+            return
+          }
+          finish({ ok: true, path })
+        })
       })
     })
   })
@@ -3660,6 +3802,16 @@ function getLocalPathSize(localPath) {
 
 function emitTransferProgress(progress, patch) {
   if (!progress?.webContents || progress.webContents.isDestroyed()) return
+  const status = patch?.status
+  const isTerminal = ['done', 'failed', 'cancelled', 'canceled'].includes(status)
+  if (status === 'running' && progress.type === 'upload' && progress.id) {
+    const now = Date.now()
+    const lastEmittedAt = fileTransferProgressEmitTimes.get(progress.id) || 0
+    if (now - lastEmittedAt < 160) return
+    fileTransferProgressEmitTimes.set(progress.id, now)
+  } else if (isTerminal && progress.type === 'upload' && progress.id) {
+    fileTransferProgressEmitTimes.delete(progress.id)
+  }
   const payload = {
     id: progress.id,
     type: progress.type,

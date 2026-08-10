@@ -59,6 +59,11 @@ contextBridge.exposeInMainWorld('opsFlow', {
     ipcRenderer.on('ssh:shell:data', listener)
     return () => ipcRenderer.removeListener('ssh:shell:data', listener)
   },
+  onSshShellCommand: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('ssh:shell:command', listener)
+    return () => ipcRenderer.removeListener('ssh:shell:command', listener)
+  },
   onSshShellClose: (callback) => {
     const listener = (_event, payload) => callback(payload)
     ipcRenderer.on('ssh:shell:close', listener)
@@ -74,6 +79,7 @@ contextBridge.exposeInMainWorld('opsFlow', {
     ipcRenderer.on('terminal:paste-request', listener)
     return () => ipcRenderer.removeListener('terminal:paste-request', listener)
   },
+  resolveRemotePath: (config, targetPath) => ipcRenderer.invoke('sftp:realpath', config, targetPath),
   inspectServer: (config) => ipcRenderer.invoke('ssh:inspect', config),
   listRemoteDirectory: (config, path) => ipcRenderer.invoke('sftp:list', config, path),
   listPrivilegedRemoteDirectory: (config, path, privilege) => ipcRenderer.invoke('sftp:privileged-list', config, path, privilege),

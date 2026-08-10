@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.2.3 - 2026-08-10
+
+### Fixed
+
+- Removed duplicate Dameng table entries by keeping schema-aware metadata and
+  defaulting the browser to the connected user's current schema. Switching
+  schemas now updates the active schema automatically for table and column
+  queries.
+- Improved SSH/SFTP stability by reusing the active terminal transport where
+  possible and avoiding redundant owner lookups when the SFTP response already
+  contains named owner and group information.
+- Reduced UI stalls during uploads by throttling upload-only progress events,
+  batching transfer-history persistence and remembering the last upload folder.
+
+### Improved
+
+- Added terminal-to-file-browser directory synchronization. Successful `cd`
+  commands, including absolute and multi-level paths, now resolve through SFTP
+  and update the remote file panel.
+- Refined terminal typography and colors for longer sessions, and replaced the
+  blue-black dark theme with an IDEA-inspired neutral charcoal palette while
+  preserving the existing teal selection and status colors.
+- Expanded the built-in help for Dameng schema browsing, terminal directory
+  synchronization and SSH tunnel workflows.
+
 ## 0.2.2 - 2026-08-06
 
 ### Added
