@@ -10,6 +10,12 @@
 - Added column comments to the add/edit field dialog, including automatic
   engine-specific comment writes and comment removal when an edited value is cleared.
 
+### Fixed
+
+- Kept the database browser mounted and cached across top-level tab switches.
+  Table metadata now reloads only when the selected database connection changes,
+  when the user refreshes it explicitly, or after a schema-changing operation.
+
 ## 0.2.4 - 2026-08-11
 
 ### Added

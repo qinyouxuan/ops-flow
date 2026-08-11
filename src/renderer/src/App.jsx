@@ -1907,6 +1907,7 @@ export default function App() {
   const [tableColumns, setTableColumns] = useState([])
   const [isTableLoading, setIsTableLoading] = useState(false)
   const databaseMetadataRequestRef = useRef({ tables: '', columns: '' })
+  const databaseAutoLoadKeyRef = useRef('')
   const [tableDialog, setTableDialog] = useState(null)
   const [tableForm, setTableForm] = useState(emptyTableForm)
   const [columnDialog, setColumnDialog] = useState(null)
@@ -2204,6 +2205,9 @@ export default function App() {
   const selectedDatabases = databases
   const selectedRedisStores = redisStores
   const selectedDatabase = selectedDatabases.find((item) => item.id === selectedDatabaseId) || selectedDatabases[0] || null
+  const selectedDatabaseAutoLoadKey = selectedDatabase
+    ? `${selectedDatabase.id}\u0000${databaseMetadataIdentity(selectedDatabase)}`
+    : ''
   const selectedRedis = selectedRedisStores.find((item) => item.id === selectedRedisId) || selectedRedisStores[0] || null
   const selectedWorkflow = workflows.find((item) => item.id === selectedWorkflowId) || workflows[0] || workflowTemplates[0]
   const workflowRunWorkflow = workflows.find((item) => item.id === workflowRunWorkflowId) || selectedWorkflow
@@ -2335,18 +2339,29 @@ export default function App() {
 
   useEffect(() => {
     if (activeModule !== 'database') return undefined
+    if (!selectedDatabaseAutoLoadKey || databaseAutoLoadKeyRef.current === selectedDatabaseAutoLoadKey) return undefined
+    const database = databases.find((item) => item.id === selectedDatabaseId)
+    if (!database || !resourceConnectionAvailable(database, servers)) return undefined
+    databaseAutoLoadKeyRef.current = selectedDatabaseAutoLoadKey
     databaseMetadataRequestRef.current = { tables: '', columns: '' }
     setSelectedDbTable(null)
     setSelectedDbColumn(null)
     setTableColumns([])
     setIsTableLoading(false)
-    const database = databases.find((item) => item.id === selectedDatabaseId)
-    if (!database || !resourceConnectionAvailable(database, servers)) return undefined
-    const timer = window.setTimeout(() => {
-      refreshDatabaseTables(database)
+    const timer = window.setTimeout(async () => {
+      try {
+        const loaded = await refreshDatabaseTables(database)
+        if (loaded === false && databaseAutoLoadKeyRef.current === selectedDatabaseAutoLoadKey) {
+          databaseAutoLoadKeyRef.current = ''
+        }
+      } catch {
+        if (databaseAutoLoadKeyRef.current === selectedDatabaseAutoLoadKey) {
+          databaseAutoLoadKeyRef.current = ''
+        }
+      }
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [activeModule, selectedDatabaseId])
+  }, [activeModule, selectedDatabaseAutoLoadKey])
 
   useEffect(() => {
     const repaired = ensureUniqueResourceIds(redisStores, 'redis')
@@ -6544,11 +6559,11 @@ export default function App() {
   const refreshDatabaseTables = async (database = selectedDatabase) => {
     if (!database) {
       appendLog('Refresh tables skipped: no database selected')
-      return
+      return false
     }
     if (!resourceConnectionAvailable(database, servers)) {
       showToast('error', resourceConnectionError(database))
-      return
+      return false
     }
     const runtimeDatabase = withDatabaseRuntime(database, servers)
     const requestId = `${database.id}:${Date.now()}:${Math.random()}`
@@ -6571,7 +6586,7 @@ export default function App() {
       if (!result.ok) {
         appendLog(`Refresh tables failed: ${result.message}`)
         showToast('error', result.message || 'Failed to refresh tables')
-        return
+        return false
       }
       const normalizedTables = normalizeDbTables(result.tables)
       const schemas = normalizeDbSchemas(result.schemas, normalizedTables)
@@ -6594,6 +6609,7 @@ export default function App() {
       persist({ servers, databases: next, redisStores })
       checkDatabasePrivileges(database, { silent: true })
       appendLog(`Tables refreshed: ${database.name} (${updatedDatabase.tables.length})`)
+      return true
     } finally {
       if (databaseMetadataRequestRef.current.tables === requestId) setIsTableLoading(false)
     }
@@ -8890,7 +8906,7 @@ export default function App() {
                 </div>
               )}
 
-              {activeModule === 'database' && (
+              <div className={activeModule === 'database' ? 'module-keepalive active' : 'module-keepalive'}>
                 <MaintenanceModule
                   empty={false}
                   title={t('database.emptyTitle', 'No database configured')}
@@ -8945,7 +8961,7 @@ export default function App() {
                     onDeleteColumn={deleteColumn}
                   />
                 </MaintenanceModule>
-              )}
+              </div>
 
               {activeModule === 'redis' && (
                 <MaintenanceModule
