@@ -17,6 +17,7 @@ import mysql from 'mysql2/promise'
 import pg from 'pg'
 import mssql from 'mssql'
 import oracledb from 'oracledb'
+import ExcelJS from 'exceljs'
 import { createClient as createRedisClient } from 'redis'
 import {
   containsCredentials,
@@ -34,6 +35,7 @@ const shellSessionsByWebContents = new Map()
 const sshExecSessions = new Map()
 const workflowPrivilegeCredentials = new Map()
 const databaseScriptSessions = new Map()
+const databaseQueryExportSessions = new Map()
 const databaseBackupSessions = new Map()
 const redisBackupSessions = new Map()
 const redisRestoreSessions = new Map()
@@ -1531,7 +1533,213 @@ ipcMain.handle('db:privileges', async (_event, config) => {
   })
 })
 
-ipcMain.handle('db:exec', async (_event, config, sql) => {
+function maskSqlForReadOnlyAnalysis(sql) {
+  const source = String(sql || '')
+  let output = ''
+  let index = 0
+  let state = 'plain'
+  let dollarTag = ''
+  while (index < source.length) {
+    const char = source[index]
+    const next = source[index + 1]
+    if (state === 'line-comment') {
+      if (char === '\n') {
+        state = 'plain'
+        output += '\n'
+      } else output += ' '
+      index += 1
+      continue
+    }
+    if (state === 'block-comment') {
+      if (char === '*' && next === '/') {
+        output += '  '
+        index += 2
+        state = 'plain'
+      } else {
+        output += char === '\n' ? '\n' : ' '
+        index += 1
+      }
+      continue
+    }
+    if (state === 'single-quote') {
+      if (char === "'" && next === "'") {
+        output += '  '
+        index += 2
+      } else if (char === "'") {
+        output += ' '
+        index += 1
+        state = 'plain'
+      } else {
+        output += char === '\n' ? '\n' : ' '
+        index += 1
+      }
+      continue
+    }
+    if (state === 'double-quote' || state === 'backtick' || state === 'bracket') {
+      const closing = state === 'double-quote' ? '"' : state === 'backtick' ? '`' : ']'
+      if (char === closing && next === closing) {
+        output += '  '
+        index += 2
+      } else if (char === closing) {
+        output += ' '
+        index += 1
+        state = 'plain'
+      } else {
+        output += char === '\n' ? '\n' : ' '
+        index += 1
+      }
+      continue
+    }
+    if (state === 'dollar-quote') {
+      if (source.startsWith(dollarTag, index)) {
+        output += ' '.repeat(dollarTag.length)
+        index += dollarTag.length
+        state = 'plain'
+      } else {
+        output += char === '\n' ? '\n' : ' '
+        index += 1
+      }
+      continue
+    }
+    if (char === '-' && next === '-') {
+      output += '  '
+      index += 2
+      state = 'line-comment'
+      continue
+    }
+    if (char === '/' && next === '*') {
+      output += '  '
+      index += 2
+      state = 'block-comment'
+      continue
+    }
+    if (char === "'") state = 'single-quote'
+    else if (char === '"') state = 'double-quote'
+    else if (char === '`') state = 'backtick'
+    else if (char === '[') state = 'bracket'
+    else if (char === '$') {
+      const match = source.slice(index).match(/^\$[A-Za-z_][A-Za-z0-9_]*\$|^\$\$/)
+      if (match) {
+        dollarTag = match[0]
+        state = 'dollar-quote'
+        output += ' '.repeat(dollarTag.length)
+        index += dollarTag.length
+        continue
+      }
+    }
+    output += state === 'plain' ? char : ' '
+    index += 1
+  }
+  return output
+}
+
+function analyzeReadOnlyDatabaseQuery(sql) {
+  const source = String(sql || '').trim()
+  if (!source) return { ok: false, reason: 'SQL is required.' }
+  const masked = maskSqlForReadOnlyAnalysis(source)
+  const executableStatements = masked.split(';').filter((part) => part.trim())
+  if (executableStatements.length !== 1) {
+    return { ok: false, reason: '分页和 Excel 导出仅支持单条只读查询。' }
+  }
+  const firstKeyword = executableStatements[0].match(/[A-Za-z]+/)?.[0]?.toUpperCase()
+  if (!['SELECT', 'WITH'].includes(firstKeyword)) {
+    return { ok: false, reason: '仅 SELECT 或 WITH 只读查询支持分页和 Excel 导出。' }
+  }
+  const forbidden = /\b(?:INSERT|UPDATE|DELETE|MERGE|UPSERT|REPLACE|INTO|CREATE|ALTER|DROP|TRUNCATE|RENAME|GRANT|REVOKE|CALL|EXEC|EXECUTE|DO|COPY|LOAD|LOCK|UNLOCK|SET|USE|COMMIT|ROLLBACK|SAVEPOINT|BEGIN|DECLARE|VACUUM)\b/i
+  if (forbidden.test(executableStatements[0])) {
+    return { ok: false, reason: '查询包含可能修改数据或会话状态的语句，不能分页或导出。' }
+  }
+  return {
+    ok: true,
+    sql: source.replace(/;\s*$/, '').trim(),
+    masked: executableStatements[0]
+  }
+}
+
+function hasTopLevelSqlServerOrderBy(maskedSql) {
+  let depth = 0
+  const tokens = []
+  const expression = /[A-Za-z_][A-Za-z0-9_]*|[()]/g
+  let match
+  while ((match = expression.exec(maskedSql))) {
+    if (match[0] === '(') depth += 1
+    else if (match[0] === ')') depth = Math.max(0, depth - 1)
+    else if (depth === 0) tokens.push(match[0].toUpperCase())
+  }
+  return tokens.some((token, index) => token === 'ORDER' && tokens[index + 1] === 'BY')
+}
+
+function buildPagedDatabaseQuery(config, analysis, page, pageSize) {
+  const safePage = Math.max(1, Math.floor(Number(page) || 1))
+  const safePageSize = Math.max(1, Math.min(5000, Math.floor(Number(pageSize) || 100)))
+  const offset = (safePage - 1) * safePageSize
+  const fetchSize = safePageSize + 1
+  const engine = String(config.engine || '').toLowerCase()
+  if (engine === 'sqlserver') {
+    if (/\b(?:OFFSET|FETCH)\b/i.test(analysis.masked)) {
+      throw new Error('SQL Server 分页查询不能包含已有的 OFFSET/FETCH，请移除后重试。')
+    }
+    if (/\bTOP\s*(?:\(|\d)/i.test(analysis.masked)) {
+      throw new Error('SQL Server 分页查询不能同时使用 TOP，请移除 TOP 后重试。')
+    }
+    const orderBy = hasTopLevelSqlServerOrderBy(analysis.masked) ? '' : ' ORDER BY (SELECT NULL)'
+    return `${analysis.sql}${orderBy} OFFSET ${offset} ROWS FETCH NEXT ${fetchSize} ROWS ONLY`
+  }
+  if (isOracleLikeEngine(engine)) {
+    return `SELECT * FROM (${analysis.sql}) ops_flow_query OFFSET ${offset} ROWS FETCH NEXT ${fetchSize} ROWS ONLY`
+  }
+  return `SELECT * FROM (${analysis.sql}) AS ops_flow_query LIMIT ${fetchSize} OFFSET ${offset}`
+}
+
+async function executeDatabaseQueryPage(connection, config, analysis, page, pageSize) {
+  const query = buildPagedDatabaseQuery(config, analysis, page, pageSize)
+  const engine = String(config.engine || '').toLowerCase()
+  let rows = []
+  let columns = []
+  if (engine === 'postgres') {
+    const result = await connection.query(query)
+    rows = result.rows || []
+    columns = (result.fields || []).map((field) => field.name)
+  } else if (engine === 'sqlserver') {
+    const result = await connection.request().query(query)
+    rows = result.recordset || []
+    columns = Object.keys(result.recordset?.columns || {})
+  } else if (isOracleLikeEngine(engine)) {
+    const result = await executeOracleLike(connection, engine, query)
+    rows = result.rows || []
+    columns = (result.metaData || []).map((field) => field.name)
+  } else {
+    const [resultRows, fields] = await connection.query(query)
+    rows = Array.isArray(resultRows) ? resultRows : []
+    columns = (fields || []).map((field) => field.name)
+  }
+  const safePageSize = Math.max(1, Math.min(5000, Math.floor(Number(pageSize) || 100)))
+  return {
+    rows: rows.slice(0, safePageSize),
+    columns: columns.length ? columns : Object.keys(rows[0] || {}),
+    hasMore: rows.length > safePageSize
+  }
+}
+
+ipcMain.handle('db:exec', async (_event, config, sql, options = {}) => {
+  const analysis = analyzeReadOnlyDatabaseQuery(sql)
+  if (analysis.ok && options.paginate !== false) {
+    const page = Math.max(1, Math.floor(Number(options.page) || 1))
+    const pageSize = Math.max(20, Math.min(500, Math.floor(Number(options.pageSize) || 100)))
+    return withDatabase(config, async (connection) => {
+      const result = await executeDatabaseQueryPage(connection, config, analysis, page, pageSize)
+      return {
+        ok: true,
+        query: true,
+        rows: result.rows,
+        columns: result.columns,
+        rowCount: result.rows.length,
+        page,
+        pageSize,
+        hasMore: result.hasMore
+      }
+    })
+  }
   return withDatabase(config, async (connection) => {
     if (config.engine === 'postgres') {
       const result = await connection.query(sql)
@@ -1764,6 +1972,173 @@ ipcMain.handle('db:cancel-script', async (event, taskId) => {
     message
   })
   return { ok: true, message: 'Stop requested' }
+})
+
+function normalizeExcelQueryCell(value) {
+  if (value === null || value === undefined) return null
+  if (value instanceof Date || typeof value === 'number' || typeof value === 'boolean') return value
+  if (typeof value === 'bigint') return value.toString()
+  if (Buffer.isBuffer(value)) return value.toString('hex')
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
+  const text = String(value)
+  return text.length > 32767 ? `${text.slice(0, 32764)}...` : text
+}
+
+function queryExportFileName(config) {
+  return `${safeFileName(config.database || config.name || 'query')}-query-${backupTimestamp()}.xlsx`
+}
+
+async function exportDatabaseQueryToExcel(connection, config, analysis, filePath, task, session, options = {}) {
+  const batchSize = Math.max(200, Math.min(5000, Math.floor(Number(options.batchSize) || 2000)))
+  const maximumDataRows = 1048575
+  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+    filename: filePath,
+    useStyles: true,
+    useSharedStrings: false
+  })
+  session.outputCreated = true
+  const worksheet = workbook.addWorksheet('Query Result', {
+    views: [{ state: 'frozen', ySplit: 1 }]
+  })
+  let columns = []
+  let page = 1
+  let exportedRows = 0
+  try {
+    while (true) {
+      if (session.cancelRequested) throw Object.assign(new Error('查询结果导出已取消。'), { canceled: true })
+      const result = await executeDatabaseQueryPage(connection, config, analysis, page, batchSize)
+      if (!columns.length) {
+        columns = result.columns.length ? result.columns : Object.keys(result.rows[0] || {})
+        if (columns.length) {
+          worksheet.columns = columns.map((name) => ({ key: name, width: Math.min(42, Math.max(12, String(name).length + 3)) }))
+          const header = worksheet.addRow(columns)
+          header.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+          header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF147D73' } }
+          header.commit()
+        }
+      }
+      for (const row of result.rows) {
+        if (session.cancelRequested) throw Object.assign(new Error('查询结果导出已取消。'), { canceled: true })
+        if (exportedRows >= maximumDataRows) {
+          throw new Error('查询结果超过 Excel 单工作表上限 1,048,575 行，请增加查询条件后分批导出。')
+        }
+        const values = columns.map((column) => normalizeExcelQueryCell(row?.[column]))
+        worksheet.addRow(values).commit()
+        exportedRows += 1
+      }
+      session.exportedRows = exportedRows
+      emitTransferProgress(task, {
+        transferred: exportedRows,
+        total: 0,
+        indeterminate: true,
+        status: 'running',
+        message: `已导出 ${exportedRows.toLocaleString('zh-CN')} 行…`
+      })
+      if (!result.hasMore) break
+      page += 1
+    }
+    worksheet.commit()
+    await workbook.commit()
+    return { ok: true, path: filePath, rowCount: exportedRows }
+  } catch (error) {
+    try {
+      worksheet.commit()
+      await workbook.commit()
+    } catch {
+      // Ignore writer shutdown errors; the incomplete workbook is removed below.
+    }
+    try {
+      if (existsSync(filePath)) rmSync(filePath, { force: true })
+    } catch {
+      // The writer can briefly retain a Windows file handle while shutting down.
+    }
+    return { ok: false, canceled: Boolean(error.canceled), rowCount: exportedRows, message: error.message }
+  }
+}
+
+ipcMain.handle('db:export-query', async (event, config, sql, options = {}) => {
+  const analysis = analyzeReadOnlyDatabaseQuery(sql)
+  if (!analysis.ok) return { ok: false, message: analysis.reason }
+  const window = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow()
+  const picked = await dialog.showSaveDialog(window, {
+    title: '导出查询结果到 Excel',
+    defaultPath: queryExportFileName(config),
+    filters: [{ name: 'Excel 工作簿', extensions: ['xlsx'] }]
+  })
+  if (picked.canceled || !picked.filePath) return { ok: false, canceled: true, message: '已取消导出。' }
+  const filePath = /\.xlsx$/i.test(picked.filePath) ? picked.filePath : `${picked.filePath}.xlsx`
+  const task = {
+    webContents: event.sender,
+    id: String(options.taskId || `database-query-export-${Date.now()}-${Math.random().toString(16).slice(2)}`),
+    type: 'database-query-export',
+    name: basename(filePath),
+    localPath: filePath,
+    remotePath: `${config.name || config.engine || 'database'} / ${config.database || ''}`,
+    total: 0,
+    startedAt: Date.now()
+  }
+  const session = {
+    task,
+    webContentsId: event.sender.id,
+    cancelRequested: false,
+    exportedRows: 0,
+    outputCreated: false
+  }
+  databaseQueryExportSessions.set(task.id, session)
+  emitTransferProgress(task, {
+    transferred: 0,
+    total: 0,
+    indeterminate: true,
+    status: 'running',
+    message: '正在准备全量查询结果导出…'
+  })
+  let result
+  try {
+    result = await withDatabase(config, async (connection) => (
+      exportDatabaseQueryToExcel(connection, config, analysis, filePath, task, session, options)
+    ))
+  } finally {
+    databaseQueryExportSessions.delete(task.id)
+  }
+  if (!result.ok && session.outputCreated) {
+    try {
+      if (existsSync(filePath)) rmSync(filePath, { force: true })
+    } catch {
+      // The incomplete file will be reported as failed if Windows still holds it.
+    }
+  }
+  emitTransferProgress(task, {
+    transferred: Number(result.rowCount || session.exportedRows || 0),
+    total: Number(result.rowCount || session.exportedRows || 0),
+    indeterminate: false,
+    status: result.ok ? 'done' : result.canceled ? 'cancelled' : 'failed',
+    message: result.ok
+      ? `Excel 导出完成，共 ${Number(result.rowCount || 0).toLocaleString('zh-CN')} 行`
+      : result.message
+  })
+  return result
+})
+
+ipcMain.handle('db:cancel-query-export', async (event, taskId) => {
+  const session = databaseQueryExportSessions.get(String(taskId || ''))
+  if (!session || session.webContentsId !== event.sender.id) {
+    return { ok: false, message: '查询结果导出任务未运行。' }
+  }
+  session.cancelRequested = true
+  emitTransferProgress(session.task, {
+    transferred: session.exportedRows,
+    total: 0,
+    indeterminate: true,
+    status: 'running',
+    message: '已请求取消，当前数据库批次结束后停止…'
+  })
+  return { ok: true, message: '已请求取消查询结果导出。' }
 })
 
 ipcMain.handle('db:export', async (event, config, tables = [], format = 'sql') => {

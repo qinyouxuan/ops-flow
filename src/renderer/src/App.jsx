@@ -14,6 +14,8 @@ import {
   Cable,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   CirclePlay,
   CircleStop,
@@ -300,8 +302,10 @@ const I18N_MESSAGES = {
     'help.data.intro': '数据库和传输类任务会把进度、成功、失败和取消状态集中到顶部“传输”。重要数据操作前仍应使用数据库自身的备份和恢复机制。',
     'help.data.database.title': '数据库对象与 SQL 编辑器',
     'help.data.database.text': '数据库和 Redis 连接是独立的全局资源，不随左侧当前服务器切换。直接连接不要求 SSH，127.0.0.1 表示运行 Ops Flow 的 Windows 电脑，也可填写其他可访问的数据库或 Redis 地址；SSH 模式需固定选择一台已保存服务器作为跳板，但不必先连接命令终端。MySQL SSH 模式还可选择 Unix Socket。达梦连接需要先在“设置 → 常规”选择用户自行取得的官方 dmdb 外部驱动；旧服务端若只能协商旧算法，可显式开启隔离运行的兼容模式。达梦表浏览默认只显示当前登录用户模式，可在数据表标题栏切换其他可访问模式；切换后表名显示和复制会自动包含模式名，程序生成的 SQL 也会使用完整限定表名。驱动、兼容开关和运行时路径不会进入配置备份。已保存连接可复制复用，表名和字段名支持模糊筛选，SQL 可直接运行或从本地文件加载后检查再执行。',
+    'help.data.queryExport.title': '查询分页与全量 Excel 导出',
+    'help.data.queryExport.text': '单条 SELECT 或 WITH 只读查询由数据库按页返回，默认每页 100 行，可切换为 50、100、200 或 500 行，因此界面不会先加载全部结果。结果区域的“导出 Excel”会重新执行同一条只读查询，按批次读取全量数据并直接写入 .xlsx；导出行数、完成、失败和取消状态统一显示在顶部“传输”。为避免重复修改数据，更新、删除、建表等非只读语句不能使用结果导出。分页和分批导出建议使用唯一键 ORDER BY 保证稳定顺序；导出期间仍在变化的数据以各批次读取时的状态为准。Excel 单工作表最多导出 1,048,575 行数据（另有一行表头）。',
     'help.data.sqlFile.title': '2. 导入 SQL 或 GZIP 备份',
-    'help.data.sqlFile.text': '先选择要写入的目标数据库连接；完整恢复建议使用空数据库或空模式。点击 SQL 区域右上角“执行脚本”，选择任意工具导出的 .sql 或 .sql.gz 文件；同目录存在 .sha256 时会先校验，没有校验文件也可以正常执行。小文件会加载到编辑器供检查；超过 10 MB 的脚本不会加载到界面，而由主进程分两遍流式扫描和执行，因此不受编辑器大小限制。脚本会按数据库方言拆分并顺序运行，支持 MySQL/MariaDB DELIMITER、PostgreSQL 美元引用、SQL Server GO，以及 Oracle/达梦的“/”块结束符。',
+    'help.data.sqlFile.text': '先选择要写入的目标数据库连接；完整恢复建议使用空数据库或空模式。点击 SQL 区域右上角“选择脚本”，选择任意工具导出的 .sql 或 .sql.gz 文件，再点击“运行”开始执行；同目录存在 .sha256 时会先校验，没有校验文件也可以正常执行。小文件会加载到编辑器供检查；超过 10 MB 的脚本不会加载到界面，而由主进程分两遍流式扫描和执行，因此不受编辑器大小限制。脚本会按数据库方言拆分并顺序运行，支持 MySQL/MariaDB DELIMITER、PostgreSQL 美元引用、SQL Server GO，以及 Oracle/达梦的“/”块结束符。',
     'help.data.sqlRollback.title': '3. 异常回滚与停止并回滚',
     'help.data.sqlRollback.text': '加载 SQL 文件后默认启用“异常/停止时回滚”。批次异常会回滚事务；运行中可点击 SQL 区域或“传输”中的“停止并回滚”，应用等待当前批次结束后在安全边界回滚。MySQL、Oracle、达梦的部分 DDL 会隐式提交，数据库管理语句也可能不支持事务，因此界面会提示无法保证完整回滚。',
     'help.data.logicalBackup.title': '1. 导出数据库逻辑备份',
@@ -309,7 +313,7 @@ const I18N_MESSAGES = {
     'help.data.redis.title': '4. Redis 逻辑库备份与恢复',
     'help.data.redis.text': '选择 Redis 连接及逻辑库后，点击“备份”可把当前 db 的 Redis DUMP 数据、绝对过期时间和毫秒 TTL 保存为 .opsredis，并生成 SHA-256 校验文件。点击“恢复”选择文件和同名键策略（跳过、覆盖或报错），输入 RESTORE 后恢复到当前 db；恢复会验证文件完整性和可用的校验文件，并显示进度。该文件不是原生 RDB 且未加密，恢复取消不会回滚已经写入的键。',
     'help.data.status.title': '5. 在传输中心查看进度',
-    'help.data.status.text': '“传输”保存最近的上传、下载、保存、删除、部署和 SQL 文件任务。全部成功或主动取消后面板会自动收起；发生错误时保持打开并保留错误信息，直到手动关闭提示或清除记录。',
+    'help.data.status.text': '“传输”保存最近的上传、下载、保存、删除、部署、SQL 文件和查询结果 Excel 导出任务。全量查询导出会显示已写入的行数并支持取消；全部成功或主动取消后面板会自动收起，发生错误时保持打开并保留错误信息，直到手动关闭提示或清除记录。',
     'help.safety.title': '高风险操作说明',
     'help.safety.warning': '连接生产服务器前请确认已有可用备份和其他登录通道。不要在不了解影响范围时执行删除、停止、卸载或防火墙修改。',
     'help.safety.permission.title': '权限与只读状态',
@@ -845,7 +849,7 @@ const I18N_MESSAGES = {
     'database.doubleClickTable': '双击数据表查看字段。',
     'database.ctrlEnter': 'Ctrl+Enter 运行',
     'database.run': '运行',
-    'database.runFile': '执行脚本',
+    'database.runFile': '选择脚本',
     'database.selectSqlFile': '选择 SQL 或压缩 SQL 脚本',
     'database.sqlFileLoaded': 'SQL 文件已加载：{name}',
     'database.sqlFileSource': '来源：{name} · {size} · {encoding}',
@@ -6959,11 +6963,12 @@ export default function App() {
             filePath: sqlFileInfo.path,
             rollbackOnError
           })
-          : await window.opsFlow.execDatabase(withDatabaseRuntime(target, servers), sqlScript)
+          : await window.opsFlow.execDatabase(withDatabaseRuntime(target, servers), sqlScript, { page: 1, pageSize: 100 })
       appendLog(result.ok
         ? sqlFileInfo ? `SQL file executed: ${sqlFileInfo.name} (${result.statementCount || 0} batches)` : 'SQL executed'
         : `SQL failed: ${result.message}`)
-      setSqlResult(formatSqlResult(result))
+      const formattedResult = formatSqlResult(result)
+      setSqlResult(!sqlFileInfo && result.query ? { ...formattedResult, sourceSql: sqlScript, databaseId: target.id } : formattedResult)
       if (result.canceled && !result.rollbackFailed) showToast('info', result.message || 'SQL execution stopped')
       else if (!result.ok) showToast('error', result.message || 'SQL execution failed')
       else showToast(
@@ -6979,6 +6984,67 @@ export default function App() {
     } finally {
       setIsSqlRunning(false)
       setSqlExecutionTaskId('')
+    }
+  }
+
+  const changeSqlResultPage = async (page, pageSize = sqlResult?.pageSize || 100) => {
+    const target = selectedDatabase
+    const sourceSql = sqlResult?.sourceSql
+    if (!target || !sourceSql || isSqlRunning) return
+    if (sqlResult?.databaseId && sqlResult.databaseId !== target.id) {
+      showToast('error', '查询结果不属于当前数据库连接，请重新运行 SQL。')
+      return
+    }
+    setIsSqlRunning(true)
+    setSqlResult((current) => ({ ...current, loading: true, message: `正在加载第 ${page} 页…` }))
+    try {
+      const result = await window.opsFlow.execDatabase(
+        withDatabaseRuntime(target, servers),
+        sourceSql,
+        { page, pageSize }
+      )
+      if (!result.ok) {
+        setSqlResult((current) => ({ ...current, loading: false, message: `分页加载失败：${result.message}` }))
+        showToast('error', result.message || '查询分页加载失败')
+        return
+      }
+      const formattedResult = formatSqlResult(result)
+      setSqlResult({ ...formattedResult, sourceSql, databaseId: target.id })
+    } catch (error) {
+      setSqlResult((current) => ({ ...current, loading: false, message: `分页加载失败：${error.message}` }))
+      showToast('error', error.message || '查询分页加载失败')
+    } finally {
+      setIsSqlRunning(false)
+    }
+  }
+
+  const exportSqlQueryResult = async (result = sqlResult) => {
+    const target = selectedDatabase
+    const sourceSql = result?.sourceSql
+    if (!target || !sourceSql || !result?.query) {
+      showToast('error', '请先执行一条只读查询。')
+      return
+    }
+    if (result.databaseId && result.databaseId !== target.id) {
+      showToast('error', '查询结果不属于当前数据库连接，请重新运行 SQL。')
+      return
+    }
+    const taskId = `database-query-export-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    try {
+      const exportResult = await window.opsFlow.exportDatabaseQuery(
+        withDatabaseRuntime(target, servers),
+        sourceSql,
+        { taskId, batchSize: 2000 }
+      )
+      if (exportResult.canceled) return
+      if (!exportResult.ok) {
+        showToast('error', exportResult.message || 'Excel 导出失败')
+        return
+      }
+      appendLog(`Query result exported: ${exportResult.path} (${exportResult.rowCount || 0} rows)`)
+      showToast('success', `Excel 导出完成，共 ${Number(exportResult.rowCount || 0).toLocaleString('zh-CN')} 行`)
+    } catch (error) {
+      showToast('error', error.message || 'Excel 导出失败')
     }
   }
 
@@ -7004,6 +7070,12 @@ export default function App() {
       databaseTableDeleteCancelRef.current.add(task.id)
       updateTransferTask({ id: task.id, status: 'running', message: '正在停止批量删除，当前数据表完成后停止…' })
       showToast('info', '已请求停止批量删除。')
+      return
+    }
+    if (task.type === 'database-query-export') {
+      const result = await window.opsFlow.cancelDatabaseQueryExport(task.id)
+      if (!result.ok) showToast('error', result.message)
+      else showToast('info', result.message)
       return
     }
     if (task.type === 'database-backup') {
@@ -8828,6 +8900,8 @@ export default function App() {
                     onSelectSqlFile={selectLocalSqlFile}
                     onClearSqlFile={clearLocalSqlFile}
                     onRunSql={runSql}
+                    onChangeSqlResultPage={changeSqlResultPage}
+                    onExportSqlResult={exportSqlQueryResult}
                     onCancelSql={cancelSqlFileExecution}
                     onSqlFileOptionChange={(patch) => setSqlFileInfo((current) => current ? { ...current, ...patch } : null)}
                     onCopy={(value) => copyText(value, showToast)}
@@ -9899,8 +9973,9 @@ function SettingsDialog({ language, themeMode, section, onLanguageChange, onThem
                 <p className="help-lead">{t('help.data.intro', 'Database and transfer tasks publish progress, success, failure and cancellation in Transfers. Important data changes still require the database own backup and restore strategy.')}</p>
                 <div className="help-step-list">
                   <HelpTextBlock title={t('help.data.database.title', 'Database objects and SQL editor')} text={t('help.data.database.text', 'Connections can use the current server SSH tunnel or connect directly. Saved connections can be copied into a new connection to reuse transport, endpoint and account details. In SSH mode, TCP host and port are reached from the remote server’s perspective; MySQL can alternatively use an instance-specific Unix Socket path. Dameng table browsing defaults to the current login schema and provides a schema selector for other accessible schemas. Tables copied from another schema automatically include the schema-qualified SQL name. Table and column names support fuzzy filtering, and SQL can be reviewed before execution.')} />
+                  <HelpTextBlock title={t('help.data.queryExport.title', 'Paginated queries and full Excel export')} text={t('help.data.queryExport.text', 'A single read-only SELECT or WITH query is fetched one database page at a time. Export Excel re-runs that same read-only query, writes the complete result to .xlsx in batches, and reports row progress and cancellation in Transfers. Data-changing statements cannot use result export.')} />
                   <HelpTextBlock title={t('help.data.logicalBackup.title', '1. Export a database logical backup')} text={t('help.data.logicalBackup.text', 'Select a database connection, choose Backup, then select scope, content and plain or GZIP-compressed SQL output. Choose a local path to start. Progress, cancellation and results appear in the dialog and Transfers.')} />
-                  <HelpTextBlock title={t('help.data.sqlFile.title', '2. Import an SQL or GZIP backup')} text={t('help.data.sqlFile.text', 'Select the target database first, preferably an empty database or schema for a full restore. Choose Run script and select an .sql or .sql.gz file. Small scripts can be reviewed in the editor; scripts larger than 10 MB are scanned and executed as streams without an editor size limit.')} />
+                  <HelpTextBlock title={t('help.data.sqlFile.title', '2. Import an SQL or GZIP backup')} text={t('help.data.sqlFile.text', 'Select the target database first, preferably an empty database or schema for a full restore. Choose Select script and select an .sql or .sql.gz file, then click Run to execute it. Small scripts can be reviewed in the editor; scripts larger than 10 MB are scanned and executed as streams without an editor size limit.')} />
                   <HelpTextBlock title={t('help.data.sqlRollback.title', '3. Rollback on error and Stop & rollback')} text={t('help.data.sqlRollback.text', 'Rollback on error/stop is enabled by default for a loaded SQL file. A failed batch rolls back the transaction. Stop & rollback waits for the current batch to finish, then rolls back at a safe boundary. Some MySQL, Oracle and DM DDL implicitly commits, and administration statements may be non-transactional, so a complete rollback cannot always be guaranteed.')} />
                   <HelpTextBlock title={t('help.data.redis.title', '4. Back up and restore a Redis logical database')} text={t('help.data.redis.text', 'Back up Redis DUMP payloads and expiration times to .opsredis, or restore a verified backup into the selected database with skip, replace, or stop-on-conflict behavior.')} />
                   <HelpTextBlock title={t('help.data.status.title', '5. Track progress in Transfers')} text={t('help.data.status.text', 'Transfers keeps recent uploads, downloads, saves, deletes, deployments and SQL-file tasks. When everything succeeds or is intentionally canceled, the panel closes automatically. Errors keep it open with the failure message until you close or clear it.')} />
@@ -13092,7 +13167,7 @@ function TransferPopover({ transfers, onClear, onCancelTask, onRetryRollback }) 
             </div>
             <div className="transfer-row-status">
               <em>{transferStatusLabel(task)}</em>
-              {['sql-file', 'database-table-delete', 'upload', 'download', 'deploy', 'backup-restore'].includes(task.type) && task.status === 'running' && (
+              {['sql-file', 'database-table-delete', 'database-query-export', 'upload', 'download', 'deploy', 'backup-restore'].includes(task.type) && task.status === 'running' && (
                 <button
                   type="button"
                   title={task.type === 'sql-file' ? t('database.stopRollback', 'Stop and rollback') : (task.type === 'database-table-delete' ? '停止批量删除' : (task.type === 'deploy' ? '停止远程命令' : t('transfer.cancel', 'Cancel transfer')))}
@@ -14027,6 +14102,7 @@ function transferTypeLabel(task) {
   if (task.type === 'delete') return 'Delete'
   if (task.type === 'export') return 'Export'
   if (task.type === 'database-table-delete') return 'DB delete'
+  if (task.type === 'database-query-export') return 'Excel export'
   if (task.type === 'database-backup') return 'DB backup'
   if (task.type === 'redis-backup') return 'Redis backup'
   if (task.type === 'redis-restore') return 'Redis restore'
@@ -14043,6 +14119,7 @@ function transferPathLabel(task) {
   if (task.type === 'deploy') return task.message || task.remotePath || 'Remote command'
   if (task.type === 'sql-file') return task.message || task.remotePath || task.localPath
   if (task.type === 'database-table-delete') return task.message || task.remotePath || 'Database table deletion'
+  if (task.type === 'database-query-export') return task.message || task.localPath || 'Query result export'
   if (task.type === 'database-backup') return task.message || task.localPath || task.remotePath || 'Database backup'
   if (task.type === 'redis-backup') return task.message || task.localPath || 'Redis backup'
   if (task.type === 'redis-restore') return task.message || task.localPath || 'Redis restore'
@@ -14343,7 +14420,7 @@ function RedisBrowser({ connections, selected, connectionAvailable, servers, dat
             if (connection) onSelect(connection)
           }}
         >
-          {connections.map((item) => <option key={item.id} value={item.id}>{item.name} · {resourceConnectionLabel(item, servers, t)}</option>)}
+          {connections.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
         <button onClick={onAdd}><Plus size={14} />{t('common.add', 'Add')}</button>
         <button onClick={() => onEdit()} disabled={!selected}><SquarePen size={14} />{t('common.edit', 'Edit')}</button>
@@ -15955,7 +16032,7 @@ function TableDialog({ mode, form, onChange, onClose, onSave }) {
   )
 }
 
-function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, servers, selectedTable, selectedColumn, privileges, columns, loading, privilegeLoading, sqlScript, sqlFileInfo, sqlRunning, sqlExecutionTaskId, sqlResult, onAdd, onCreateDatabase, onSelectDatabase, onSelectColumn, onEdit, onDuplicate, onDelete, onRefreshTables, onSelectSchema, onOpenTable, onExportTables, onOpenBackup, onSqlChange, onSelectSqlFile, onClearSqlFile, onRunSql, onCancelSql, onSqlFileOptionChange, onCopy, onAddTable, onEditTable, onDeleteTable, onAddColumn, onEditColumn, onDeleteColumn }) {
+function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, servers, selectedTable, selectedColumn, privileges, columns, loading, privilegeLoading, sqlScript, sqlFileInfo, sqlRunning, sqlExecutionTaskId, sqlResult, onAdd, onCreateDatabase, onSelectDatabase, onSelectColumn, onEdit, onDuplicate, onDelete, onRefreshTables, onSelectSchema, onOpenTable, onExportTables, onOpenBackup, onSqlChange, onSelectSqlFile, onClearSqlFile, onRunSql, onChangeSqlResultPage, onExportSqlResult, onCancelSql, onSqlFileOptionChange, onCopy, onAddTable, onEditTable, onDeleteTable, onAddColumn, onEditColumn, onDeleteColumn }) {
   const { t } = useI18n()
   const allTables = selectedDatabase?.tables || []
   const schemas = selectedDatabase?.engine === 'dm'
@@ -15984,7 +16061,9 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
   const canDrop = hasPrivilege(privileges, 'drop')
   const ddlRollbackLimited = ['mysql', 'mariadb', 'oracle', 'dm'].includes(selectedDatabase?.engine)
   const [schemaSplit, setSchemaSplit] = useState(50)
+  const [schemaPanelHeight, setSchemaPanelHeight] = useState(null)
   const [sqlPanelHeight, setSqlPanelHeight] = useState(170)
+  const databaseBrowserRef = useRef(null)
   const schemaBrowserRef = useRef(null)
   const copyTimerRef = useRef(null)
   const addMenuRef = useRef(null)
@@ -16101,11 +16180,37 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
     window.addEventListener('mousemove', handleMove)
     window.addEventListener('mouseup', handleUp)
   }
+  const startSchemaSqlResize = (event) => {
+    event.preventDefault()
+    const browserBounds = databaseBrowserRef.current?.getBoundingClientRect()
+    const schemaBounds = schemaBrowserRef.current?.getBoundingClientRect()
+    if (!browserBounds?.height || !schemaBounds?.height) return
+    const startY = event.clientY
+    const startHeight = schemaBounds.height
+    document.body.classList.add('is-resizing-row')
+
+    const handleMove = (moveEvent) => {
+      const reservedHeight = 54 + 30 + 10 + sqlPanelHeight + 10 + 110 + (6 * 8)
+      const maxHeight = Math.max(110, browserBounds.height - reservedHeight)
+      const nextHeight = Math.min(maxHeight, Math.max(110, startHeight + moveEvent.clientY - startY))
+      setSchemaPanelHeight(nextHeight)
+    }
+
+    const handleUp = () => {
+      document.body.classList.remove('is-resizing-row')
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
 
   return (
     <div
       className="database-browser"
-      style={{ gridTemplateRows: `54px 30px minmax(180px, 2fr) ${sqlPanelHeight}px 10px minmax(110px, 1fr)` }}
+      ref={databaseBrowserRef}
+      style={{ gridTemplateRows: `54px 30px ${schemaPanelHeight ? `${schemaPanelHeight}px` : 'minmax(150px, 1.5fr)'} 10px ${sqlPanelHeight}px 10px minmax(110px, 1fr)` }}
     >
       {selectedDatabase && !connectionAvailable && <div className="module-disabled-banner">{resourceConnectionError(selectedDatabase)}</div>}
       <div className="database-toolbar">
@@ -16120,9 +16225,7 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
           >
             {!databases.length && <option value="">暂无数据库连接</option>}
             {databases.map((database) => (
-              <option key={database.id} value={database.id}>
-                {database.name} / {database.engine} / {database.database} · {resourceConnectionLabel(database, servers, t)}
-              </option>
+              <option key={database.id} value={database.id}>{database.name}</option>
             ))}
           </select>
         </div>
@@ -16175,19 +16278,33 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
         </div>
       </div>
       <div className={`privilege-strip ${privileges?.ok === false ? 'error' : privileges ? '' : 'empty'}`}>
-        {privilegeLoading ? (
-          <span>{t('database.checkingPrivileges', 'Checking privileges...')}</span>
-        ) : privileges?.ok === false ? (
-          <span>{privileges.message}</span>
-        ) : privileges ? (
-          <>
-          <span title={privileges.user}>{privileges.user}</span>
-          {['select', 'insert', 'update', 'delete', 'create', 'alter', 'drop'].map((name) => (
-            <em key={name} className={privilegeClass(privileges.privileges?.[name])}>{name}</em>
-          ))}
-          </>
-        ) : (
-          <span>{t('database.privilegesNotChecked', 'Privileges not checked')}</span>
+        <div className="privilege-strip-status">
+          {privilegeLoading ? (
+            <span>{t('database.checkingPrivileges', 'Checking privileges...')}</span>
+          ) : privileges?.ok === false ? (
+            <span>{privileges.message}</span>
+          ) : privileges ? (
+            <>
+            <span title={privileges.user}>{privileges.user}</span>
+            {['select', 'insert', 'update', 'delete', 'create', 'alter', 'drop'].map((name) => (
+              <em key={name} className={privilegeClass(privileges.privileges?.[name])}>{name}</em>
+            ))}
+            </>
+          ) : (
+            <span>{t('database.privilegesNotChecked', 'Privileges not checked')}</span>
+          )}
+        </div>
+        {selectedDatabase?.engine === 'dm' && schemas.length > 0 && (
+          <label className="schema-picker privilege-schema-picker" title={showingOtherSchema ? t('database.schemaCopyHint', 'Table copies include the selected schema.') : t('database.currentSchema', 'Current schema')}>
+            <span>{t('database.schema', 'Schema')}</span>
+            <select value={activeSchema} onChange={(event) => onSelectSchema(event.target.value)} disabled={loading}>
+              {schemas.map((schema) => (
+                <option key={schema} value={schema}>
+                  {schema}{schema === currentSchema ? ` · ${t('database.currentSchema', 'current')}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
       </div>
 
@@ -16200,18 +16317,6 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
           <div className="database-head">
             <strong>{t('database.tables', 'Tables')}</strong>
             <div className="column-actions table-actions">
-              {selectedDatabase?.engine === 'dm' && schemas.length > 0 && (
-                <label className="schema-picker" title={showingOtherSchema ? t('database.schemaCopyHint', 'Table copies include the selected schema.') : t('database.currentSchema', 'Current schema')}>
-                  <span>{t('database.schema', 'Schema')}</span>
-                  <select value={activeSchema} onChange={(event) => onSelectSchema(event.target.value)} disabled={loading}>
-                    {schemas.map((schema) => (
-                      <option key={schema} value={schema}>
-                        {schema}{schema === currentSchema ? ` · ${t('database.currentSchema', 'current')}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
               <span className="count-badge">{normalizedTableQuery ? `${visibleTables.length}/${tables.length}` : tables.length}</span>
               <InlineSearch
                 value={tableQuery}
@@ -16368,6 +16473,15 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
         </div>
       </div>
 
+      <div
+        className="vertical-panel-splitter schema-sql-splitter"
+        role="separator"
+        aria-orientation="horizontal"
+        title={t('database.resizeSchemaSql', 'Drag to resize tables/fields and SQL')}
+        onMouseDown={startSchemaSqlResize}
+        onDoubleClick={() => setSchemaPanelHeight(null)}
+      />
+
       <div className="sql-editor-panel">
         <div className="database-head">
           <strong>SQL</strong>
@@ -16399,7 +16513,7 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
                 <span>{ddlRollbackLimited ? '数据回滚（DDL除外）' : t('database.rollbackOnStop', 'Rollback on error/stop')}</span>
               </label>
             )}
-            <button type="button" onClick={onSelectSqlFile} disabled={sqlRunning} title={t('database.selectSqlFile', 'Select SQL or compressed SQL script')}><File size={15} />{t('database.runFile', 'Run script')}</button>
+            <button type="button" onClick={onSelectSqlFile} disabled={sqlRunning} title={t('database.selectSqlFile', 'Select SQL or compressed SQL script')}><File size={15} />{t('database.runFile', 'Select script')}</button>
             {sqlRunning && sqlExecutionTaskId ? (
               <button className="danger-button" onClick={() => onCancelSql(sqlExecutionTaskId)}><CircleStop size={15} />{t('database.stopRollback', 'Stop and rollback')}</button>
             ) : (
@@ -16431,7 +16545,50 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
       <div className="sql-result-panel">
         <div className="database-head">
           <strong>{t('database.result', 'Result')}</strong>
-          <span>{resultSummary(sqlResult)}</span>
+          <div className="sql-result-head-actions">
+            <span>{resultSummary(sqlResult)}</span>
+            {sqlResult?.query && (
+              <div className="sql-result-pagination">
+                <button
+                  type="button"
+                  title="上一页"
+                  aria-label="上一页"
+                  disabled={sqlRunning || sqlResult.loading || sqlResult.page <= 1}
+                  onClick={() => onChangeSqlResultPage(sqlResult.page - 1, sqlResult.pageSize)}
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <em>第 {sqlResult.page} 页</em>
+                <select
+                  title="每页行数"
+                  aria-label="每页行数"
+                  value={sqlResult.pageSize}
+                  disabled={sqlRunning || sqlResult.loading}
+                  onChange={(event) => onChangeSqlResultPage(1, Number(event.target.value))}
+                >
+                  {[50, 100, 200, 500].map((size) => <option key={size} value={size}>{size} 行/页</option>)}
+                </select>
+                <button
+                  type="button"
+                  title="下一页"
+                  aria-label="下一页"
+                  disabled={sqlRunning || sqlResult.loading || !sqlResult.hasMore}
+                  onClick={() => onChangeSqlResultPage(sqlResult.page + 1, sqlResult.pageSize)}
+                >
+                  <ChevronRight size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="sql-result-export"
+                  title="重新执行当前只读查询并分批导出全量结果；建议查询使用唯一键 ORDER BY"
+                  disabled={sqlRunning || sqlResult.loading}
+                  onClick={() => onExportSqlResult(sqlResult)}
+                >
+                  <Download size={14} />导出 Excel
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         <SqlResultView result={sqlResult} onCopy={onCopy} />
       </div>
@@ -21040,11 +21197,21 @@ function formatSqlResult(result) {
     ? result.message || `${result.completedStatements || result.statementCount || 0}/${result.statementCount || 0} SQL batches completed`
     : ''
   if (Array.isArray(rows)) {
+    const page = Math.max(1, Number(result.page) || 1)
+    const pageSize = Math.max(1, Number(result.pageSize) || 100)
+    const queryMessage = result.query
+      ? `第 ${page} 页 · 本页 ${rows.length} 行${result.hasMore ? ' · 还有更多' : ' · 已到末页'}`
+      : ''
     return {
       ok: true,
-      rows: rows.slice(0, 500),
+      query: Boolean(result.query),
+      rows,
+      columns: result.columns || [],
       rowCount: typeof result.rowCount === 'number' ? result.rowCount : rows.length,
-      message: scriptMessage || (rows.length ? `${rows.length} row${rows.length === 1 ? '' : 's'} returned` : 'Query OK, 0 rows returned')
+      page,
+      pageSize,
+      hasMore: Boolean(result.hasMore),
+      message: scriptMessage || queryMessage || (rows.length ? `${rows.length} row${rows.length === 1 ? '' : 's'} returned` : 'Query OK, 0 rows returned')
     }
   }
 

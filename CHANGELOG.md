@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.4 - 2026-08-11
+
+### Added
+
+- Added database-side pagination for single read-only `SELECT` and `WITH`
+  queries, with selectable page sizes and next/previous navigation that avoids
+  loading the full result set into the renderer.
+- Added full query-result export to streaming Excel workbooks. Exports re-run
+  only validated read-only queries, write rows in batches, report progress in
+  Transfers and support cancellation with partial-file cleanup.
+
+### Improved
+
+- Made the table/field browser vertically resizable so more space can be given
+  to the SQL editor and result grid, while retaining the existing horizontal
+  table/field splitter.
+- Renamed the SQL-file action to “Select script” to distinguish file selection
+  from actual execution, and expanded the built-in database help.
+- Simplified database and Redis connection selectors to display saved names
+  only, and tightened the database toolbar layout for smaller windows.
+- Added ExcelJS runtime licensing information and pinned its UUID dependency to
+  a patched release.
+
 ## 0.2.3 - 2026-08-10
 
 ### Fixed

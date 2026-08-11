@@ -4948,7 +4948,7 @@ button.workflow-cancel-button:disabled {
 .database-browser {
   position: relative;
   display: grid;
-  grid-template-rows: 54px 30px minmax(180px, 2fr) minmax(116px, 1fr) minmax(126px, 1fr);
+  grid-template-rows: 54px 30px minmax(150px, 1.5fr) 10px minmax(116px, 1fr) 10px minmax(126px, 1fr);
   gap: 8px;
   height: 100%;
   min-height: 0;
@@ -4978,9 +4978,11 @@ button.workflow-cancel-button:disabled {
 
 .database-picker {
   display: grid;
-  grid-template-columns: auto minmax(240px, 540px);
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 8px;
   align-items: center;
+  width: calc(100% - 30px);
+  max-width: 492px;
   min-width: 0;
 }
 
@@ -5271,11 +5273,33 @@ button.workflow-cancel-button:disabled {
   font-size: 12px;
 }
 
-.privilege-strip span {
+.privilege-strip-status {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.privilege-strip-status span {
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.privilege-schema-picker {
+  flex: 0 0 auto;
+  height: 26px;
+  margin-left: auto;
+  background: #ffffff;
+}
+
+.privilege-schema-picker select {
+  width: clamp(120px, 14vw, 190px);
+  max-width: 190px;
+  height: 22px;
 }
 
 .privilege-strip.empty {
@@ -5401,6 +5425,15 @@ body.is-resizing-panel {
 .vertical-panel-splitter:hover::before,
 body.is-resizing-row .vertical-panel-splitter::before {
   background: #99f6e4;
+}
+
+.schema-sql-splitter::before {
+  background: #dce3ed;
+}
+
+.schema-sql-splitter:hover::before,
+body.is-resizing-row .schema-sql-splitter::before {
+  background: #5eead4;
 }
 
 body.is-resizing-row {
@@ -5665,6 +5698,58 @@ body.is-resizing-row {
   height: 28px;
   min-width: 76px;
   padding: 0 10px;
+}
+
+.sql-result-head-actions,
+.sql-result-pagination {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sql-result-head-actions {
+  flex: 0 1 auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.sql-result-head-actions::-webkit-scrollbar {
+  display: none;
+}
+
+.sql-result-head-actions > span {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sql-result-pagination {
+  flex: 0 0 auto;
+}
+
+.sql-result-pagination em {
+  color: #475569;
+  font-size: 11px;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.sql-result-pagination select {
+  height: 27px;
+  padding: 0 5px;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #dce3ed;
+  border-radius: 7px;
+  outline: none;
+  font-size: 11px;
+}
+
+.sql-result-pagination .sql-result-export {
+  padding: 0 9px;
 }
 
 .result-table-wrap {
@@ -8990,6 +9075,12 @@ html[data-theme="dark"] :is(
   border-color: #484a4f !important;
 }
 
+html[data-theme="dark"] .privilege-schema-picker {
+  color: var(--dark-text-muted);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+}
+
 html[data-theme="dark"] :is(
   .database-backup-built-in,
   .database-backup-summary > span,
@@ -10255,4 +10346,13 @@ html[data-theme="dark"] .remote-path-history .remote-path-list article > button:
 html[data-theme="dark"] .remote-path-list > div strong,
 html[data-theme="dark"] .command-snippet-editor label span {
   color: var(--dark-text-secondary);
+}
+
+html[data-theme="dark"] .schema-sql-splitter::before {
+  background: var(--dark-border);
+}
+
+html[data-theme="dark"] .schema-sql-splitter:hover::before,
+html[data-theme="dark"] body.is-resizing-row .schema-sql-splitter::before {
+  background: #5eead4;
 }
