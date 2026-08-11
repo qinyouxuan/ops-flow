@@ -61,6 +61,13 @@ const PRODUCT_NAME = 'Ops Flow Plus'
 const PRODUCT_AUTHOR = '秦屿'
 const PRODUCT_EMAIL = '734052482@qq.com'
 const PRODUCT_SOURCE_URL = 'https://github.com/qinyouxuan/ops-flow'
+const APP_SIDEBAR_MIN_WIDTH = 220
+const APP_SIDEBAR_MAX_WIDTH = 420
+const APP_SIDEBAR_DEFAULT_WIDTH = 270
+const APP_SIDEBAR_COLLAPSED_WIDTH = 48
+const WORKSPACE_AUXILIARY_MIN_WIDTH = 360
+const WORKSPACE_AUXILIARY_MAX_WIDTH = 700
+const WORKSPACE_AUXILIARY_DEFAULT_WIDTH = 520
 
 const I18N_MESSAGES = {
   'en-US': {},
@@ -73,6 +80,16 @@ const I18N_MESSAGES = {
     'app.noServers': '暂无服务器',
     'app.addFirstSsh': '添加第一个 SSH 连接。',
     'app.toolLog': '工具日志',
+    'app.collapseSidebar': '收起服务器导航',
+    'app.expandSidebar': '展开服务器导航',
+    'app.openServerSwitcher': '选择服务器',
+    'app.serverSwitcher': '服务器列表',
+    'app.searchServers': '搜索服务器名称、地址或用户',
+    'app.noMatchingServers': '没有匹配的服务器。',
+    'workspace.collapseAuxiliary': '收起基本信息与远程文件',
+    'workspace.expandAuxiliary': '展开基本信息与远程文件',
+    'workspace.resizeAuxiliary': '拖动调整基本信息与远程文件区域宽度',
+    'workspace.auxiliaryLabel': '信息与文件',
     'language.label': '语言',
     'settings.title': '设置',
     'settings.description': '语言、主题、帮助和软件信息。',
@@ -211,7 +228,7 @@ const I18N_MESSAGES = {
     'help.support.title': '当前支持范围',
     'help.support.text': '桌面客户端支持 Windows。SSH、SFTP、命令、部署、服务、运行环境、备份恢复和主机管理目前以 Linux 远程服务器为目标；数据库和 Redis 可通过直连或 Linux SSH 转发访问。Windows Server 远程部署和服务管理尚未完整支持。',
     'help.quick.server.title': '1. 添加服务器',
-    'help.quick.server.text': '点击左侧“添加服务器”，填写地址、SSH 端口、用户名和认证信息。内网服务器可选择一台已保存的 SSH 跳板服务器。先测试连接，成功后再保存。',
+    'help.quick.server.text': '点击左侧“添加服务器”，填写地址、SSH 端口、用户名和认证信息。内网服务器可选择一台已保存的 SSH 跳板服务器。先测试连接，成功后再保存。服务器导航可通过顶部箭头收起；收起后点击服务器状态图标，可搜索并切换服务器，点击 Ops Flow 图标可恢复完整列表。',
     'help.quick.connect.title': '2. 建立连接',
     'help.quick.connect.text': '从左侧选择服务器并点击“连接”。连接成功后，基本信息、远程文件和各功能模块才会加载。',
     'help.quick.module.title': '3. 选择功能',
@@ -227,7 +244,7 @@ const I18N_MESSAGES = {
     'help.features.tunnel.title': '供外部客户端使用的 SSH 隧道',
     'help.features.tunnel.text': '点击顶部“隧道”，选择一台已保存的 SSH 服务器，设置本地端口以及由该服务器访问的目标主机和端口。“测试连接”会验证 SSH 登录、跳板链和目标端口。启动后，达梦管理工具、Oracle SQL Developer、DBeaver 等外部客户端可连接 127.0.0.1:本地端口。隧道会复用所选服务器的跳板链，但独立于命令终端运行；为防止意外暴露数据库，基础版只监听本机 127.0.0.1，退出 Ops Flow 后自动停止。',
     'help.features.files.title': '远程文件',
-    'help.features.files.text': '通过 SFTP 浏览、搜索、上传、下载、编辑、重命名、备份和删除远程文件。终端执行简单的 cd 命令后，左侧文件区会自动切换到对应目录；最近路径和收藏路径按服务器保存，可快速切换目录；权限不足时可临时启用 sudo 或 su 特权访问。',
+    'help.features.files.text': '通过 SFTP 浏览、搜索、上传、下载、编辑、重命名、备份和删除远程文件。终端执行简单的 cd 命令后，左侧文件区会自动切换到对应目录；最近路径和收藏路径按服务器保存，可快速切换目录；权限不足时可临时启用 sudo 或 su 特权访问。可使用辅助区分隔线上的箭头收起基本信息与远程文件，让右侧工作区铺满；再次点击左侧窄栏即可恢复，宽度和折叠状态会自动记忆。',
     'help.features.database.title': '数据库管理',
     'help.features.database.text': '维护数据库连接，查看表和字段，执行 SQL 或选择本地 SQL/GZIP 文件批量运行；大型脚本会流式执行。内置逻辑备份无需另装命令行客户端，可把表结构、数据、索引、外键、视图、触发器和存储程序保存到本机。',
     'help.features.redis.title': 'Redis 管理',
@@ -1944,7 +1961,14 @@ export default function App() {
   ].join('\n'))
   const [resourceHistory, setResourceHistory] = useState(() => makeInitialUsageHistory())
   const [toast, setToast] = useState(null)
-  const [appSidebarWidth, setAppSidebarWidth] = useState(270)
+  const [appSidebarWidth, setAppSidebarWidth] = useState(APP_SIDEBAR_DEFAULT_WIDTH)
+  const [appSidebarCollapsed, setAppSidebarCollapsed] = useState(false)
+  const [serverSwitcherOpen, setServerSwitcherOpen] = useState(false)
+  const [serverSwitcherQuery, setServerSwitcherQuery] = useState('')
+  const [workspaceAuxiliaryWidth, setWorkspaceAuxiliaryWidth] = useState(WORKSPACE_AUXILIARY_DEFAULT_WIDTH)
+  const [workspaceAuxiliaryCollapsed, setWorkspaceAuxiliaryCollapsed] = useState(false)
+  const serverSwitcherRef = useRef(null)
+  const desktopGridRef = useRef(null)
   const workflowLayoutRef = useRef(null)
   const terminalOutputRef = useRef(null)
   const terminalTextRef = useRef(terminalOutput)
@@ -1996,6 +2020,25 @@ export default function App() {
     })
     window.opsFlow.getStore('theme').then((savedTheme) => {
       if (THEME_OPTIONS.includes(savedTheme)) setThemeMode(savedTheme)
+    })
+    window.opsFlow.getStore('appSidebarLayout').then((savedLayout) => {
+      if (!savedLayout || typeof savedLayout !== 'object' || Array.isArray(savedLayout)) return
+      const savedWidth = Number(savedLayout.width)
+      if (Number.isFinite(savedWidth)) {
+        setAppSidebarWidth(Math.min(APP_SIDEBAR_MAX_WIDTH, Math.max(APP_SIDEBAR_MIN_WIDTH, savedWidth)))
+      }
+      setAppSidebarCollapsed(savedLayout.collapsed === true)
+    })
+    window.opsFlow.getStore('workspaceAuxiliaryLayout').then((savedLayout) => {
+      if (!savedLayout || typeof savedLayout !== 'object' || Array.isArray(savedLayout)) return
+      const savedWidth = Number(savedLayout.width)
+      if (Number.isFinite(savedWidth)) {
+        setWorkspaceAuxiliaryWidth(Math.min(
+          WORKSPACE_AUXILIARY_MAX_WIDTH,
+          Math.max(WORKSPACE_AUXILIARY_MIN_WIDTH, savedWidth)
+        ))
+      }
+      setWorkspaceAuxiliaryCollapsed(savedLayout.collapsed === true)
     })
     window.opsFlow.getStore('backupRecoveryProfiles').then((savedProfiles) => {
       if (savedProfiles && typeof savedProfiles === 'object' && !Array.isArray(savedProfiles)) {
@@ -2061,6 +2104,22 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (!serverSwitcherOpen) return undefined
+    const closeOnOutsideClick = (event) => {
+      if (!serverSwitcherRef.current?.contains(event.target)) setServerSwitcherOpen(false)
+    }
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setServerSwitcherOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [serverSwitcherOpen])
+
+  useEffect(() => {
     const previous = previousSshTunnelStatusesRef.current
     for (const [id, status] of Object.entries(sshTunnelStatuses)) {
       if (previous[id]?.status === 'running' && status?.status === 'error') {
@@ -2101,6 +2160,12 @@ export default function App() {
     () => servers.find((server) => server.id === selectedServerId) || emptyServer,
     [servers, selectedServerId]
   )
+  const filteredServerSwitcherServers = useMemo(() => {
+    const query = serverSwitcherQuery.trim().toLocaleLowerCase()
+    if (!query) return servers
+    return servers.filter((server) => [server.name, server.host, server.username, server.environment]
+      .some((value) => String(value || '').toLocaleLowerCase().includes(query)))
+  }, [servers, serverSwitcherQuery])
   const selectedRemotePathHistory = remotePathHistory[selectedServer.id] || { recent: [], favorites: [] }
   const visibleCommandSnippets = useMemo(
     () => commandSnippets.filter((snippet) => snippet.scope === 'all' || snippet.scope === selectedServer.id),
@@ -8309,20 +8374,104 @@ export default function App() {
 
   function startAppSidebarResize(event) {
     event.preventDefault()
+    if (appSidebarCollapsed) return
     const startX = event.clientX
     const startWidth = appSidebarWidth
+    let resizedWidth = startWidth
     document.body.classList.add('is-resizing-panel')
 
     const handleMove = (moveEvent) => {
-      const maxWidth = Math.min(420, Math.max(260, window.innerWidth * 0.36))
-      const nextWidth = Math.min(maxWidth, Math.max(220, startWidth + moveEvent.clientX - startX))
-      setAppSidebarWidth(nextWidth)
+      const maxWidth = Math.min(APP_SIDEBAR_MAX_WIDTH, Math.max(260, window.innerWidth * 0.36))
+      resizedWidth = Math.min(maxWidth, Math.max(
+        APP_SIDEBAR_MIN_WIDTH,
+        startWidth + moveEvent.clientX - startX
+      ))
+      setAppSidebarWidth(resizedWidth)
     }
 
     const handleUp = () => {
       document.body.classList.remove('is-resizing-panel')
       window.removeEventListener('mousemove', handleMove)
       window.removeEventListener('mouseup', handleUp)
+      window.opsFlow.setStore('appSidebarLayout', {
+        width: resizedWidth,
+        collapsed: false
+      })
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
+
+  function toggleAppSidebar() {
+    setServerSwitcherOpen(false)
+    setServerSwitcherQuery('')
+    setAppSidebarCollapsed((current) => {
+      const collapsed = !current
+      window.opsFlow.setStore('appSidebarLayout', {
+        width: appSidebarWidth,
+        collapsed
+      })
+      return collapsed
+    })
+  }
+
+  function openServerSwitcher() {
+    setServerSwitcherQuery('')
+    setServerSwitcherOpen((current) => !current)
+  }
+
+  function selectServerFromSwitcher(server) {
+    selectServer(server)
+    setServerSwitcherOpen(false)
+    setServerSwitcherQuery('')
+  }
+
+  function addServerFromCollapsedSidebar() {
+    setServerSwitcherOpen(false)
+    setServerSwitcherQuery('')
+    openAddServer()
+  }
+
+  function toggleWorkspaceAuxiliaryPanel() {
+    setWorkspaceAuxiliaryCollapsed((current) => {
+      const collapsed = !current
+      window.opsFlow.setStore('workspaceAuxiliaryLayout', {
+        width: workspaceAuxiliaryWidth,
+        collapsed
+      })
+      return collapsed
+    })
+  }
+
+  function startWorkspaceAuxiliaryResize(event) {
+    event.preventDefault()
+    if (workspaceAuxiliaryCollapsed) return
+    const bounds = desktopGridRef.current?.getBoundingClientRect()
+    if (!bounds?.width) return
+    const startX = event.clientX
+    const startWidth = workspaceAuxiliaryWidth
+    let resizedWidth = startWidth
+    document.body.classList.add('is-resizing-panel')
+
+    const handleMove = (moveEvent) => {
+      const availableMaximum = Math.max(WORKSPACE_AUXILIARY_MIN_WIDTH, bounds.width - 634)
+      const maximum = Math.min(WORKSPACE_AUXILIARY_MAX_WIDTH, availableMaximum)
+      resizedWidth = Math.min(maximum, Math.max(
+        WORKSPACE_AUXILIARY_MIN_WIDTH,
+        startWidth + moveEvent.clientX - startX
+      ))
+      setWorkspaceAuxiliaryWidth(resizedWidth)
+    }
+
+    const handleUp = () => {
+      document.body.classList.remove('is-resizing-panel')
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+      window.opsFlow.setStore('workspaceAuxiliaryLayout', {
+        width: resizedWidth,
+        collapsed: false
+      })
     }
 
     window.addEventListener('mousemove', handleMove)
@@ -8353,56 +8502,179 @@ export default function App() {
   return (
     <I18nContext.Provider value={{ language, t, themeMode, resolvedTheme }}>
     <div
-      className="app-shell"
-      style={{ gridTemplateColumns: `${appSidebarWidth}px 10px minmax(0, 1fr)` }}
+      className={`app-shell ${appSidebarCollapsed ? 'server-sidebar-collapsed' : ''}`}
+      style={{
+        gridTemplateColumns: appSidebarCollapsed
+          ? `${APP_SIDEBAR_COLLAPSED_WIDTH}px 8px minmax(0, 1fr)`
+          : `${appSidebarWidth}px 10px minmax(0, 1fr)`
+      }}
     >
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark"><Boxes size={22} /></div>
-          <div>
-            <strong>Ops Flow</strong>
-            <span>{t('app.serverOperations', 'Server operations')}</span>
-          </div>
-        </div>
-
-        <button className="primary-button" onClick={openAddServer}>
-          <Plus size={16} />
-          {t('app.addServer', 'Add server')}
-        </button>
-
-        <div className="server-list">
-          {servers.length ? (
-            servers.map((server) => (
-              <button
-                key={server.id}
-                className={`server-item server-${server.status || 'disconnected'} ${server.id === selectedServerId ? 'active' : ''}`}
-                onClick={() => selectServer(server)}
-              >
-                <Server size={18} />
-                <span>
-                  <strong title={server.name}>{server.name}</strong>
-                  <small title={`${server.host}:${server.port}`}>{server.host}:{server.port}</small>
-                </span>
-              </button>
-            ))
-          ) : (
-            <div className="server-empty">
-              <strong>{t('app.noServers', 'No servers')}</strong>
-              <span>{t('app.addFirstSsh', 'Add your first SSH connection.')}</span>
+      <aside className={`sidebar ${appSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+        <div className="sidebar-expanded-content" aria-hidden={appSidebarCollapsed}>
+          <div className="brand">
+            <div className="brand-mark"><Boxes size={22} /></div>
+            <div>
+              <strong>Ops Flow</strong>
+              <span>{t('app.serverOperations', 'Server operations')}</span>
             </div>
-          )}
+            <button
+              type="button"
+              className="sidebar-collapse-button"
+              title={t('app.collapseSidebar', 'Collapse server navigation')}
+              aria-label={t('app.collapseSidebar', 'Collapse server navigation')}
+              aria-expanded="true"
+              onClick={toggleAppSidebar}
+            >
+              <ChevronLeft size={16} />
+            </button>
+          </div>
+
+          <button className="primary-button" onClick={openAddServer}>
+            <Plus size={16} />
+            {t('app.addServer', 'Add server')}
+          </button>
+
+          <div className="server-list">
+            {servers.length ? (
+              servers.map((server) => (
+                <button
+                  key={server.id}
+                  className={`server-item server-${server.status || 'disconnected'} ${server.id === selectedServerId ? 'active' : ''}`}
+                  onClick={() => selectServer(server)}
+                >
+                  <Server size={18} />
+                  <span>
+                    <strong title={server.name}>{server.name}</strong>
+                    <small title={`${server.host}:${server.port}`}>{server.host}:{server.port}</small>
+                  </span>
+                </button>
+              ))
+            ) : (
+              <div className="server-empty">
+                <strong>{t('app.noServers', 'No servers')}</strong>
+                <span>{t('app.addFirstSsh', 'Add your first SSH connection.')}</span>
+              </div>
+            )}
+          </div>
+
+          <section className="side-log">
+            <div>{t('app.toolLog', 'Tool log')}</div>
+            <pre>{logs.slice(-6).join('\n')}</pre>
+          </section>
         </div>
 
-        <section className="side-log">
-          <div>{t('app.toolLog', 'Tool log')}</div>
-          <pre>{logs.slice(-6).join('\n')}</pre>
-        </section>
+        <div className="sidebar-collapsed-content" aria-hidden={!appSidebarCollapsed}>
+          <button
+            type="button"
+            className="collapsed-sidebar-brand"
+            title={t('app.expandSidebar', 'Expand server navigation')}
+            aria-label={t('app.expandSidebar', 'Expand server navigation')}
+            aria-expanded="false"
+            onClick={toggleAppSidebar}
+          >
+            <Boxes size={20} />
+            <ChevronRight size={11} />
+          </button>
+
+          <div className="server-switcher-control" ref={serverSwitcherRef}>
+            <button
+              type="button"
+              className={`collapsed-current-server server-${selectedServer.status || 'disconnected'} ${serverSwitcherOpen ? 'selected' : ''}`}
+              title={selectedServer.id
+                ? `${t('app.openServerSwitcher', 'Choose server')}: ${selectedServer.name}`
+                : t('app.openServerSwitcher', 'Choose server')}
+              aria-label={t('app.openServerSwitcher', 'Choose server')}
+              aria-expanded={serverSwitcherOpen}
+              onClick={openServerSwitcher}
+            >
+              <Server size={19} />
+              <span className="collapsed-server-status" />
+            </button>
+
+            {serverSwitcherOpen && (
+              <section className="server-switcher-popover">
+                <div className="server-switcher-title">
+                  <div>
+                    <strong>{t('app.serverSwitcher', 'Servers')}</strong>
+                    <span>{servers.length}</span>
+                  </div>
+                  <button
+                    type="button"
+                    title={t('common.close', 'Close')}
+                    aria-label={t('common.close', 'Close')}
+                    onClick={() => setServerSwitcherOpen(false)}
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+                <label className="server-switcher-search">
+                  <Search size={15} />
+                  <input
+                    autoFocus
+                    value={serverSwitcherQuery}
+                    placeholder={t('app.searchServers', 'Search name, address or user')}
+                    onChange={(event) => setServerSwitcherQuery(event.target.value)}
+                  />
+                  {serverSwitcherQuery && (
+                    <button
+                      type="button"
+                      title={t('common.clearSearch', 'Clear search')}
+                      aria-label={t('common.clearSearch', 'Clear search')}
+                      onClick={() => setServerSwitcherQuery('')}
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </label>
+                <div className="server-switcher-list">
+                  {filteredServerSwitcherServers.length ? (
+                    filteredServerSwitcherServers.map((server) => (
+                      <button
+                        type="button"
+                        key={server.id}
+                        className={`server-switcher-item ${server.id === selectedServerId ? 'selected' : ''}`}
+                        onClick={() => selectServerFromSwitcher(server)}
+                      >
+                        <span className={`server-switcher-icon server-${server.status || 'disconnected'}`}>
+                          <Server size={17} />
+                        </span>
+                        <span>
+                          <strong>{server.name}</strong>
+                          <small>{server.username}@{server.host}:{server.port}</small>
+                        </span>
+                        <em className={`server-switcher-state server-${server.status || 'disconnected'}`}>
+                          {t(`status.${server.status || 'disconnected'}`, server.status || 'disconnected')}
+                        </em>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="server-switcher-empty">{t('app.noMatchingServers', 'No matching servers.')}</div>
+                  )}
+                </div>
+                <button type="button" className="server-switcher-add" onClick={addServerFromCollapsedSidebar}>
+                  <Plus size={15} />
+                  {t('app.addServer', 'Add server')}
+                </button>
+              </section>
+            )}
+          </div>
+
+          <button
+            type="button"
+            className="collapsed-add-server"
+            title={t('app.addServer', 'Add server')}
+            aria-label={t('app.addServer', 'Add server')}
+            onClick={addServerFromCollapsedSidebar}
+          >
+            <Plus size={19} />
+          </button>
+        </div>
       </aside>
       <div
-        className="app-shell-splitter"
+        className={`app-shell-splitter ${appSidebarCollapsed ? 'disabled' : ''}`}
         role="separator"
         aria-orientation="vertical"
-        title="Drag to resize sidebar"
+        title={appSidebarCollapsed ? undefined : 'Drag to resize sidebar'}
         onMouseDown={startAppSidebarResize}
       />
 
@@ -8465,8 +8737,16 @@ export default function App() {
           <Metric icon={<ShieldCheck />} label={t('metric.status', 'Status')} value={t(`status.${selectedServer.status}`, selectedServer.status)} tone={selectedServer.status} />
         </section>
 
-        <section className="desktop-grid">
-          <div className="left-stack">
+        <section
+          ref={desktopGridRef}
+          className={`desktop-grid ${workspaceAuxiliaryCollapsed ? 'auxiliary-collapsed' : ''}`}
+          style={{
+            gridTemplateColumns: workspaceAuxiliaryCollapsed
+              ? '32px minmax(0, 1fr)'
+              : `${workspaceAuxiliaryWidth}px 14px minmax(0, 1fr)`
+          }}
+        >
+          <div className="left-stack" aria-hidden={workspaceAuxiliaryCollapsed}>
             <Panel title={t('panel.basicInfo', 'Basic info')} icon={<Server size={17} />}>
               <InfoGrid server={selectedServer} history={resourceHistory} onCopy={(value) => copyText(value, showToast)} />
             </Panel>
@@ -8515,6 +8795,44 @@ export default function App() {
               onExitPrivilege={disableRemotePrivilegeAccess}
             />
           </div>
+
+          {workspaceAuxiliaryCollapsed ? (
+            <aside className="workspace-auxiliary-rail">
+              <button
+                type="button"
+                title={t('workspace.expandAuxiliary', 'Expand basic information and remote files')}
+                aria-label={t('workspace.expandAuxiliary', 'Expand basic information and remote files')}
+                aria-expanded="false"
+                onClick={toggleWorkspaceAuxiliaryPanel}
+              >
+                <ChevronRight size={16} />
+                <span>{t('workspace.auxiliaryLabel', 'Info & files')}</span>
+              </button>
+            </aside>
+          ) : (
+            <div
+              className="workspace-auxiliary-splitter"
+              role="separator"
+              aria-orientation="vertical"
+              aria-valuemin={WORKSPACE_AUXILIARY_MIN_WIDTH}
+              aria-valuemax={WORKSPACE_AUXILIARY_MAX_WIDTH}
+              aria-valuenow={Math.round(workspaceAuxiliaryWidth)}
+              title={t('workspace.resizeAuxiliary', 'Drag to resize basic information and remote files')}
+              onMouseDown={startWorkspaceAuxiliaryResize}
+            >
+              <button
+                type="button"
+                className="workspace-auxiliary-toggle"
+                title={t('workspace.collapseAuxiliary', 'Collapse basic information and remote files')}
+                aria-label={t('workspace.collapseAuxiliary', 'Collapse basic information and remote files')}
+                aria-expanded="true"
+                onMouseDown={(buttonEvent) => buttonEvent.stopPropagation()}
+                onClick={toggleWorkspaceAuxiliaryPanel}
+              >
+                <ChevronLeft size={16} />
+              </button>
+            </div>
+          )}
 
           <div className="right-stack">
             <section className="ops-panel">
@@ -9940,7 +10258,7 @@ function SettingsDialog({ language, themeMode, section, onLanguageChange, onThem
                   <span>{t('help.support.text', 'The desktop client supports Windows. SSH, SFTP, commands, deployment, services, runtimes, backup/recovery and host management currently target remote Linux servers. Databases and Redis can be reached directly or through a Linux SSH connection. Full Windows Server deployment and service management are not yet supported.')}</span>
                 </div>
                 <div className="help-step-list">
-                  <HelpTextBlock title={t('help.quick.server.title', '1. Add a server')} text={t('help.quick.server.text', 'Click Add server in the left sidebar, enter the address, SSH port, username and authentication details. For a private server, select a saved SSH jump server. Test the connection before saving.')} />
+                  <HelpTextBlock title={t('help.quick.server.title', '1. Add a server')} text={t('help.quick.server.text', 'Click Add server in the left sidebar, enter the address, SSH port, username and authentication details. For a private server, select a saved SSH jump server. Test the connection before saving. Collapse server navigation with the top arrow; in the narrow rail, click the server-status button to search and switch servers, or click the Ops Flow icon to restore the full list.')} />
                   <HelpTextBlock title={t('help.quick.connect.title', '2. Connect')} text={t('help.quick.connect.text', 'Select a server on the left and click Connect. Basic information, remote files and all feature modules load after the connection succeeds.')} />
                   <HelpTextBlock title={t('help.quick.module.title', '3. Choose a feature')} text={t('help.quick.module.text', 'Use Command for ad hoc tasks; Database and Redis for data maintenance; Workflow for repeatable tasks; Audit for checks; and Deployer or Host Management for system-level work.')} />
                   <HelpTextBlock title={t('help.quick.verify.title', '4. Verify the result')} text={t('help.quick.verify.text', 'Review page results, tool logs and server output. For deletion, restart, deployment or firewall changes, verify the target server and parameters again.')} />
@@ -9955,7 +10273,7 @@ function SettingsDialog({ language, themeMode, section, onLanguageChange, onThem
                   <HelpTextBlock title={t('help.features.terminal.title', 'Command terminal')} text={t('help.features.terminal.text', 'Use the interactive SSH terminal for troubleshooting, one-off commands and live output. The terminal follows the selected server and prompts you to reconnect after disconnection.')} />
                   <HelpTextBlock title={t('help.features.jump.title', 'SSH jump server for private hosts')} text={t('help.features.jump.text', 'First save and test a public SSH server using Direct connection. Add the private server with an address reachable from that server, select the saved server as its SSH jump server, and enter the private server own SSH credentials. Terminal, SFTP, workflows, deployment and host management automatically reuse the route Ops Flow → public jump server → private server. The jump server must allow TCP forwarding and be able to reach the target SSH port.')} />
                   <HelpTextBlock title={t('help.features.tunnel.title', 'SSH tunnels for external clients')} text={t('help.features.tunnel.text', 'Open Tunnels from the top toolbar, select a saved SSH server, and configure a local port plus a destination host and port reachable from that server. Test connection verifies SSH login, the jump chain and the destination port. Start the tunnel, then connect Dameng tools, Oracle SQL Developer, DBeaver or another external client to 127.0.0.1:local-port. The tunnel runs independently from the command terminal, and listeners are restricted to 127.0.0.1 until Ops Flow exits.')} />
-                  <HelpTextBlock title={t('help.features.files.title', 'Remote files')} text={t('help.features.files.text', 'Browse SFTP directories, go to the parent folder, refresh, upload, download, edit, rename or delete files. After a simple cd command runs in the terminal, the file browser automatically opens the corresponding directory. Sort by file name or filter names in real time; clearing the search restores the full list.')} />
+                  <HelpTextBlock title={t('help.features.files.title', 'Remote files')} text={t('help.features.files.text', 'Browse SFTP directories, go to the parent folder, refresh, upload, download, edit, rename or delete files. After a simple cd command runs in the terminal, the file browser automatically opens the corresponding directory. Use the arrow on the auxiliary-area divider to collapse basic information and remote files so the main workspace can expand; click the narrow rail to restore it. The app remembers the saved width and collapsed state.')} />
                   <HelpTextBlock title={t('help.features.database.title', 'Database management')} text={t('help.features.database.text', 'Manage database connections, inspect tables, fields and data, run SQL, and export query results. Independent table and field searches make large schemas easier to navigate.')} />
                   <HelpTextBlock title={t('help.features.redis.title', 'Redis management')} text={t('help.features.redis.text', 'Manage Redis connections, load and inspect keys, and delete confirmed keys. Search and refresh help investigate cache, queue and temporary state data.')} />
                   <HelpTextBlock title={t('help.features.workflow.title', 'Workflow')} text={t('help.features.workflow.text', 'Combine command, file, database, Redis and scheduled-task steps into reusable flows for inspections, release checks and repeated maintenance, with a result for every step.')} />

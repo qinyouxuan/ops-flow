@@ -4,6 +4,12 @@
 
 ### Added
 
+- Added a collapsible, resizable auxiliary workspace for basic server information
+  and remote files. The main module expands into the released space, while the
+  saved width and collapsed state persist across app restarts.
+- Added a collapsible server navigation rail with a searchable server switcher,
+  connection-status indicators and quick server creation. The expanded width
+  and collapsed state are saved independently from the auxiliary workspace.
 - Added automatic column-comment metadata adapters for MySQL/MariaDB,
   PostgreSQL, SQL Server, Oracle and Dameng. Every connection reuses its engine
   adapter and returns the same normalized column shape without user setup.
