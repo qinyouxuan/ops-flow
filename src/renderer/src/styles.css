@@ -5527,7 +5527,7 @@ body.is-resizing-row {
 
 .columns-table {
   width: 100%;
-  min-width: 540px;
+  min-width: 680px;
   border-collapse: collapse;
   table-layout: fixed;
   font-size: 13px;
@@ -5565,11 +5565,15 @@ body.is-resizing-row {
 }
 
 .columns-table .field-name-col {
-  width: 34%;
+  width: 26%;
 }
 
 .columns-table .field-type-col {
-  width: auto;
+  width: 20%;
+}
+
+.columns-table .field-comment-col {
+  width: 30%;
 }
 
 .columns-table .field-null-col {
@@ -5577,7 +5581,7 @@ body.is-resizing-row {
 }
 
 .columns-table .field-default-col {
-  width: 76px;
+  width: 92px;
 }
 
 .db-empty-row {

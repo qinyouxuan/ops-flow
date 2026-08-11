@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added automatic column-comment metadata adapters for MySQL/MariaDB,
+  PostgreSQL, SQL Server, Oracle and Dameng. Every connection reuses its engine
+  adapter and returns the same normalized column shape without user setup.
+- Added column comments to the add/edit field dialog, including automatic
+  engine-specific comment writes and comment removal when an edited value is cleared.
+
 ## 0.2.4 - 2026-08-11
 
 ### Added

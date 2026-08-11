@@ -27,6 +27,7 @@ import {
   sanitizeConfigObject,
   summarizeConfig
 } from './configCrypto.mjs'
+import { inspectDatabaseColumnMetadata, setDatabaseColumnComment } from './database/columnMetadataAdapters.mjs'
 
 const shellSessions = new Map()
 let dmdbDriverPromise = null
@@ -1399,65 +1400,28 @@ ipcMain.handle('db:inspect', async (_event, config) => {
 
 ipcMain.handle('db:columns', async (_event, config, table) => {
   return withDatabase(config, async (connection) => {
-    if (config.engine === 'postgres') {
-      const result = await connection.query(
-        `
-          select column_name, data_type, is_nullable, column_default
-          from information_schema.columns
-          where table_schema = $1 and table_name = $2
-          order by ordinal_position
-        `,
-        [table.schema, table.name]
-      )
-      return { ok: true, columns: result.rows }
-    }
+    const columns = await inspectDatabaseColumnMetadata({
+      connection,
+      config,
+      table,
+      mssql,
+      executeOracleLike
+    })
+    return { ok: true, columns }
+  })
+})
 
-    if (config.engine === 'sqlserver') {
-      const request = connection.request()
-      request.input('schema', mssql.NVarChar, table.schema)
-      request.input('name', mssql.NVarChar, table.name)
-      const result = await request.query(`
-        select
-          COLUMN_NAME as column_name,
-          DATA_TYPE as data_type,
-          IS_NULLABLE as is_nullable,
-          COLUMN_DEFAULT as column_default
-        from INFORMATION_SCHEMA.COLUMNS
-        where TABLE_SCHEMA = @schema and TABLE_NAME = @name
-        order by ORDINAL_POSITION
-      `)
-      return { ok: true, columns: result.recordset }
-    }
-
-    if (isOracleLikeEngine(config.engine)) {
-      const result = await executeOracleLike(
-        connection,
-        config.engine,
-        `
-          select
-            COLUMN_NAME as column_name,
-            DATA_TYPE as data_type,
-            NULLABLE as is_nullable,
-            DATA_DEFAULT as column_default
-          from ALL_TAB_COLUMNS
-          where OWNER = :schema and TABLE_NAME = :name
-          order by COLUMN_ID
-        `,
-        { schema: table.schema, name: table.name }
-      )
-      return { ok: true, columns: result.rows }
-    }
-
-    const [rows] = await connection.query(
-      `
-        select column_name, column_type as data_type, is_nullable, column_default
-        from information_schema.columns
-        where table_schema = ? and table_name = ?
-        order by ordinal_position
-      `,
-      [table.schema, table.name]
-    )
-    return { ok: true, columns: rows }
+ipcMain.handle('db:set-column-comment', async (_event, config, table, column) => {
+  return withDatabase(config, async (connection) => {
+    await setDatabaseColumnComment({
+      connection,
+      config,
+      table,
+      column,
+      mssql,
+      executeOracleLike
+    })
+    return { ok: true }
   })
 })
 

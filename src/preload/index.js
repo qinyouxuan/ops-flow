@@ -122,6 +122,7 @@ contextBridge.exposeInMainWorld('opsFlow', {
   createDatabase: (config, request) => ipcRenderer.invoke('db:create-database', config, request),
   inspectDatabase: (config) => ipcRenderer.invoke('db:inspect', config),
   inspectDatabaseColumns: (config, table) => ipcRenderer.invoke('db:columns', config, table),
+  setDatabaseColumnComment: (config, table, column) => ipcRenderer.invoke('db:set-column-comment', config, table, column),
   inspectDatabasePrivileges: (config) => ipcRenderer.invoke('db:privileges', config),
   execDatabase: (config, sql, options) => ipcRenderer.invoke('db:exec', config, sql, options),
   execDatabaseScript: (config, sql, options) => ipcRenderer.invoke('db:exec-script', config, sql, options),

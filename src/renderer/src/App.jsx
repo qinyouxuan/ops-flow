@@ -301,7 +301,7 @@ const I18N_MESSAGES = {
     'help.data.title': '数据库、SQL 文件与统一状态',
     'help.data.intro': '数据库和传输类任务会把进度、成功、失败和取消状态集中到顶部“传输”。重要数据操作前仍应使用数据库自身的备份和恢复机制。',
     'help.data.database.title': '数据库对象与 SQL 编辑器',
-    'help.data.database.text': '数据库和 Redis 连接是独立的全局资源，不随左侧当前服务器切换。直接连接不要求 SSH，127.0.0.1 表示运行 Ops Flow 的 Windows 电脑，也可填写其他可访问的数据库或 Redis 地址；SSH 模式需固定选择一台已保存服务器作为跳板，但不必先连接命令终端。MySQL SSH 模式还可选择 Unix Socket。达梦连接需要先在“设置 → 常规”选择用户自行取得的官方 dmdb 外部驱动；旧服务端若只能协商旧算法，可显式开启隔离运行的兼容模式。达梦表浏览默认只显示当前登录用户模式，可在数据表标题栏切换其他可访问模式；切换后表名显示和复制会自动包含模式名，程序生成的 SQL 也会使用完整限定表名。驱动、兼容开关和运行时路径不会进入配置备份。已保存连接可复制复用，表名和字段名支持模糊筛选，SQL 可直接运行或从本地文件加载后检查再执行。',
+    'help.data.database.text': '数据库和 Redis 连接是独立的全局资源，不随左侧当前服务器切换。直接连接不要求 SSH，127.0.0.1 表示运行 Ops Flow 的 Windows 电脑，也可填写其他可访问的数据库或 Redis 地址；SSH 模式需固定选择一台已保存服务器作为跳板，但不必先连接命令终端。MySQL SSH 模式还可选择 Unix Socket。字段列表会根据连接的数据库引擎自动选择内置元数据适配器并读取字段注释，新增连接不需要配置注释查询；新增或编辑字段时也可维护注释，程序会自动使用对应数据库的写入方式。达梦连接需要先在“设置 → 常规”选择用户自行取得的官方 dmdb 外部驱动；旧服务端若只能协商旧算法，可显式开启隔离运行的兼容模式。达梦表浏览默认只显示当前登录用户模式，可在数据表标题栏切换其他可访问模式；切换后表名显示和复制会自动包含模式名，程序生成的 SQL 也会使用完整限定表名。驱动、兼容开关和运行时路径不会进入配置备份。已保存连接可复制复用，表名和字段名支持模糊筛选，SQL 可直接运行或从本地文件加载后检查再执行。',
     'help.data.queryExport.title': '查询分页与全量 Excel 导出',
     'help.data.queryExport.text': '单条 SELECT 或 WITH 只读查询由数据库按页返回，默认每页 100 行，可切换为 50、100、200 或 500 行，因此界面不会先加载全部结果。结果区域的“导出 Excel”会重新执行同一条只读查询，按批次读取全量数据并直接写入 .xlsx；导出行数、完成、失败和取消状态统一显示在顶部“传输”。为避免重复修改数据，更新、删除、建表等非只读语句不能使用结果导出。分页和分批导出建议使用唯一键 ORDER BY 保证稳定顺序；导出期间仍在变化的数据以各批次读取时的状态为准。Excel 单工作表最多导出 1,048,575 行数据（另有一行表头）。',
     'help.data.sqlFile.title': '2. 导入 SQL 或 GZIP 备份',
@@ -844,6 +844,7 @@ const I18N_MESSAGES = {
     'database.deleteField': '删除字段',
     'database.header.name': '名称',
     'database.header.type': '类型',
+    'database.header.comment': '注释',
     'database.header.nullable': '可空',
     'database.header.default': '默认值',
     'database.doubleClickTable': '双击数据表查看字段。',
@@ -880,14 +881,15 @@ const I18N_MESSAGES = {
     'database.table.createTable': '创建表',
     'database.column.editTitle': '编辑字段',
     'database.column.addTitle': '添加字段',
-    'database.column.editDescription': '更新字段名称、类型、是否可空和默认值。',
-    'database.column.addDescription': '在当前数据表上创建新字段。',
+    'database.column.editDescription': '更新字段名称、类型、是否可空、默认值和注释。',
+    'database.column.addDescription': '在当前数据表上创建新字段并可设置注释。',
     'database.column.currentName': '当前名称',
     'database.column.newName': '新名称',
     'database.column.name': '名称',
     'database.column.type': '类型',
     'database.column.nullable': '可空',
     'database.column.default': '默认值',
+    'database.column.comment': '注释',
     'database.column.yes': '是',
     'database.column.no': '否',
     'redis.dialog.editTitle': '编辑 Redis',
@@ -1591,7 +1593,8 @@ const emptyColumnForm = {
   newName: '',
   type: 'varchar(255)',
   nullable: true,
-  defaultValue: ''
+  defaultValue: '',
+  comment: ''
 }
 
 const emptyTableForm = {
@@ -7427,7 +7430,8 @@ export default function App() {
       newName: selectedDbColumn.name,
       type: selectedDbColumn.type || emptyColumnForm.type,
       nullable: !/^no$/i.test(selectedDbColumn.nullable || ''),
-      defaultValue: selectedDbColumn.defaultValue === '-' ? '' : selectedDbColumn.defaultValue || ''
+      defaultValue: selectedDbColumn.defaultValue === '-' ? '' : selectedDbColumn.defaultValue || '',
+      comment: selectedDbColumn.comment === '-' ? '' : selectedDbColumn.comment || ''
     })
     setColumnDialog({ mode: 'edit', column: selectedDbColumn })
   }
@@ -7450,6 +7454,34 @@ export default function App() {
         showToast('error', message)
         setSqlResult({ ok: false, message })
         return
+      }
+
+      const finalColumnName = columnDialog.mode === 'edit'
+        ? columnForm.newName.trim()
+        : columnForm.name.trim()
+      const shouldSaveComment = columnDialog.mode === 'edit' || Boolean(columnForm.comment.trim())
+      if (shouldSaveComment) {
+        const commentResult = await window.opsFlow.setDatabaseColumnComment(
+          withDatabaseRuntime(selectedDatabase, servers),
+          selectedDbTable,
+          {
+            name: finalColumnName,
+            type: columnForm.type.trim(),
+            nullable: Boolean(columnForm.nullable),
+            defaultValue: columnForm.defaultValue?.trim() || '',
+            comment: columnForm.comment
+          }
+        )
+        if (!commentResult.ok) {
+          const message = `字段结构已更新，但注释保存失败：${formatDatabaseOperationError(commentResult.message)}`
+          appendLog(message)
+          showToast('error', message)
+          setSqlResult({ ok: false, message })
+          setColumnDialog(null)
+          setColumnForm(emptyColumnForm)
+          await loadTableColumns(selectedDbTable, selectedDatabase)
+          return
+        }
       }
       showToast('success', 'Column updated.')
       setColumnDialog(null)
@@ -15914,6 +15946,9 @@ function ColumnDialog({ mode, form, notice = null, onChange, onClose, onSave }) 
               <Field label={t('database.column.default', 'Default')}>
                 <input value={form.defaultValue} onChange={(event) => onChange('defaultValue', event.target.value)} placeholder="optional SQL expression" />
               </Field>
+              <Field label={t('database.column.comment', 'Comment')}>
+                <input value={form.comment} onChange={(event) => onChange('comment', event.target.value)} placeholder="optional column comment" />
+              </Field>
             </>
           ) : (
             <>
@@ -15931,6 +15966,9 @@ function ColumnDialog({ mode, form, notice = null, onChange, onClose, onSave }) 
               </Field>
               <Field label={t('database.column.default', 'Default')}>
                 <input value={form.defaultValue} onChange={(event) => onChange('defaultValue', event.target.value)} placeholder="optional SQL expression" />
+              </Field>
+              <Field label={t('database.column.comment', 'Comment')}>
+                <input value={form.comment} onChange={(event) => onChange('comment', event.target.value)} placeholder="optional column comment" />
               </Field>
             </>
           )}
@@ -16083,7 +16121,7 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
   ), [tables, normalizedTableQuery])
   const visibleColumns = useMemo(() => (
     normalizedColumnQuery
-      ? columns.filter((column) => String(column.name || '').toLocaleLowerCase().includes(normalizedColumnQuery))
+      ? columns.filter((column) => `${column.name || ''} ${column.comment || ''}`.toLocaleLowerCase().includes(normalizedColumnQuery))
       : columns
   ), [columns, normalizedColumnQuery])
 
@@ -16426,6 +16464,7 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
               <colgroup>
                 <col className="field-name-col" />
                 <col className="field-type-col" />
+                <col className="field-comment-col" />
                 <col className="field-null-col" />
                 <col className="field-default-col" />
               </colgroup>
@@ -16433,6 +16472,7 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
                 <tr>
                   <th>{t('database.header.name', 'Name')}</th>
                   <th>{t('database.header.type', 'Type')}</th>
+                  <th>{t('database.header.comment', 'Comment')}</th>
                   <th>{t('database.header.nullable', 'Nullable')}</th>
                   <th>{t('database.header.default', 'Default')}</th>
                 </tr>
@@ -16454,13 +16494,14 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
                         {column.name}
                       </td>
                       <td title={column.type}>{column.type}</td>
+                      <td title={column.comment}>{column.comment}</td>
                       <td>{column.nullable}</td>
                       <td title={column.defaultValue}>{column.defaultValue}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="4" className="db-empty-row">
+                    <td colSpan="5" className="db-empty-row">
                       {normalizedColumnQuery
                         ? t('database.noMatchingColumns', 'No matching columns.')
                         : t('database.doubleClickTable', 'Double-click a table to view fields.')}
@@ -21132,7 +21173,8 @@ function normalizeDbColumns(columns = []) {
     name: column.column_name || column.COLUMN_NAME || column.name || '-',
     type: column.data_type || column.DATA_TYPE || column.column_type || column.COLUMN_TYPE || '-',
     nullable: column.is_nullable || column.IS_NULLABLE || '-',
-    defaultValue: column.column_default ?? column.COLUMN_DEFAULT ?? '-'
+    defaultValue: column.column_default ?? column.COLUMN_DEFAULT ?? column.defaultValue ?? '-',
+    comment: column.column_comment || column.COLUMN_COMMENT || column.comments || column.COMMENTS || column.comment || '-'
   }))
 }
 
