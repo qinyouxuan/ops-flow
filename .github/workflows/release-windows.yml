@@ -42,7 +42,8 @@ jobs:
           npm run lint
           npm run audit:prod
           npm run verify:source
-          npm run dist:win
+          npm run build
+          npx electron-builder --win nsis zip --publish never
           npm run verify:release
 
       - name: Check release version

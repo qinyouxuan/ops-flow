@@ -29,7 +29,16 @@ if (-not $artifacts) {
 }
 
 $hashLines = foreach ($artifact in $artifacts) {
-  $hash = (Get-FileHash -LiteralPath $artifact.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+  $stream = [System.IO.File]::OpenRead($artifact.FullName)
+  $sha256 = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $hashBytes = $sha256.ComputeHash($stream)
+    $hash = [System.BitConverter]::ToString($hashBytes).Replace("-", "").ToLowerInvariant()
+  }
+  finally {
+    $sha256.Dispose()
+    $stream.Dispose()
+  }
   "$hash  $($artifact.Name)"
 }
 
@@ -38,10 +47,16 @@ $hashFile = Join-Path $resolvedReleaseDir "SHA256SUMS.txt"
 Write-Output "Wrote $hashFile"
 
 $signatureFailures = @()
+$authenticodeCommand = Get-Command Get-AuthenticodeSignature -ErrorAction SilentlyContinue
 foreach ($artifact in $artifacts | Where-Object { $_.Extension -eq ".exe" }) {
-  $signature = Get-AuthenticodeSignature -LiteralPath $artifact.FullName
-  Write-Output "$($artifact.Name): signature=$($signature.Status)"
-  if ($RequireSignature -and $signature.Status -ne "Valid") {
+  if ($authenticodeCommand) {
+    $signatureStatus = (Get-AuthenticodeSignature -LiteralPath $artifact.FullName).Status
+  }
+  else {
+    $signatureStatus = "Unavailable"
+  }
+  Write-Output "$($artifact.Name): signature=$signatureStatus"
+  if ($RequireSignature -and $signatureStatus -ne "Valid") {
     $signatureFailures += $artifact.Name
   }
 }
