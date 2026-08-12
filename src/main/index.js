@@ -17,6 +17,7 @@ import mysql from 'mysql2/promise'
 import pg from 'pg'
 import mssql from 'mssql'
 import oracledb from 'oracledb'
+import ExcelJS from 'exceljs'
 import { createClient as createRedisClient } from 'redis'
 import {
   containsCredentials,
@@ -26,6 +27,7 @@ import {
   sanitizeConfigObject,
   summarizeConfig
 } from './configCrypto.mjs'
+import { inspectDatabaseColumnMetadata, setDatabaseColumnComment } from './database/columnMetadataAdapters.mjs'
 
 const shellSessions = new Map()
 let dmdbDriverPromise = null
@@ -34,6 +36,7 @@ const shellSessionsByWebContents = new Map()
 const sshExecSessions = new Map()
 const workflowPrivilegeCredentials = new Map()
 const databaseScriptSessions = new Map()
+const databaseQueryExportSessions = new Map()
 const databaseBackupSessions = new Map()
 const redisBackupSessions = new Map()
 const redisRestoreSessions = new Map()
@@ -773,6 +776,10 @@ ipcMain.handle('ssh:exec', async (_event, config, command) => {
   return withSshClient(config, (client) => execCommand(client, wrapInteractiveCommand(command), { pty: true }))
 })
 
+ipcMain.handle('ssh:exec-raw', async (_event, config, command) => {
+  return withSshClient(config, (client) => execCommand(client, `bash -lc ${shellQuote(command)}`))
+})
+
 ipcMain.handle('ssh:exec-stream', async (event, config, command, executionId, privilege) => {
   return execStreamingCommand(event.sender, config, command, executionId, privilege)
 })
@@ -869,15 +876,20 @@ ipcMain.handle('ssh:shell:start', async (event, config, size = {}) => {
   return startShellSession(event.sender, config, size)
 })
 
-ipcMain.handle('ssh:shell:write', async (event, sessionId, data) => {
+ipcMain.on('ssh:shell:write', (event, sessionId, data) => {
   const session = shellSessions.get(sessionId)
-  if (!session?.stream) return { ok: false, message: 'Terminal session is not connected' }
-  const submittedCommands = captureShellInput(session, data)
-  session.stream.write(data)
-  submittedCommands.forEach((command) => {
-    if (!event.sender.isDestroyed()) event.sender.send('ssh:shell:command', { sessionId, command })
-  })
-  return { ok: true }
+  if (!session?.stream || session.stream.destroyed || !session.stream.writable) return
+  try {
+    const submittedCommands = captureShellInput(session, data)
+    session.stream.write(data)
+    submittedCommands.forEach((command) => {
+      if (!event.sender.isDestroyed()) event.sender.send('ssh:shell:command', { sessionId, command })
+    })
+  } catch (error) {
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('ssh:shell:error', { sessionId, message: error.message || 'Terminal input failed' })
+    }
+  }
 })
 
 ipcMain.handle('ssh:shell:resize', async (_event, sessionId, size = {}) => {
@@ -967,10 +979,9 @@ ipcMain.handle('sftp:upload', async (event, config, targetDirectory = '/', optio
     webContents: event.sender
   }
   prepareFileTransferSession(progress, null)
-  let result = await withActiveShellClient(event.sender, config, (client, connection) => {
-    progress.sharedConnection = connection.shared
-    return uploadRemoteFile(client, localPath, remotePath, progress)
-  })
+  let result = await uploadWithReconnect(event.sender, config, progress, (client) => (
+    uploadRemoteFile(client, localPath, remotePath, progress)
+  ))
   result = settlePendingFileTransfer(progress, result)
   if (result.canceled && result.partialRemotePath) {
     void cleanupCanceledRemoteUpload(config, result.partialRemotePath)
@@ -1026,12 +1037,11 @@ ipcMain.handle('sftp:upload-path', async (event, config, localPath, remotePath) 
     webContents: event.sender
   }
   prepareFileTransferSession(progress, null)
-  let result = await withActiveShellClient(event.sender, config, (client, connection) => {
-    progress.sharedConnection = connection.shared
-    return stats.isDirectory()
+  let result = await uploadWithReconnect(event.sender, config, progress, (client) => (
+    stats.isDirectory()
       ? uploadRemoteDirectory(client, localPath, targetRemotePath, progress)
       : uploadRemoteFile(client, localPath, targetRemotePath, progress)
-  })
+  ))
   result = settlePendingFileTransfer(progress, result)
   if (result.canceled && result.partialRemotePath) {
     void cleanupCanceledRemoteUpload(config, result.partialRemotePath)
@@ -1397,65 +1407,28 @@ ipcMain.handle('db:inspect', async (_event, config) => {
 
 ipcMain.handle('db:columns', async (_event, config, table) => {
   return withDatabase(config, async (connection) => {
-    if (config.engine === 'postgres') {
-      const result = await connection.query(
-        `
-          select column_name, data_type, is_nullable, column_default
-          from information_schema.columns
-          where table_schema = $1 and table_name = $2
-          order by ordinal_position
-        `,
-        [table.schema, table.name]
-      )
-      return { ok: true, columns: result.rows }
-    }
+    const columns = await inspectDatabaseColumnMetadata({
+      connection,
+      config,
+      table,
+      mssql,
+      executeOracleLike
+    })
+    return { ok: true, columns }
+  })
+})
 
-    if (config.engine === 'sqlserver') {
-      const request = connection.request()
-      request.input('schema', mssql.NVarChar, table.schema)
-      request.input('name', mssql.NVarChar, table.name)
-      const result = await request.query(`
-        select
-          COLUMN_NAME as column_name,
-          DATA_TYPE as data_type,
-          IS_NULLABLE as is_nullable,
-          COLUMN_DEFAULT as column_default
-        from INFORMATION_SCHEMA.COLUMNS
-        where TABLE_SCHEMA = @schema and TABLE_NAME = @name
-        order by ORDINAL_POSITION
-      `)
-      return { ok: true, columns: result.recordset }
-    }
-
-    if (isOracleLikeEngine(config.engine)) {
-      const result = await executeOracleLike(
-        connection,
-        config.engine,
-        `
-          select
-            COLUMN_NAME as column_name,
-            DATA_TYPE as data_type,
-            NULLABLE as is_nullable,
-            DATA_DEFAULT as column_default
-          from ALL_TAB_COLUMNS
-          where OWNER = :schema and TABLE_NAME = :name
-          order by COLUMN_ID
-        `,
-        { schema: table.schema, name: table.name }
-      )
-      return { ok: true, columns: result.rows }
-    }
-
-    const [rows] = await connection.query(
-      `
-        select column_name, column_type as data_type, is_nullable, column_default
-        from information_schema.columns
-        where table_schema = ? and table_name = ?
-        order by ordinal_position
-      `,
-      [table.schema, table.name]
-    )
-    return { ok: true, columns: rows }
+ipcMain.handle('db:set-column-comment', async (_event, config, table, column) => {
+  return withDatabase(config, async (connection) => {
+    await setDatabaseColumnComment({
+      connection,
+      config,
+      table,
+      column,
+      mssql,
+      executeOracleLike
+    })
+    return { ok: true }
   })
 })
 
@@ -1531,7 +1504,213 @@ ipcMain.handle('db:privileges', async (_event, config) => {
   })
 })
 
-ipcMain.handle('db:exec', async (_event, config, sql) => {
+function maskSqlForReadOnlyAnalysis(sql) {
+  const source = String(sql || '')
+  let output = ''
+  let index = 0
+  let state = 'plain'
+  let dollarTag = ''
+  while (index < source.length) {
+    const char = source[index]
+    const next = source[index + 1]
+    if (state === 'line-comment') {
+      if (char === '\n') {
+        state = 'plain'
+        output += '\n'
+      } else output += ' '
+      index += 1
+      continue
+    }
+    if (state === 'block-comment') {
+      if (char === '*' && next === '/') {
+        output += '  '
+        index += 2
+        state = 'plain'
+      } else {
+        output += char === '\n' ? '\n' : ' '
+        index += 1
+      }
+      continue
+    }
+    if (state === 'single-quote') {
+      if (char === "'" && next === "'") {
+        output += '  '
+        index += 2
+      } else if (char === "'") {
+        output += ' '
+        index += 1
+        state = 'plain'
+      } else {
+        output += char === '\n' ? '\n' : ' '
+        index += 1
+      }
+      continue
+    }
+    if (state === 'double-quote' || state === 'backtick' || state === 'bracket') {
+      const closing = state === 'double-quote' ? '"' : state === 'backtick' ? '`' : ']'
+      if (char === closing && next === closing) {
+        output += '  '
+        index += 2
+      } else if (char === closing) {
+        output += ' '
+        index += 1
+        state = 'plain'
+      } else {
+        output += char === '\n' ? '\n' : ' '
+        index += 1
+      }
+      continue
+    }
+    if (state === 'dollar-quote') {
+      if (source.startsWith(dollarTag, index)) {
+        output += ' '.repeat(dollarTag.length)
+        index += dollarTag.length
+        state = 'plain'
+      } else {
+        output += char === '\n' ? '\n' : ' '
+        index += 1
+      }
+      continue
+    }
+    if (char === '-' && next === '-') {
+      output += '  '
+      index += 2
+      state = 'line-comment'
+      continue
+    }
+    if (char === '/' && next === '*') {
+      output += '  '
+      index += 2
+      state = 'block-comment'
+      continue
+    }
+    if (char === "'") state = 'single-quote'
+    else if (char === '"') state = 'double-quote'
+    else if (char === '`') state = 'backtick'
+    else if (char === '[') state = 'bracket'
+    else if (char === '$') {
+      const match = source.slice(index).match(/^\$[A-Za-z_][A-Za-z0-9_]*\$|^\$\$/)
+      if (match) {
+        dollarTag = match[0]
+        state = 'dollar-quote'
+        output += ' '.repeat(dollarTag.length)
+        index += dollarTag.length
+        continue
+      }
+    }
+    output += state === 'plain' ? char : ' '
+    index += 1
+  }
+  return output
+}
+
+function analyzeReadOnlyDatabaseQuery(sql) {
+  const source = String(sql || '').trim()
+  if (!source) return { ok: false, reason: 'SQL is required.' }
+  const masked = maskSqlForReadOnlyAnalysis(source)
+  const executableStatements = masked.split(';').filter((part) => part.trim())
+  if (executableStatements.length !== 1) {
+    return { ok: false, reason: '分页和 Excel 导出仅支持单条只读查询。' }
+  }
+  const firstKeyword = executableStatements[0].match(/[A-Za-z]+/)?.[0]?.toUpperCase()
+  if (!['SELECT', 'WITH'].includes(firstKeyword)) {
+    return { ok: false, reason: '仅 SELECT 或 WITH 只读查询支持分页和 Excel 导出。' }
+  }
+  const forbidden = /\b(?:INSERT|UPDATE|DELETE|MERGE|UPSERT|REPLACE|INTO|CREATE|ALTER|DROP|TRUNCATE|RENAME|GRANT|REVOKE|CALL|EXEC|EXECUTE|DO|COPY|LOAD|LOCK|UNLOCK|SET|USE|COMMIT|ROLLBACK|SAVEPOINT|BEGIN|DECLARE|VACUUM)\b/i
+  if (forbidden.test(executableStatements[0])) {
+    return { ok: false, reason: '查询包含可能修改数据或会话状态的语句，不能分页或导出。' }
+  }
+  return {
+    ok: true,
+    sql: source.replace(/;\s*$/, '').trim(),
+    masked: executableStatements[0]
+  }
+}
+
+function hasTopLevelSqlServerOrderBy(maskedSql) {
+  let depth = 0
+  const tokens = []
+  const expression = /[A-Za-z_][A-Za-z0-9_]*|[()]/g
+  let match
+  while ((match = expression.exec(maskedSql))) {
+    if (match[0] === '(') depth += 1
+    else if (match[0] === ')') depth = Math.max(0, depth - 1)
+    else if (depth === 0) tokens.push(match[0].toUpperCase())
+  }
+  return tokens.some((token, index) => token === 'ORDER' && tokens[index + 1] === 'BY')
+}
+
+function buildPagedDatabaseQuery(config, analysis, page, pageSize) {
+  const safePage = Math.max(1, Math.floor(Number(page) || 1))
+  const safePageSize = Math.max(1, Math.min(5000, Math.floor(Number(pageSize) || 100)))
+  const offset = (safePage - 1) * safePageSize
+  const fetchSize = safePageSize + 1
+  const engine = String(config.engine || '').toLowerCase()
+  if (engine === 'sqlserver') {
+    if (/\b(?:OFFSET|FETCH)\b/i.test(analysis.masked)) {
+      throw new Error('SQL Server 分页查询不能包含已有的 OFFSET/FETCH，请移除后重试。')
+    }
+    if (/\bTOP\s*(?:\(|\d)/i.test(analysis.masked)) {
+      throw new Error('SQL Server 分页查询不能同时使用 TOP，请移除 TOP 后重试。')
+    }
+    const orderBy = hasTopLevelSqlServerOrderBy(analysis.masked) ? '' : ' ORDER BY (SELECT NULL)'
+    return `${analysis.sql}${orderBy} OFFSET ${offset} ROWS FETCH NEXT ${fetchSize} ROWS ONLY`
+  }
+  if (isOracleLikeEngine(engine)) {
+    return `SELECT * FROM (${analysis.sql}) ops_flow_query OFFSET ${offset} ROWS FETCH NEXT ${fetchSize} ROWS ONLY`
+  }
+  return `SELECT * FROM (${analysis.sql}) AS ops_flow_query LIMIT ${fetchSize} OFFSET ${offset}`
+}
+
+async function executeDatabaseQueryPage(connection, config, analysis, page, pageSize) {
+  const query = buildPagedDatabaseQuery(config, analysis, page, pageSize)
+  const engine = String(config.engine || '').toLowerCase()
+  let rows = []
+  let columns = []
+  if (engine === 'postgres') {
+    const result = await connection.query(query)
+    rows = result.rows || []
+    columns = (result.fields || []).map((field) => field.name)
+  } else if (engine === 'sqlserver') {
+    const result = await connection.request().query(query)
+    rows = result.recordset || []
+    columns = Object.keys(result.recordset?.columns || {})
+  } else if (isOracleLikeEngine(engine)) {
+    const result = await executeOracleLike(connection, engine, query)
+    rows = result.rows || []
+    columns = (result.metaData || []).map((field) => field.name)
+  } else {
+    const [resultRows, fields] = await connection.query(query)
+    rows = Array.isArray(resultRows) ? resultRows : []
+    columns = (fields || []).map((field) => field.name)
+  }
+  const safePageSize = Math.max(1, Math.min(5000, Math.floor(Number(pageSize) || 100)))
+  return {
+    rows: rows.slice(0, safePageSize),
+    columns: columns.length ? columns : Object.keys(rows[0] || {}),
+    hasMore: rows.length > safePageSize
+  }
+}
+
+ipcMain.handle('db:exec', async (_event, config, sql, options = {}) => {
+  const analysis = analyzeReadOnlyDatabaseQuery(sql)
+  if (analysis.ok && options.paginate !== false) {
+    const page = Math.max(1, Math.floor(Number(options.page) || 1))
+    const pageSize = Math.max(20, Math.min(500, Math.floor(Number(options.pageSize) || 100)))
+    return withDatabase(config, async (connection) => {
+      const result = await executeDatabaseQueryPage(connection, config, analysis, page, pageSize)
+      return {
+        ok: true,
+        query: true,
+        rows: result.rows,
+        columns: result.columns,
+        rowCount: result.rows.length,
+        page,
+        pageSize,
+        hasMore: result.hasMore
+      }
+    })
+  }
   return withDatabase(config, async (connection) => {
     if (config.engine === 'postgres') {
       const result = await connection.query(sql)
@@ -1764,6 +1943,173 @@ ipcMain.handle('db:cancel-script', async (event, taskId) => {
     message
   })
   return { ok: true, message: 'Stop requested' }
+})
+
+function normalizeExcelQueryCell(value) {
+  if (value === null || value === undefined) return null
+  if (value instanceof Date || typeof value === 'number' || typeof value === 'boolean') return value
+  if (typeof value === 'bigint') return value.toString()
+  if (Buffer.isBuffer(value)) return value.toString('hex')
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
+  const text = String(value)
+  return text.length > 32767 ? `${text.slice(0, 32764)}...` : text
+}
+
+function queryExportFileName(config) {
+  return `${safeFileName(config.database || config.name || 'query')}-query-${backupTimestamp()}.xlsx`
+}
+
+async function exportDatabaseQueryToExcel(connection, config, analysis, filePath, task, session, options = {}) {
+  const batchSize = Math.max(200, Math.min(5000, Math.floor(Number(options.batchSize) || 2000)))
+  const maximumDataRows = 1048575
+  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+    filename: filePath,
+    useStyles: true,
+    useSharedStrings: false
+  })
+  session.outputCreated = true
+  const worksheet = workbook.addWorksheet('Query Result', {
+    views: [{ state: 'frozen', ySplit: 1 }]
+  })
+  let columns = []
+  let page = 1
+  let exportedRows = 0
+  try {
+    while (true) {
+      if (session.cancelRequested) throw Object.assign(new Error('查询结果导出已取消。'), { canceled: true })
+      const result = await executeDatabaseQueryPage(connection, config, analysis, page, batchSize)
+      if (!columns.length) {
+        columns = result.columns.length ? result.columns : Object.keys(result.rows[0] || {})
+        if (columns.length) {
+          worksheet.columns = columns.map((name) => ({ key: name, width: Math.min(42, Math.max(12, String(name).length + 3)) }))
+          const header = worksheet.addRow(columns)
+          header.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+          header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF147D73' } }
+          header.commit()
+        }
+      }
+      for (const row of result.rows) {
+        if (session.cancelRequested) throw Object.assign(new Error('查询结果导出已取消。'), { canceled: true })
+        if (exportedRows >= maximumDataRows) {
+          throw new Error('查询结果超过 Excel 单工作表上限 1,048,575 行，请增加查询条件后分批导出。')
+        }
+        const values = columns.map((column) => normalizeExcelQueryCell(row?.[column]))
+        worksheet.addRow(values).commit()
+        exportedRows += 1
+      }
+      session.exportedRows = exportedRows
+      emitTransferProgress(task, {
+        transferred: exportedRows,
+        total: 0,
+        indeterminate: true,
+        status: 'running',
+        message: `已导出 ${exportedRows.toLocaleString('zh-CN')} 行…`
+      })
+      if (!result.hasMore) break
+      page += 1
+    }
+    worksheet.commit()
+    await workbook.commit()
+    return { ok: true, path: filePath, rowCount: exportedRows }
+  } catch (error) {
+    try {
+      worksheet.commit()
+      await workbook.commit()
+    } catch {
+      // Ignore writer shutdown errors; the incomplete workbook is removed below.
+    }
+    try {
+      if (existsSync(filePath)) rmSync(filePath, { force: true })
+    } catch {
+      // The writer can briefly retain a Windows file handle while shutting down.
+    }
+    return { ok: false, canceled: Boolean(error.canceled), rowCount: exportedRows, message: error.message }
+  }
+}
+
+ipcMain.handle('db:export-query', async (event, config, sql, options = {}) => {
+  const analysis = analyzeReadOnlyDatabaseQuery(sql)
+  if (!analysis.ok) return { ok: false, message: analysis.reason }
+  const window = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow()
+  const picked = await dialog.showSaveDialog(window, {
+    title: '导出查询结果到 Excel',
+    defaultPath: queryExportFileName(config),
+    filters: [{ name: 'Excel 工作簿', extensions: ['xlsx'] }]
+  })
+  if (picked.canceled || !picked.filePath) return { ok: false, canceled: true, message: '已取消导出。' }
+  const filePath = /\.xlsx$/i.test(picked.filePath) ? picked.filePath : `${picked.filePath}.xlsx`
+  const task = {
+    webContents: event.sender,
+    id: String(options.taskId || `database-query-export-${Date.now()}-${Math.random().toString(16).slice(2)}`),
+    type: 'database-query-export',
+    name: basename(filePath),
+    localPath: filePath,
+    remotePath: `${config.name || config.engine || 'database'} / ${config.database || ''}`,
+    total: 0,
+    startedAt: Date.now()
+  }
+  const session = {
+    task,
+    webContentsId: event.sender.id,
+    cancelRequested: false,
+    exportedRows: 0,
+    outputCreated: false
+  }
+  databaseQueryExportSessions.set(task.id, session)
+  emitTransferProgress(task, {
+    transferred: 0,
+    total: 0,
+    indeterminate: true,
+    status: 'running',
+    message: '正在准备全量查询结果导出…'
+  })
+  let result
+  try {
+    result = await withDatabase(config, async (connection) => (
+      exportDatabaseQueryToExcel(connection, config, analysis, filePath, task, session, options)
+    ))
+  } finally {
+    databaseQueryExportSessions.delete(task.id)
+  }
+  if (!result.ok && session.outputCreated) {
+    try {
+      if (existsSync(filePath)) rmSync(filePath, { force: true })
+    } catch {
+      // The incomplete file will be reported as failed if Windows still holds it.
+    }
+  }
+  emitTransferProgress(task, {
+    transferred: Number(result.rowCount || session.exportedRows || 0),
+    total: Number(result.rowCount || session.exportedRows || 0),
+    indeterminate: false,
+    status: result.ok ? 'done' : result.canceled ? 'cancelled' : 'failed',
+    message: result.ok
+      ? `Excel 导出完成，共 ${Number(result.rowCount || 0).toLocaleString('zh-CN')} 行`
+      : result.message
+  })
+  return result
+})
+
+ipcMain.handle('db:cancel-query-export', async (event, taskId) => {
+  const session = databaseQueryExportSessions.get(String(taskId || ''))
+  if (!session || session.webContentsId !== event.sender.id) {
+    return { ok: false, message: '查询结果导出任务未运行。' }
+  }
+  session.cancelRequested = true
+  emitTransferProgress(session.task, {
+    transferred: session.exportedRows,
+    total: 0,
+    indeterminate: true,
+    status: 'running',
+    message: '已请求取消，当前数据库批次结束后停止…'
+  })
+  return { ok: true, message: '已请求取消查询结果导出。' }
 })
 
 ipcMain.handle('db:export', async (event, config, tables = [], format = 'sql') => {
@@ -2303,6 +2649,28 @@ async function withActiveShellClient(webContents, config, task) {
   }
 }
 
+async function uploadWithReconnect(webContents, config, progress, upload) {
+  let result = await withActiveShellClient(webContents, config, (client, connection) => {
+    progress.sharedConnection = connection.shared
+    return upload(client)
+  })
+  if (!shouldRetryUploadConnection(result)) return result
+
+  emitTransferProgress(progress, {
+    transferred: 0,
+    status: 'running',
+    message: 'SFTP connection interrupted before transfer; reconnecting once'
+  })
+  progress.sharedConnection = false
+  result = await withSshClient(config, (client) => upload(client))
+  return { ...result, retried: true }
+}
+
+function shouldRetryUploadConnection(result = {}) {
+  if (result.ok || result.canceled || Number(result.transferred || 0) > 0) return false
+  return /(?:ECONNRESET|ECONNABORTED|EPIPE|ETIMEDOUT|connection (?:was )?closed|connection lost|no response from server|channel open failure|unable to open channel|not connected|write EOF)/i.test(String(result.message || ''))
+}
+
 async function connectSshClient(client, config, shouldAbort = () => false) {
   const prepared = await prepareSshConnection(config)
   let cleanedUp = false
@@ -2319,6 +2687,7 @@ async function connectSshClient(client, config, shouldAbort = () => false) {
   client.once('error', cleanup)
   try {
     client.connect(prepared.connection)
+    client.setNoDelay(true)
   } catch (error) {
     cleanup()
     throw error
@@ -2408,6 +2777,7 @@ async function openPreparedSshClient(config, visitedServerIds) {
         .once('error', fail)
         .once('close', () => fail(new Error('SSH jump connection closed before authentication completed')))
         .connect(prepared.connection)
+      client.setNoDelay(true)
     })
     // Keep a listener installed so a later transport error cannot become an
     // unhandled EventEmitter error while the downstream connection is active.
@@ -2796,6 +3166,7 @@ function startShellSession(webContents, config, size = {}) {
 
     client
       .on('ready', () => {
+        client.setNoDelay(true)
         client.shell(
           {
             term: 'xterm-256color',
@@ -2809,6 +3180,11 @@ function startShellSession(webContents, config, size = {}) {
               finish({ ok: false, message: error.message })
               return
             }
+
+            // Do not let the initial prompt race ahead of the IPC response that
+            // gives the renderer its session id. This is especially important
+            // while automatically reopening a dropped interactive shell.
+            stream.pause()
 
             shellSessions.set(sessionId, {
               id: sessionId,
@@ -2830,9 +3206,18 @@ function startShellSession(webContents, config, size = {}) {
                 cleanup()
                 client.end()
               })
+              .on('error', (streamError) => {
+                send('ssh:shell:error', { message: streamError.message })
+                notifyClose(streamError.message, 'channel')
+                cleanup()
+                client.end()
+              })
               .stderr?.on('data', (data) => send('ssh:shell:data', { data: data.toString('utf8') }))
 
             finish({ ok: true, sessionId })
+            setImmediate(() => {
+              if (!stream.destroyed) stream.resume()
+            })
           }
         )
       })
@@ -3333,7 +3718,6 @@ function uploadLocalFileToStage(client, localPath, stagePath, progress) {
     client.sftp((error, sftp) => {
       if (session) session.sftp = sftp || null
       if (session?.canceled) {
-        sftp?.end()
         finish(canceledFileTransferResult(progress, session, { partialRemotePath: stagePath }))
         return
       }
@@ -3348,7 +3732,7 @@ function uploadLocalFileToStage(client, localPath, stagePath, progress) {
         }
       }, (putError) => {
         if (session?.canceled) finish(canceledFileTransferResult(progress, session, { partialRemotePath: stagePath }))
-        else finish(putError ? { ok: false, message: putError.message } : { ok: true })
+        else finish(putError ? { ok: false, message: putError.message, transferred: session?.transferred || 0 } : { ok: true })
       })
     })
   })
@@ -3479,9 +3863,10 @@ async function deletePrivilegedRemoteItem(webContents, config, remotePath, type,
     webContents
   }
   emitTransferProgress(progress, { transferred: 0, status: 'running', currentPath: normalizedPath })
+  const quotedPath = shellQuote(normalizedPath)
   const command = type === 'dir'
-    ? `test -d ${shellQuote(normalizedPath)} && rm -rf -- ${shellQuote(normalizedPath)}`
-    : `test -e ${shellQuote(normalizedPath)} && rm -f -- ${shellQuote(normalizedPath)}`
+    ? `test -d ${quotedPath} && rm -rf -- ${quotedPath} && test ! -e ${quotedPath} && test ! -L ${quotedPath}`
+    : `(test -e ${quotedPath} || test -L ${quotedPath}) && rm -f -- ${quotedPath} && test ! -e ${quotedPath} && test ! -L ${quotedPath}`
   const result = await runPrivilegedFileCommand(webContents, config, command, privilege, 'delete')
   emitTransferProgress(progress, result.ok
     ? { transferred: 1, status: 'done', currentPath: normalizedPath }
@@ -3642,7 +4027,6 @@ function uploadRemoteFile(client, localPath, remotePath, progress = null) {
     client.sftp(async (error, sftp) => {
       if (session) session.sftp = sftp || null
       if (session?.canceled) {
-        sftp?.end()
         finish(canceledFileTransferResult(progress, session, { partialRemotePath: remotePath }))
         return
       }
@@ -3673,7 +4057,7 @@ function uploadRemoteFile(client, localPath, remotePath, progress = null) {
           return
         }
         if (putError) {
-          finish({ ok: false, message: putError.message, localPath, remotePath }, { status: 'failed', message: putError.message })
+          finish({ ok: false, message: putError.message, localPath, remotePath, transferred: session?.transferred || 0 }, { status: 'failed', message: putError.message })
           return
         }
         finish(
@@ -3707,7 +4091,6 @@ function uploadRemoteDirectory(client, localPath, remotePath, progress = null) {
     client.sftp(async (error, sftp) => {
       if (session) session.sftp = sftp || null
       if (session?.canceled) {
-        sftp?.end()
         finish(canceledFileTransferResult(progress, session))
         return
       }
@@ -3752,10 +4135,19 @@ function uploadRemoteDirectory(client, localPath, remotePath, progress = null) {
         )
       } catch (uploadError) {
         if (session?.canceled) finish(canceledFileTransferResult(progress, session))
-        else finish({ ok: false, message: uploadError.message, localPath, remotePath }, { status: 'failed', message: uploadError.message })
+        else finish({ ok: false, message: uploadError.message, localPath, remotePath, transferred: session?.transferred || 0 }, { status: 'failed', message: uploadError.message })
       }
     })
   })
+}
+
+function closeSftpChannel(sftp) {
+  if (!sftp) return
+  try {
+    sftp.end()
+  } catch {
+    // The SSH transport may already be closed after a network failure.
+  }
 }
 
 function uploadFileWithSftp(sftp, localPath, remotePath, progress = null) {
@@ -3857,6 +4249,7 @@ function finishFileTransferSession(progress, session) {
   if (!progress?.id || !session) return
   if (fileTransferSessions.get(progress.id) === session) fileTransferSessions.delete(progress.id)
   session.cancelTransfer = null
+  closeSftpChannel(session.sftp)
   session.sftp = null
   session.client = null
   session.sharedConnection = false
@@ -3995,33 +4388,42 @@ async function cleanupCanceledRemoteUpload(config, remotePath) {
 function readRemoteTextFile(client, remotePath) {
   const maxBytes = 2 * 1024 * 1024
   return new Promise((resolve) => {
+    let settled = false
+    let sftpSession = null
+    const finish = (result) => {
+      if (settled) return
+      settled = true
+      closeSftpChannel(sftpSession)
+      resolve(result)
+    }
     client.sftp((error, sftp) => {
       if (error) {
-        resolve({ ok: false, message: error.message })
+        finish({ ok: false, message: error.message })
         return
       }
+      sftpSession = sftp
 
       sftp.stat(remotePath, (statError, attrs) => {
         if (statError) {
-          resolve({ ok: false, message: statError.message })
+          finish({ ok: false, message: statError.message })
           return
         }
         if (attrs?.size > maxBytes) {
-          resolve({ ok: false, message: 'File is larger than 2 MB. Download it instead.' })
+          finish({ ok: false, message: 'File is larger than 2 MB. Download it instead.' })
           return
         }
 
         const chunks = []
         const stream = sftp.createReadStream(remotePath)
         stream.on('data', (chunk) => chunks.push(chunk))
-        stream.on('error', (streamError) => resolve({ ok: false, message: streamError.message }))
+        stream.on('error', (streamError) => finish({ ok: false, message: streamError.message }))
         stream.on('end', () => {
           const buffer = Buffer.concat(chunks)
           if (buffer.includes(0)) {
-            resolve({ ok: false, message: 'Binary file preview is not supported.' })
+            finish({ ok: false, message: 'Binary file preview is not supported.' })
             return
           }
-          resolve({ ok: true, path: remotePath, content: buffer.toString('utf8'), size: attrs?.size || buffer.length })
+          finish({ ok: true, path: remotePath, content: buffer.toString('utf8'), size: attrs?.size || buffer.length })
         })
       })
     })
@@ -4034,18 +4436,24 @@ function writeRemoteTextFile(client, remotePath, content) {
 
 function createRemoteFile(client, remotePath) {
   return new Promise((resolve) => {
+    let sftpSession = null
+    const finish = (result) => {
+      closeSftpChannel(sftpSession)
+      resolve(result)
+    }
     client.sftp((error, sftp) => {
       if (error) {
-        resolve({ ok: false, message: error.message, path: remotePath })
+        finish({ ok: false, message: error.message, path: remotePath })
         return
       }
+      sftpSession = sftp
       sftp.open(remotePath, 'wx', 0o644, (openError, handle) => {
         if (openError) {
-          resolve({ ok: false, message: openError.message, path: remotePath })
+          finish({ ok: false, message: openError.message, path: remotePath })
           return
         }
         sftp.close(handle, (closeError) => {
-          resolve(closeError
+          finish(closeError
             ? { ok: false, message: closeError.message, path: remotePath }
             : { ok: true, message: 'File created', path: remotePath, name: posix.basename(remotePath), type: 'file', size: 0 })
         })
@@ -4089,22 +4497,28 @@ function createRemoteDirectory(client, remotePath) {
 
 function renameRemoteItem(client, sourcePath, targetPath) {
   return new Promise((resolve) => {
+    let sftpSession = null
+    const finish = (result) => {
+      closeSftpChannel(sftpSession)
+      resolve(result)
+    }
     client.sftp((error, sftp) => {
       if (error) {
-        resolve({ ok: false, message: error.message, sourcePath, path: targetPath })
+        finish({ ok: false, message: error.message, sourcePath, path: targetPath })
         return
       }
+      sftpSession = sftp
       sftp.lstat(targetPath, (targetError) => {
         if (!targetError) {
-          resolve({ ok: false, message: `Target already exists: ${targetPath}`, sourcePath, path: targetPath })
+          finish({ ok: false, message: `Target already exists: ${targetPath}`, sourcePath, path: targetPath })
           return
         }
         if (!isRemotePathMissingError(targetError)) {
-          resolve({ ok: false, message: targetError.message, sourcePath, path: targetPath })
+          finish({ ok: false, message: targetError.message, sourcePath, path: targetPath })
           return
         }
         sftp.rename(sourcePath, targetPath, (renameError) => {
-          resolve(renameError
+          finish(renameError
             ? { ok: false, message: renameError.message, sourcePath, path: targetPath }
             : {
                 ok: true,
@@ -4136,6 +4550,7 @@ function writeRemoteBufferFile(client, remotePath, buffer) {
         if (settled) return
         settled = true
         clearTimeout(timer)
+        closeSftpChannel(sftp)
         resolve(result)
       }
       const timer = setTimeout(() => {
@@ -4192,6 +4607,7 @@ function deleteRemoteItem(client, remotePath, type, progress = null) {
           emitTransferProgress(progress, { status: 'failed', message: deleteError.message, currentPath: remotePath })
           resolve({ ok: false, message: deleteError.message, path: remotePath })
         })
+        .finally(() => closeSftpChannel(sftp))
     })
   })
 }
@@ -4199,6 +4615,7 @@ function deleteRemoteItem(client, remotePath, type, progress = null) {
 async function deleteRemoteItemWithProgress(sftp, remotePath, type, progress) {
   if (type !== 'dir') {
     await sftpUnlink(sftp, remotePath)
+    await verifySftpPathDeleted(sftp, remotePath)
     emitTransferProgress(progress, { transferred: 1, total: 1, status: 'done', currentPath: remotePath })
     return { ok: true, message: 'Deleted', path: remotePath, deletedCount: 1 }
   }
@@ -4218,12 +4635,31 @@ async function deleteRemoteItemWithProgress(sftp, remotePath, type, progress) {
     emitTransferProgress(progress, {
       transferred: deleted,
       total,
-      status: deleted === total ? 'done' : 'running',
+      status: 'running',
       currentPath: entry.path
     })
   }
 
+  await verifySftpPathDeleted(sftp, remotePath)
+  emitTransferProgress(progress, { transferred: deleted, total, status: 'done', currentPath: remotePath })
+
   return { ok: true, message: 'Deleted', path: remotePath, deletedCount: deleted }
+}
+
+function verifySftpPathDeleted(sftp, remotePath) {
+  return new Promise((resolve, reject) => {
+    sftp.lstat(remotePath, (error) => {
+      if (error && isRemotePathMissingError(error)) {
+        resolve()
+        return
+      }
+      if (error) {
+        reject(error)
+        return
+      }
+      reject(new Error(`Delete verification failed; remote path still exists: ${remotePath}`))
+    })
+  })
 }
 
 async function collectRemoteDeleteEntries(sftp, remotePath) {

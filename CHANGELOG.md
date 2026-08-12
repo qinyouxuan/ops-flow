@@ -1,5 +1,66 @@
 # Changelog
 
+## Unreleased
+
+## 0.2.5 - 2026-08-12
+
+### Added
+
+- Added a collapsible, resizable auxiliary workspace for basic server information
+  and remote files. The main module expands into the released space, while the
+  saved width and collapsed state persist across app restarts.
+- Added a collapsible server navigation rail with a searchable server switcher,
+  connection-status indicators and quick server creation. The expanded width
+  and collapsed state are saved independently from the auxiliary workspace.
+- Added automatic column-comment metadata adapters for MySQL/MariaDB,
+  PostgreSQL, SQL Server, Oracle and Dameng. Every connection reuses its engine
+  adapter and returns the same normalized column shape without user setup.
+- Added column comments to the add/edit field dialog, including automatic
+  engine-specific comment writes and comment removal when an edited value is cleared.
+
+### Fixed
+
+- Kept the database browser mounted and cached across top-level tab switches.
+  Table metadata now reloads only when the selected database connection changes,
+  when the user refreshes it explicitly, or after a schema-changing operation.
+- Added confirmation for SQL statements that modify data or schema while keeping
+  read-only `SELECT` execution immediate, and restored SQL editor focus after
+  confirmations, successful execution and errors.
+- Improved interactive terminal input latency, cursor behavior and reconnect
+  handling so asynchronous SSH recovery no longer steals focus from dialogs.
+- Stabilized multi-file SFTP upload, download and deletion by reusing the active
+  SSH transport, closing channels deterministically, retrying eligible upload
+  connection failures once and verifying remote deletion.
+- Fixed remote-file batch deletion refresh and breadcrumb navigation state.
+- Fixed user crontab management by filtering terminal control sequences,
+  verifying writes through a non-PTY command, preserving comments and environment
+  assignments, and updating only the Cron list instead of reloading host inspection.
+- Added automatic `.log` redirection for simple shell-script schedules and an
+  interactive one-time run action with live output, exit status and cancellation.
+
+## 0.2.4 - 2026-08-11
+
+### Added
+
+- Added database-side pagination for single read-only `SELECT` and `WITH`
+  queries, with selectable page sizes and next/previous navigation that avoids
+  loading the full result set into the renderer.
+- Added full query-result export to streaming Excel workbooks. Exports re-run
+  only validated read-only queries, write rows in batches, report progress in
+  Transfers and support cancellation with partial-file cleanup.
+
+### Improved
+
+- Made the table/field browser vertically resizable so more space can be given
+  to the SQL editor and result grid, while retaining the existing horizontal
+  table/field splitter.
+- Renamed the SQL-file action to “Select script” to distinguish file selection
+  from actual execution, and expanded the built-in database help.
+- Simplified database and Redis connection selectors to display saved names
+  only, and tightened the database toolbar layout for smaller windows.
+- Added ExcelJS runtime licensing information and pinned its UUID dependency to
+  a patched release.
+
 ## 0.2.3 - 2026-08-10
 
 ### Fixed

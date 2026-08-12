@@ -14,6 +14,8 @@ import {
   Cable,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   CirclePlay,
   CircleStop,
@@ -59,6 +61,13 @@ const PRODUCT_NAME = 'Ops Flow Plus'
 const PRODUCT_AUTHOR = '秦屿'
 const PRODUCT_EMAIL = '734052482@qq.com'
 const PRODUCT_SOURCE_URL = 'https://github.com/qinyouxuan/ops-flow'
+const APP_SIDEBAR_MIN_WIDTH = 220
+const APP_SIDEBAR_MAX_WIDTH = 420
+const APP_SIDEBAR_DEFAULT_WIDTH = 270
+const APP_SIDEBAR_COLLAPSED_WIDTH = 48
+const WORKSPACE_AUXILIARY_MIN_WIDTH = 360
+const WORKSPACE_AUXILIARY_MAX_WIDTH = 700
+const WORKSPACE_AUXILIARY_DEFAULT_WIDTH = 520
 
 const I18N_MESSAGES = {
   'en-US': {},
@@ -71,6 +80,16 @@ const I18N_MESSAGES = {
     'app.noServers': '暂无服务器',
     'app.addFirstSsh': '添加第一个 SSH 连接。',
     'app.toolLog': '工具日志',
+    'app.collapseSidebar': '收起服务器导航',
+    'app.expandSidebar': '展开服务器导航',
+    'app.openServerSwitcher': '选择服务器',
+    'app.serverSwitcher': '服务器列表',
+    'app.searchServers': '搜索服务器名称、地址或用户',
+    'app.noMatchingServers': '没有匹配的服务器。',
+    'workspace.collapseAuxiliary': '收起基本信息与远程文件',
+    'workspace.expandAuxiliary': '展开基本信息与远程文件',
+    'workspace.resizeAuxiliary': '拖动调整基本信息与远程文件区域宽度',
+    'workspace.auxiliaryLabel': '信息与文件',
     'language.label': '语言',
     'settings.title': '设置',
     'settings.description': '语言、主题、帮助和软件信息。',
@@ -209,7 +228,7 @@ const I18N_MESSAGES = {
     'help.support.title': '当前支持范围',
     'help.support.text': '桌面客户端支持 Windows。SSH、SFTP、命令、部署、服务、运行环境、备份恢复和主机管理目前以 Linux 远程服务器为目标；数据库和 Redis 可通过直连或 Linux SSH 转发访问。Windows Server 远程部署和服务管理尚未完整支持。',
     'help.quick.server.title': '1. 添加服务器',
-    'help.quick.server.text': '点击左侧“添加服务器”，填写地址、SSH 端口、用户名和认证信息。内网服务器可选择一台已保存的 SSH 跳板服务器。先测试连接，成功后再保存。',
+    'help.quick.server.text': '点击左侧“添加服务器”，填写地址、SSH 端口、用户名和认证信息。内网服务器可选择一台已保存的 SSH 跳板服务器。先测试连接，成功后再保存。服务器导航可通过顶部箭头收起；收起后点击服务器状态图标，可搜索并切换服务器，点击 Ops Flow 图标可恢复完整列表。',
     'help.quick.connect.title': '2. 建立连接',
     'help.quick.connect.text': '从左侧选择服务器并点击“连接”。连接成功后，基本信息、远程文件和各功能模块才会加载。',
     'help.quick.module.title': '3. 选择功能',
@@ -225,7 +244,7 @@ const I18N_MESSAGES = {
     'help.features.tunnel.title': '供外部客户端使用的 SSH 隧道',
     'help.features.tunnel.text': '点击顶部“隧道”，选择一台已保存的 SSH 服务器，设置本地端口以及由该服务器访问的目标主机和端口。“测试连接”会验证 SSH 登录、跳板链和目标端口。启动后，达梦管理工具、Oracle SQL Developer、DBeaver 等外部客户端可连接 127.0.0.1:本地端口。隧道会复用所选服务器的跳板链，但独立于命令终端运行；为防止意外暴露数据库，基础版只监听本机 127.0.0.1，退出 Ops Flow 后自动停止。',
     'help.features.files.title': '远程文件',
-    'help.features.files.text': '通过 SFTP 浏览、搜索、上传、下载、编辑、重命名、备份和删除远程文件。终端执行简单的 cd 命令后，左侧文件区会自动切换到对应目录；最近路径和收藏路径按服务器保存，可快速切换目录；权限不足时可临时启用 sudo 或 su 特权访问。',
+    'help.features.files.text': '通过 SFTP 浏览、搜索、上传、下载、编辑、重命名、备份和删除远程文件。终端执行简单的 cd 命令后，左侧文件区会自动切换到对应目录；最近路径和收藏路径按服务器保存，可快速切换目录；权限不足时可临时启用 sudo 或 su 特权访问。可使用辅助区分隔线上的箭头收起基本信息与远程文件，让右侧工作区铺满；再次点击左侧窄栏即可恢复，宽度和折叠状态会自动记忆。',
     'help.features.database.title': '数据库管理',
     'help.features.database.text': '维护数据库连接，查看表和字段，执行 SQL 或选择本地 SQL/GZIP 文件批量运行；大型脚本会流式执行。内置逻辑备份无需另装命令行客户端，可把表结构、数据、索引、外键、视图、触发器和存储程序保存到本机。',
     'help.features.redis.title': 'Redis 管理',
@@ -299,9 +318,11 @@ const I18N_MESSAGES = {
     'help.data.title': '数据库、SQL 文件与统一状态',
     'help.data.intro': '数据库和传输类任务会把进度、成功、失败和取消状态集中到顶部“传输”。重要数据操作前仍应使用数据库自身的备份和恢复机制。',
     'help.data.database.title': '数据库对象与 SQL 编辑器',
-    'help.data.database.text': '数据库和 Redis 连接是独立的全局资源，不随左侧当前服务器切换。直接连接不要求 SSH，127.0.0.1 表示运行 Ops Flow 的 Windows 电脑，也可填写其他可访问的数据库或 Redis 地址；SSH 模式需固定选择一台已保存服务器作为跳板，但不必先连接命令终端。MySQL SSH 模式还可选择 Unix Socket。达梦连接需要先在“设置 → 常规”选择用户自行取得的官方 dmdb 外部驱动；旧服务端若只能协商旧算法，可显式开启隔离运行的兼容模式。达梦表浏览默认只显示当前登录用户模式，可在数据表标题栏切换其他可访问模式；切换后表名显示和复制会自动包含模式名，程序生成的 SQL 也会使用完整限定表名。驱动、兼容开关和运行时路径不会进入配置备份。已保存连接可复制复用，表名和字段名支持模糊筛选，SQL 可直接运行或从本地文件加载后检查再执行。',
+    'help.data.database.text': '数据库和 Redis 连接是独立的全局资源，不随左侧当前服务器切换。直接连接不要求 SSH，127.0.0.1 表示运行 Ops Flow 的 Windows 电脑，也可填写其他可访问的数据库或 Redis 地址；SSH 模式需固定选择一台已保存服务器作为跳板，但不必先连接命令终端。MySQL SSH 模式还可选择 Unix Socket。字段列表会根据连接的数据库引擎自动选择内置元数据适配器并读取字段注释，新增连接不需要配置注释查询；新增或编辑字段时也可维护注释，程序会自动使用对应数据库的写入方式。达梦连接需要先在“设置 → 常规”选择用户自行取得的官方 dmdb 外部驱动；旧服务端若只能协商旧算法，可显式开启隔离运行的兼容模式。达梦表浏览默认只显示当前登录用户模式，可在数据表标题栏切换其他可访问模式；切换后表名显示和复制会自动包含模式名，程序生成的 SQL 也会使用完整限定表名。驱动、兼容开关和运行时路径不会进入配置备份。已保存连接可复制复用，表名和字段名支持模糊筛选，SQL 可直接运行或从本地文件加载后检查再执行。',
+    'help.data.queryExport.title': '查询分页与全量 Excel 导出',
+    'help.data.queryExport.text': '单条 SELECT 或 WITH 只读查询由数据库按页返回，默认每页 100 行，可切换为 50、100、200 或 500 行，因此界面不会先加载全部结果。结果区域的“导出 Excel”会重新执行同一条只读查询，按批次读取全量数据并直接写入 .xlsx；导出行数、完成、失败和取消状态统一显示在顶部“传输”。为避免重复修改数据，更新、删除、建表等非只读语句不能使用结果导出。分页和分批导出建议使用唯一键 ORDER BY 保证稳定顺序；导出期间仍在变化的数据以各批次读取时的状态为准。Excel 单工作表最多导出 1,048,575 行数据（另有一行表头）。',
     'help.data.sqlFile.title': '2. 导入 SQL 或 GZIP 备份',
-    'help.data.sqlFile.text': '先选择要写入的目标数据库连接；完整恢复建议使用空数据库或空模式。点击 SQL 区域右上角“执行脚本”，选择任意工具导出的 .sql 或 .sql.gz 文件；同目录存在 .sha256 时会先校验，没有校验文件也可以正常执行。小文件会加载到编辑器供检查；超过 10 MB 的脚本不会加载到界面，而由主进程分两遍流式扫描和执行，因此不受编辑器大小限制。脚本会按数据库方言拆分并顺序运行，支持 MySQL/MariaDB DELIMITER、PostgreSQL 美元引用、SQL Server GO，以及 Oracle/达梦的“/”块结束符。',
+    'help.data.sqlFile.text': '先选择要写入的目标数据库连接；完整恢复建议使用空数据库或空模式。点击 SQL 区域右上角“选择脚本”，选择任意工具导出的 .sql 或 .sql.gz 文件，再点击“运行”开始执行；同目录存在 .sha256 时会先校验，没有校验文件也可以正常执行。小文件会加载到编辑器供检查；超过 10 MB 的脚本不会加载到界面，而由主进程分两遍流式扫描和执行，因此不受编辑器大小限制。脚本会按数据库方言拆分并顺序运行，支持 MySQL/MariaDB DELIMITER、PostgreSQL 美元引用、SQL Server GO，以及 Oracle/达梦的“/”块结束符。',
     'help.data.sqlRollback.title': '3. 异常回滚与停止并回滚',
     'help.data.sqlRollback.text': '加载 SQL 文件后默认启用“异常/停止时回滚”。批次异常会回滚事务；运行中可点击 SQL 区域或“传输”中的“停止并回滚”，应用等待当前批次结束后在安全边界回滚。MySQL、Oracle、达梦的部分 DDL 会隐式提交，数据库管理语句也可能不支持事务，因此界面会提示无法保证完整回滚。',
     'help.data.logicalBackup.title': '1. 导出数据库逻辑备份',
@@ -309,7 +330,7 @@ const I18N_MESSAGES = {
     'help.data.redis.title': '4. Redis 逻辑库备份与恢复',
     'help.data.redis.text': '选择 Redis 连接及逻辑库后，点击“备份”可把当前 db 的 Redis DUMP 数据、绝对过期时间和毫秒 TTL 保存为 .opsredis，并生成 SHA-256 校验文件。点击“恢复”选择文件和同名键策略（跳过、覆盖或报错），输入 RESTORE 后恢复到当前 db；恢复会验证文件完整性和可用的校验文件，并显示进度。该文件不是原生 RDB 且未加密，恢复取消不会回滚已经写入的键。',
     'help.data.status.title': '5. 在传输中心查看进度',
-    'help.data.status.text': '“传输”保存最近的上传、下载、保存、删除、部署和 SQL 文件任务。全部成功或主动取消后面板会自动收起；发生错误时保持打开并保留错误信息，直到手动关闭提示或清除记录。',
+    'help.data.status.text': '“传输”保存最近的上传、下载、保存、删除、部署、SQL 文件和查询结果 Excel 导出任务。全量查询导出会显示已写入的行数并支持取消；全部成功或主动取消后面板会自动收起，发生错误时保持打开并保留错误信息，直到手动关闭提示或清除记录。',
     'help.safety.title': '高风险操作说明',
     'help.safety.warning': '连接生产服务器前请确认已有可用备份和其他登录通道。不要在不了解影响范围时执行删除、停止、卸载或防火墙修改。',
     'help.safety.permission.title': '权限与只读状态',
@@ -840,12 +861,14 @@ const I18N_MESSAGES = {
     'database.deleteField': '删除字段',
     'database.header.name': '名称',
     'database.header.type': '类型',
+    'database.header.comment': '注释',
     'database.header.nullable': '可空',
     'database.header.default': '默认值',
     'database.doubleClickTable': '双击数据表查看字段。',
     'database.ctrlEnter': 'Ctrl+Enter 运行',
+    'database.sqlPlaceholder': '输入 SQL 语句',
     'database.run': '运行',
-    'database.runFile': '执行脚本',
+    'database.runFile': '选择脚本',
     'database.selectSqlFile': '选择 SQL 或压缩 SQL 脚本',
     'database.sqlFileLoaded': 'SQL 文件已加载：{name}',
     'database.sqlFileSource': '来源：{name} · {size} · {encoding}',
@@ -854,6 +877,8 @@ const I18N_MESSAGES = {
     'database.clearSqlConfirm': '清除已加载的 SQL 文件及编辑器内容？',
     'database.sqlRunning': '执行中',
     'database.rollbackOnStop': '异常/停止时回滚',
+    'database.executionConfirm': '确定在数据库“{name}”中运行当前 SQL 吗？',
+    'database.mutationConfirm': 'SQL 包含修改或删除数据的操作，确定在数据库“{name}”中执行吗？\n\n请确认目标数据库、表名和 WHERE 条件；执行后可能难以恢复。',
     'database.rollbackRiskConfirm': '脚本包含可能发生隐式提交的 DDL 或数据库管理语句，无法保证完整回滚。仍以事务模式执行吗？',
     'database.stopRollback': '停止并回滚',
     'database.stopRequested': '已请求停止，当前 SQL 批次结束后将执行回滚。',
@@ -876,14 +901,15 @@ const I18N_MESSAGES = {
     'database.table.createTable': '创建表',
     'database.column.editTitle': '编辑字段',
     'database.column.addTitle': '添加字段',
-    'database.column.editDescription': '更新字段名称、类型、是否可空和默认值。',
-    'database.column.addDescription': '在当前数据表上创建新字段。',
+    'database.column.editDescription': '更新字段名称、类型、是否可空、默认值和注释。',
+    'database.column.addDescription': '在当前数据表上创建新字段并可设置注释。',
     'database.column.currentName': '当前名称',
     'database.column.newName': '新名称',
     'database.column.name': '名称',
     'database.column.type': '类型',
     'database.column.nullable': '可空',
     'database.column.default': '默认值',
+    'database.column.comment': '注释',
     'database.column.yes': '是',
     'database.column.no': '否',
     'redis.dialog.editTitle': '编辑 Redis',
@@ -1587,7 +1613,8 @@ const emptyColumnForm = {
   newName: '',
   type: 'varchar(255)',
   nullable: true,
-  defaultValue: ''
+  defaultValue: '',
+  comment: ''
 }
 
 const emptyTableForm = {
@@ -1607,7 +1634,8 @@ const emptyCronForm = {
   weekday: '*',
   everyMinutes: '5',
   expression: '0 2 * * *',
-  command: ''
+  command: '',
+  autoLog: true
 }
 
 const emptyFirewallPortForm = {
@@ -1900,6 +1928,7 @@ export default function App() {
   const [tableColumns, setTableColumns] = useState([])
   const [isTableLoading, setIsTableLoading] = useState(false)
   const databaseMetadataRequestRef = useRef({ tables: '', columns: '' })
+  const databaseAutoLoadKeyRef = useRef('')
   const [tableDialog, setTableDialog] = useState(null)
   const [tableForm, setTableForm] = useState(emptyTableForm)
   const [columnDialog, setColumnDialog] = useState(null)
@@ -1936,7 +1965,14 @@ export default function App() {
   ].join('\n'))
   const [resourceHistory, setResourceHistory] = useState(() => makeInitialUsageHistory())
   const [toast, setToast] = useState(null)
-  const [appSidebarWidth, setAppSidebarWidth] = useState(270)
+  const [appSidebarWidth, setAppSidebarWidth] = useState(APP_SIDEBAR_DEFAULT_WIDTH)
+  const [appSidebarCollapsed, setAppSidebarCollapsed] = useState(false)
+  const [serverSwitcherOpen, setServerSwitcherOpen] = useState(false)
+  const [serverSwitcherQuery, setServerSwitcherQuery] = useState('')
+  const [workspaceAuxiliaryWidth, setWorkspaceAuxiliaryWidth] = useState(WORKSPACE_AUXILIARY_DEFAULT_WIDTH)
+  const [workspaceAuxiliaryCollapsed, setWorkspaceAuxiliaryCollapsed] = useState(false)
+  const serverSwitcherRef = useRef(null)
+  const desktopGridRef = useRef(null)
   const workflowLayoutRef = useRef(null)
   const terminalOutputRef = useRef(null)
   const terminalTextRef = useRef(terminalOutput)
@@ -1947,6 +1983,7 @@ export default function App() {
   const shellSessionRef = useRef(null)
   const shellServerIdRef = useRef('')
   const shellSessionsRef = useRef({})
+  const pendingShellInputRef = useRef({})
   const shellDirectoriesRef = useRef({})
   const shellDirectorySyncRef = useRef(0)
   const shellInputCaptureRef = useRef({})
@@ -1958,6 +1995,7 @@ export default function App() {
   const redisAutoLoadKeyRef = useRef('')
   const systemInspectorAutoLoadKeyRef = useRef('')
   const systemInspectorExecutionRef = useRef('')
+  const cronManualExecutionRef = useRef('')
   const serversLiveRef = useRef(servers)
   const shellRecoveryRef = useRef(new Set())
   const serverInspectInFlightRef = useRef(new Set())
@@ -1975,6 +2013,14 @@ export default function App() {
   const remoteDirectoryRequestRef = useRef(0)
   const lastWorkspaceServerIdRef = useRef('')
   const selectedServerIdLiveRef = useRef('')
+  const focusTerminalIfAvailable = () => {
+    if (activeModuleRef.current !== 'command') return false
+    if (document.querySelector('.modal-backdrop')) return false
+    const activeElement = document.activeElement
+    if (activeElement?.matches?.('input, textarea, select, [contenteditable="true"]')) return false
+    terminalRef.current?.focus()
+    return true
+  }
   const [logs, setLogs] = useState([
     '[09:30:12] Ops Flow ready',
     '[09:30:13] No server configured'
@@ -1988,6 +2034,25 @@ export default function App() {
     })
     window.opsFlow.getStore('theme').then((savedTheme) => {
       if (THEME_OPTIONS.includes(savedTheme)) setThemeMode(savedTheme)
+    })
+    window.opsFlow.getStore('appSidebarLayout').then((savedLayout) => {
+      if (!savedLayout || typeof savedLayout !== 'object' || Array.isArray(savedLayout)) return
+      const savedWidth = Number(savedLayout.width)
+      if (Number.isFinite(savedWidth)) {
+        setAppSidebarWidth(Math.min(APP_SIDEBAR_MAX_WIDTH, Math.max(APP_SIDEBAR_MIN_WIDTH, savedWidth)))
+      }
+      setAppSidebarCollapsed(savedLayout.collapsed === true)
+    })
+    window.opsFlow.getStore('workspaceAuxiliaryLayout').then((savedLayout) => {
+      if (!savedLayout || typeof savedLayout !== 'object' || Array.isArray(savedLayout)) return
+      const savedWidth = Number(savedLayout.width)
+      if (Number.isFinite(savedWidth)) {
+        setWorkspaceAuxiliaryWidth(Math.min(
+          WORKSPACE_AUXILIARY_MAX_WIDTH,
+          Math.max(WORKSPACE_AUXILIARY_MIN_WIDTH, savedWidth)
+        ))
+      }
+      setWorkspaceAuxiliaryCollapsed(savedLayout.collapsed === true)
     })
     window.opsFlow.getStore('backupRecoveryProfiles').then((savedProfiles) => {
       if (savedProfiles && typeof savedProfiles === 'object' && !Array.isArray(savedProfiles)) {
@@ -2053,6 +2118,22 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (!serverSwitcherOpen) return undefined
+    const closeOnOutsideClick = (event) => {
+      if (!serverSwitcherRef.current?.contains(event.target)) setServerSwitcherOpen(false)
+    }
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setServerSwitcherOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [serverSwitcherOpen])
+
+  useEffect(() => {
     const previous = previousSshTunnelStatusesRef.current
     for (const [id, status] of Object.entries(sshTunnelStatuses)) {
       if (previous[id]?.status === 'running' && status?.status === 'error') {
@@ -2093,6 +2174,12 @@ export default function App() {
     () => servers.find((server) => server.id === selectedServerId) || emptyServer,
     [servers, selectedServerId]
   )
+  const filteredServerSwitcherServers = useMemo(() => {
+    const query = serverSwitcherQuery.trim().toLocaleLowerCase()
+    if (!query) return servers
+    return servers.filter((server) => [server.name, server.host, server.username, server.environment]
+      .some((value) => String(value || '').toLocaleLowerCase().includes(query)))
+  }, [servers, serverSwitcherQuery])
   const selectedRemotePathHistory = remotePathHistory[selectedServer.id] || { recent: [], favorites: [] }
   const visibleCommandSnippets = useMemo(
     () => commandSnippets.filter((snippet) => snippet.scope === 'all' || snippet.scope === selectedServer.id),
@@ -2182,7 +2269,7 @@ export default function App() {
     }
     shellSessionRef.current = sessionId
     shellServerIdRef.current = selectedServer.id
-    terminalRef.current.focus()
+    focusTerminalIfAvailable()
     terminalRef.current.paste(command)
     terminalRef.current.scrollToBottom()
     showToast('info', t('command.filled', 'Command pasted into the terminal. Review it, then press Enter to run.'))
@@ -2197,6 +2284,9 @@ export default function App() {
   const selectedDatabases = databases
   const selectedRedisStores = redisStores
   const selectedDatabase = selectedDatabases.find((item) => item.id === selectedDatabaseId) || selectedDatabases[0] || null
+  const selectedDatabaseAutoLoadKey = selectedDatabase
+    ? `${selectedDatabase.id}\u0000${databaseMetadataIdentity(selectedDatabase)}`
+    : ''
   const selectedRedis = selectedRedisStores.find((item) => item.id === selectedRedisId) || selectedRedisStores[0] || null
   const selectedWorkflow = workflows.find((item) => item.id === selectedWorkflowId) || workflows[0] || workflowTemplates[0]
   const workflowRunWorkflow = workflows.find((item) => item.id === workflowRunWorkflowId) || selectedWorkflow
@@ -2328,18 +2418,29 @@ export default function App() {
 
   useEffect(() => {
     if (activeModule !== 'database') return undefined
+    if (!selectedDatabaseAutoLoadKey || databaseAutoLoadKeyRef.current === selectedDatabaseAutoLoadKey) return undefined
+    const database = databases.find((item) => item.id === selectedDatabaseId)
+    if (!database || !resourceConnectionAvailable(database, servers)) return undefined
+    databaseAutoLoadKeyRef.current = selectedDatabaseAutoLoadKey
     databaseMetadataRequestRef.current = { tables: '', columns: '' }
     setSelectedDbTable(null)
     setSelectedDbColumn(null)
     setTableColumns([])
     setIsTableLoading(false)
-    const database = databases.find((item) => item.id === selectedDatabaseId)
-    if (!database || !resourceConnectionAvailable(database, servers)) return undefined
-    const timer = window.setTimeout(() => {
-      refreshDatabaseTables(database)
+    const timer = window.setTimeout(async () => {
+      try {
+        const loaded = await refreshDatabaseTables(database)
+        if (loaded === false && databaseAutoLoadKeyRef.current === selectedDatabaseAutoLoadKey) {
+          databaseAutoLoadKeyRef.current = ''
+        }
+      } catch {
+        if (databaseAutoLoadKeyRef.current === selectedDatabaseAutoLoadKey) {
+          databaseAutoLoadKeyRef.current = ''
+        }
+      }
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [activeModule, selectedDatabaseId])
+  }, [activeModule, selectedDatabaseAutoLoadKey])
 
   useEffect(() => {
     const repaired = ensureUniqueResourceIds(redisStores, 'redis')
@@ -2440,13 +2541,16 @@ export default function App() {
       const serverId = selectedServerIdLiveRef.current
       captureSubmittedTerminalCommands(shellInputCaptureRef.current, serverId, text)
         .forEach((submittedCommand) => void syncRemoteDirectoryFromShellCommand(serverId, submittedCommand))
-      terminalRef.current?.focus()
+      focusTerminalIfAvailable()
       window.opsFlow.writeSshShell(sessionId, text)
       return true
     }
 
     const terminal = new Terminal({
       cursorBlink: true,
+      cursorStyle: 'bar',
+      cursorInactiveStyle: 'bar',
+      cursorWidth: 2,
       fontFamily: '"Cascadia Mono", Consolas, "Liberation Mono", monospace',
       fontSize: 14,
       fontWeight: 400,
@@ -2506,19 +2610,20 @@ export default function App() {
 
     terminal.onData((data) => {
       if (activeModuleRef.current !== 'command') return
-      const sessionId = getShellSessionId(selectedServerIdLiveRef.current)
+      const serverId = selectedServerIdLiveRef.current
+      const sessionId = getShellSessionId(serverId)
       if (sessionId) {
-        const serverId = selectedServerIdLiveRef.current
         const submittedCommands = captureSubmittedTerminalCommands(shellInputCaptureRef.current, serverId, data)
         if (!submittedCommands.length && /[\r\n]/.test(data)) {
           const displayedCommand = readDisplayedTerminalCommand(terminal)
           if (displayedCommand) submittedCommands.push(displayedCommand)
         }
         submittedCommands.forEach((submittedCommand) => void syncRemoteDirectoryFromShellCommand(serverId, submittedCommand))
-        terminal.scrollToBottom()
         shellSessionRef.current = sessionId
         shellServerIdRef.current = serverId
         window.opsFlow.writeSshShell(sessionId, data)
+      } else if (serverId && (shellRecoveryRef.current.has(serverId) || terminalAutoOpenRef.current === serverId)) {
+        pendingShellInputRef.current[serverId] = `${pendingShellInputRef.current[serverId] || ''}${data}`.slice(-4096)
       } else {
         showToast('error', 'Click Connect to open the SSH terminal.')
       }
@@ -2620,6 +2725,7 @@ export default function App() {
           setRemoteItems([])
           setSelectedRemoteItem(null)
         }
+        delete pendingShellInputRef.current[serverId]
         appendLog(`Server connection check failed after ${result?.attempts || 1} attempts: ${result?.message || 'SSH unavailable'}`)
         showToast('error', '服务器 SSH 已不可达，连接状态已更新。')
       }).catch((error) => {
@@ -2727,7 +2833,7 @@ export default function App() {
       window.setTimeout(() => {
         if (!terminalHostRef.current?.clientWidth || !terminalHostRef.current?.clientHeight) return
         fitAddonRef.current?.fit()
-        terminalRef.current?.focus()
+        focusTerminalIfAvailable()
         terminalRef.current?.scrollToBottom()
         const sessionId = getShellSessionId(selectedServer.id)
         if (sessionId && terminalRef.current) {
@@ -3070,12 +3176,13 @@ export default function App() {
     if (existingSessionId) {
       shellSessionRef.current = existingSessionId
       shellServerIdRef.current = server.id
-      terminalRef.current.focus()
+      focusTerminalIfAvailable()
       fitAddonRef.current?.fit()
       window.opsFlow.resizeSshShell(existingSessionId, {
         cols: terminalRef.current.cols,
         rows: terminalRef.current.rows
       })
+      flushPendingShellInput(server.id, existingSessionId)
       void initializeShellDirectory(server)
       return { ok: true }
     }
@@ -3089,6 +3196,7 @@ export default function App() {
       rows: terminalRef.current.rows
     })
     if (!result.ok) {
+      delete pendingShellInputRef.current[server.id]
       terminalRef.current.writeln(`Connection failed: ${result.message}`)
       return result
     }
@@ -3096,9 +3204,16 @@ export default function App() {
     shellSessionsRef.current[server.id] = result.sessionId
     shellSessionRef.current = result.sessionId
     shellServerIdRef.current = server.id
+    flushPendingShellInput(server.id, result.sessionId)
     void initializeShellDirectory(server)
-    terminalRef.current.focus()
+    focusTerminalIfAvailable()
     return result
+  }
+
+  const flushPendingShellInput = (serverId, sessionId) => {
+    const pending = pendingShellInputRef.current[serverId] || ''
+    delete pendingShellInputRef.current[serverId]
+    if (pending && sessionId) window.opsFlow.writeSshShell(sessionId, pending)
   }
 
   const ensureCurrentTerminalShell = async () => {
@@ -3109,7 +3224,7 @@ export default function App() {
     if (existingSessionId) {
       shellSessionRef.current = existingSessionId
       shellServerIdRef.current = selectedServer.id
-      terminalRef.current.focus()
+      focusTerminalIfAvailable()
       return
     }
     if (terminalAutoOpenRef.current === selectedServer.id) return
@@ -3141,6 +3256,7 @@ export default function App() {
       shellSessionRef.current = null
       shellServerIdRef.current = ''
     }
+    if (serverId) delete pendingShellInputRef.current[serverId]
     if (message) terminalRef.current?.writeln(`\r\n${message}`)
   }
 
@@ -5234,46 +5350,106 @@ export default function App() {
       showToast('error', 'Schedule and command are required.')
       return
     }
-    const cronLines = systemInspectorResult?.cronEntries?.map((item) => item.line) || []
+    const cronEntries = systemInspectorResult?.cronEntries || []
+    const cronLines = sanitizeCronSourceLines(systemInspectorResult?.sections?.CRON || cronEntries.map((item) => item.line))
     const nextLines =
       cronDialog?.mode === 'edit'
         ? cronLines.map((item, index) => (index === cronDialog.cron.index ? line : item))
         : [...cronLines, line]
-    await saveCronLines(nextLines)
+    const saved = await saveCronLines(nextLines)
+    if (!saved) return
     applyWorkflowPendingResource('cron', {
       cronLine: line,
       cron: buildCronExpression(cronForm),
-      command: cronForm.command
+      command: buildCronCommandFromForm(cronForm)
     })
     closeCronDialog()
     resumeWorkflowAfterResource()
   }
 
-  const deleteCronEntry = async (cron) => {
-    if (!window.confirm(t('confirm.deleteCron', 'Delete cron entry?\n{line}', { line: cron.line }))) return
-    const nextLines = (systemInspectorResult?.cronEntries || [])
-      .filter((item) => item.index !== cron.index)
-      .map((item) => item.line)
+  const performDeleteCronEntry = async (cron) => {
+    const cronLines = sanitizeCronSourceLines(systemInspectorResult?.sections?.CRON || [])
+    const nextLines = cronLines.filter((_item, index) => index !== cron.index)
     await saveCronLines(nextLines)
+  }
+
+  const deleteCronEntry = (cron) => {
+    setDangerConfirm({
+      title: '删除定时任务',
+      target: cron.line,
+      warning: '该任务将从当前 SSH 用户的 crontab 中删除。',
+      confirmLabel: '删除任务',
+      onConfirm: () => performDeleteCronEntry(cron)
+    })
   }
 
   const saveCronLines = async (lines) => {
     if (selectedServer.status !== 'connected') {
       showToast('error', 'Connect server first.')
-      return
+      return false
     }
     setInspectorBusyKey('cron:save')
     try {
-      const result = await window.opsFlow.execSsh(selectedServer, buildCronInstallCommand(lines))
+      const executeCronCommand = window.opsFlow.execSshRaw || window.opsFlow.execSsh
+      const result = await executeCronCommand(selectedServer, buildCronInstallCommand(lines))
       if (!result.ok) {
-        showToast('error', result.message || 'Cron update failed')
-        return
+        showToast('error', String(result.stderr || result.stdout || result.message || 'Cron update failed').trim())
+        return false
       }
+      const cronEntries = parseCronLines(lines)
+      setSystemInspectorResult((current) => {
+        if (!current || current.ok === false) return current
+        return {
+          ...current,
+          sections: { ...current.sections, CRON: [...lines] },
+          cronEntries
+        }
+      })
       showToast('success', 'Cron updated.')
-      await loadSystemInspector()
+      return true
+    } catch (error) {
+      showToast('error', error?.message || 'Cron update failed')
+      return false
     } finally {
       setInspectorBusyKey('')
     }
+  }
+
+  const runCronEntryOnce = async (command, onOutput) => {
+    const executableCommand = String(command || '').trim()
+    if (!executableCommand) return { ok: false, message: 'Command is required.', output: '' }
+    if (selectedServer.status !== 'connected') return { ok: false, message: 'Connect server first.', output: '' }
+
+    const executionId = `cron-manual-${selectedServer.id}-${Date.now()}`
+    const outputChunks = []
+    cronManualExecutionRef.current = executionId
+    const stopListening = window.opsFlow.onSshExecData?.((payload) => {
+      if (payload?.executionId !== executionId) return
+      const chunk = String(payload.data || '')
+      if (!chunk) return
+      outputChunks.push(chunk)
+      onOutput?.(chunk, payload.stream || 'stdout')
+    })
+
+    try {
+      const result = window.opsFlow.execSshStream
+        ? await window.opsFlow.execSshStream(selectedServer, executableCommand, executionId, { mode: 'normal' })
+        : await window.opsFlow.execSsh(selectedServer, executableCommand)
+      const streamedOutput = outputChunks.join('').trim()
+      const finalOutput = streamedOutput || [result.stdout, result.stderr].filter(Boolean).join('\n').trim()
+      return { ...result, output: finalOutput }
+    } catch (error) {
+      return { ok: false, message: error?.message || 'Manual execution failed.', output: outputChunks.join('').trim() }
+    } finally {
+      stopListening?.()
+      if (cronManualExecutionRef.current === executionId) cronManualExecutionRef.current = ''
+    }
+  }
+
+  const cancelCronEntryRun = async () => {
+    const executionId = cronManualExecutionRef.current
+    if (!executionId) return
+    await window.opsFlow.cancelSshExec?.(executionId).catch(() => null)
   }
 
   const openFirewallPortDialog = () => {
@@ -5693,7 +5869,7 @@ export default function App() {
     const privilege = options.privileged === false ? null : (options.privilege || getRemotePrivilege(server))
     setRemoteServerId(requestServerId)
     setRemotePath(path)
-    if (remoteServerId !== requestServerId) setRemoteItems([])
+    setRemoteItems([])
     setRemoteLoadError({ serverId: requestServerId, message: '' })
     setIsRemoteLoading(true)
 
@@ -5989,6 +6165,12 @@ export default function App() {
 
       const completed = results.filter((result) => result.ok)
       const failed = results.filter((result) => !result.ok)
+      if (completed.length) {
+        const deletedPaths = new Set(completed.map((result) => result.path))
+        setRemoteItems((current) => current.filter((item) => (
+          !deletedPaths.has(item.path || joinRemotePath(remotePath, item.name))
+        )))
+      }
       if (failed.length) showToast('error', `${failed.length} item(s) could not be deleted`)
       else showToast('success', targets.length === 1 ? `Deleted: ${targets[0].name}` : `${completed.length} items deleted`)
       setSelectedRemoteItem(null)
@@ -6537,11 +6719,11 @@ export default function App() {
   const refreshDatabaseTables = async (database = selectedDatabase) => {
     if (!database) {
       appendLog('Refresh tables skipped: no database selected')
-      return
+      return false
     }
     if (!resourceConnectionAvailable(database, servers)) {
       showToast('error', resourceConnectionError(database))
-      return
+      return false
     }
     const runtimeDatabase = withDatabaseRuntime(database, servers)
     const requestId = `${database.id}:${Date.now()}:${Math.random()}`
@@ -6564,7 +6746,7 @@ export default function App() {
       if (!result.ok) {
         appendLog(`Refresh tables failed: ${result.message}`)
         showToast('error', result.message || 'Failed to refresh tables')
-        return
+        return false
       }
       const normalizedTables = normalizeDbTables(result.tables)
       const schemas = normalizeDbSchemas(result.schemas, normalizedTables)
@@ -6587,6 +6769,7 @@ export default function App() {
       persist({ servers, databases: next, redisStores })
       checkDatabasePrivileges(database, { silent: true })
       appendLog(`Tables refreshed: ${database.name} (${updatedDatabase.tables.length})`)
+      return true
     } finally {
       if (databaseMetadataRequestRef.current.tables === requestId) setIsTableLoading(false)
     }
@@ -6933,13 +7116,29 @@ export default function App() {
       return
     }
     const rollbackOnError = Boolean(sqlFileInfo && sqlFileInfo.rollbackOnError !== false)
-    if (rollbackOnError && (sqlFileInfo?.directExecution || scriptHasRollbackRisk(sqlScript, target.engine))) {
-      const confirmed = window.confirm(t(
-        'database.rollbackRiskConfirm',
-        'This script contains DDL or administration statements that may implicitly commit, so a full rollback cannot be guaranteed. Continue in transaction mode?'
-      ))
-      if (!confirmed) return
-    }
+    const hasMutation = !sqlFileInfo?.directExecution && scriptHasMutation(sqlScript)
+    const hasRollbackRisk = rollbackOnError && (sqlFileInfo?.directExecution || scriptHasRollbackRisk(sqlScript, target.engine))
+    const isReadOnlySelect = !sqlFileInfo?.directExecution
+      && scriptStartsWithSelect(sqlScript)
+      && !scriptHasNonQueryOperation(sqlScript)
+    const executionConfirmation = hasMutation
+      ? t(
+          'database.mutationConfirm',
+          'This SQL modifies or deletes data. Run it on database "{name}"?\n\nConfirm the target database, table names, and WHERE clauses first; the changes may be difficult to undo.',
+          { name: target.name }
+        )
+      : t(
+          'database.executionConfirm',
+          'Run the current SQL on database "{name}"?',
+          { name: target.name }
+        )
+    const rollbackWarning = hasRollbackRisk
+      ? `\n\n${t(
+          'database.rollbackRiskConfirm',
+          'This script contains DDL or administration statements that may implicitly commit, so a full rollback cannot be guaranteed. Continue in transaction mode?'
+        )}`
+      : ''
+    if (!isReadOnlySelect && !window.confirm(`${executionConfirmation}${rollbackWarning}`)) return
     const taskId = sqlFileInfo ? `sql-file-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : ''
     setSqlExecutionTaskId(taskId)
     setIsSqlRunning(true)
@@ -6959,11 +7158,12 @@ export default function App() {
             filePath: sqlFileInfo.path,
             rollbackOnError
           })
-          : await window.opsFlow.execDatabase(withDatabaseRuntime(target, servers), sqlScript)
+          : await window.opsFlow.execDatabase(withDatabaseRuntime(target, servers), sqlScript, { page: 1, pageSize: 100 })
       appendLog(result.ok
         ? sqlFileInfo ? `SQL file executed: ${sqlFileInfo.name} (${result.statementCount || 0} batches)` : 'SQL executed'
         : `SQL failed: ${result.message}`)
-      setSqlResult(formatSqlResult(result))
+      const formattedResult = formatSqlResult(result)
+      setSqlResult(!sqlFileInfo && result.query ? { ...formattedResult, sourceSql: sqlScript, databaseId: target.id } : formattedResult)
       if (result.canceled && !result.rollbackFailed) showToast('info', result.message || 'SQL execution stopped')
       else if (!result.ok) showToast('error', result.message || 'SQL execution failed')
       else showToast(
@@ -6979,6 +7179,67 @@ export default function App() {
     } finally {
       setIsSqlRunning(false)
       setSqlExecutionTaskId('')
+    }
+  }
+
+  const changeSqlResultPage = async (page, pageSize = sqlResult?.pageSize || 100) => {
+    const target = selectedDatabase
+    const sourceSql = sqlResult?.sourceSql
+    if (!target || !sourceSql || isSqlRunning) return
+    if (sqlResult?.databaseId && sqlResult.databaseId !== target.id) {
+      showToast('error', '查询结果不属于当前数据库连接，请重新运行 SQL。')
+      return
+    }
+    setIsSqlRunning(true)
+    setSqlResult((current) => ({ ...current, loading: true, message: `正在加载第 ${page} 页…` }))
+    try {
+      const result = await window.opsFlow.execDatabase(
+        withDatabaseRuntime(target, servers),
+        sourceSql,
+        { page, pageSize }
+      )
+      if (!result.ok) {
+        setSqlResult((current) => ({ ...current, loading: false, message: `分页加载失败：${result.message}` }))
+        showToast('error', result.message || '查询分页加载失败')
+        return
+      }
+      const formattedResult = formatSqlResult(result)
+      setSqlResult({ ...formattedResult, sourceSql, databaseId: target.id })
+    } catch (error) {
+      setSqlResult((current) => ({ ...current, loading: false, message: `分页加载失败：${error.message}` }))
+      showToast('error', error.message || '查询分页加载失败')
+    } finally {
+      setIsSqlRunning(false)
+    }
+  }
+
+  const exportSqlQueryResult = async (result = sqlResult) => {
+    const target = selectedDatabase
+    const sourceSql = result?.sourceSql
+    if (!target || !sourceSql || !result?.query) {
+      showToast('error', '请先执行一条只读查询。')
+      return
+    }
+    if (result.databaseId && result.databaseId !== target.id) {
+      showToast('error', '查询结果不属于当前数据库连接，请重新运行 SQL。')
+      return
+    }
+    const taskId = `database-query-export-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    try {
+      const exportResult = await window.opsFlow.exportDatabaseQuery(
+        withDatabaseRuntime(target, servers),
+        sourceSql,
+        { taskId, batchSize: 2000 }
+      )
+      if (exportResult.canceled) return
+      if (!exportResult.ok) {
+        showToast('error', exportResult.message || 'Excel 导出失败')
+        return
+      }
+      appendLog(`Query result exported: ${exportResult.path} (${exportResult.rowCount || 0} rows)`)
+      showToast('success', `Excel 导出完成，共 ${Number(exportResult.rowCount || 0).toLocaleString('zh-CN')} 行`)
+    } catch (error) {
+      showToast('error', error.message || 'Excel 导出失败')
     }
   }
 
@@ -7004,6 +7265,12 @@ export default function App() {
       databaseTableDeleteCancelRef.current.add(task.id)
       updateTransferTask({ id: task.id, status: 'running', message: '正在停止批量删除，当前数据表完成后停止…' })
       showToast('info', '已请求停止批量删除。')
+      return
+    }
+    if (task.type === 'database-query-export') {
+      const result = await window.opsFlow.cancelDatabaseQueryExport(task.id)
+      if (!result.ok) showToast('error', result.message)
+      else showToast('info', result.message)
       return
     }
     if (task.type === 'database-backup') {
@@ -7355,7 +7622,8 @@ export default function App() {
       newName: selectedDbColumn.name,
       type: selectedDbColumn.type || emptyColumnForm.type,
       nullable: !/^no$/i.test(selectedDbColumn.nullable || ''),
-      defaultValue: selectedDbColumn.defaultValue === '-' ? '' : selectedDbColumn.defaultValue || ''
+      defaultValue: selectedDbColumn.defaultValue === '-' ? '' : selectedDbColumn.defaultValue || '',
+      comment: selectedDbColumn.comment === '-' ? '' : selectedDbColumn.comment || ''
     })
     setColumnDialog({ mode: 'edit', column: selectedDbColumn })
   }
@@ -7378,6 +7646,34 @@ export default function App() {
         showToast('error', message)
         setSqlResult({ ok: false, message })
         return
+      }
+
+      const finalColumnName = columnDialog.mode === 'edit'
+        ? columnForm.newName.trim()
+        : columnForm.name.trim()
+      const shouldSaveComment = columnDialog.mode === 'edit' || Boolean(columnForm.comment.trim())
+      if (shouldSaveComment) {
+        const commentResult = await window.opsFlow.setDatabaseColumnComment(
+          withDatabaseRuntime(selectedDatabase, servers),
+          selectedDbTable,
+          {
+            name: finalColumnName,
+            type: columnForm.type.trim(),
+            nullable: Boolean(columnForm.nullable),
+            defaultValue: columnForm.defaultValue?.trim() || '',
+            comment: columnForm.comment
+          }
+        )
+        if (!commentResult.ok) {
+          const message = `字段结构已更新，但注释保存失败：${formatDatabaseOperationError(commentResult.message)}`
+          appendLog(message)
+          showToast('error', message)
+          setSqlResult({ ok: false, message })
+          setColumnDialog(null)
+          setColumnForm(emptyColumnForm)
+          await loadTableColumns(selectedDbTable, selectedDatabase)
+          return
+        }
       }
       showToast('success', 'Column updated.')
       setColumnDialog(null)
@@ -7753,7 +8049,7 @@ export default function App() {
       ? terminalTextRef.current
       : (workspaceCacheRef.current[serverId]?.terminalOutput || '')
     const rawNext = `${base}${chunk}`
-    const next = limitTerminalOutput(rawNext)
+    const next = rawNext.length > 60000 ? rawNext.slice(-60000) : rawNext
 
     if (serverId) {
       workspaceCacheRef.current[serverId] = {
@@ -7764,7 +8060,6 @@ export default function App() {
 
     if (isSelectedServerShell) {
       terminalTextRef.current = next
-      setTerminalOutput(next)
     }
 
   }
@@ -7957,7 +8252,7 @@ export default function App() {
       sqlFileInfo,
       sqlResult,
       terminalInput,
-      terminalOutput,
+      terminalOutput: terminalTextRef.current,
       resourceHistory,
       systemInspectorResult,
       servicePrivilege: { ...servicePrivilege, password: '' },
@@ -8189,20 +8484,104 @@ export default function App() {
 
   function startAppSidebarResize(event) {
     event.preventDefault()
+    if (appSidebarCollapsed) return
     const startX = event.clientX
     const startWidth = appSidebarWidth
+    let resizedWidth = startWidth
     document.body.classList.add('is-resizing-panel')
 
     const handleMove = (moveEvent) => {
-      const maxWidth = Math.min(420, Math.max(260, window.innerWidth * 0.36))
-      const nextWidth = Math.min(maxWidth, Math.max(220, startWidth + moveEvent.clientX - startX))
-      setAppSidebarWidth(nextWidth)
+      const maxWidth = Math.min(APP_SIDEBAR_MAX_WIDTH, Math.max(260, window.innerWidth * 0.36))
+      resizedWidth = Math.min(maxWidth, Math.max(
+        APP_SIDEBAR_MIN_WIDTH,
+        startWidth + moveEvent.clientX - startX
+      ))
+      setAppSidebarWidth(resizedWidth)
     }
 
     const handleUp = () => {
       document.body.classList.remove('is-resizing-panel')
       window.removeEventListener('mousemove', handleMove)
       window.removeEventListener('mouseup', handleUp)
+      window.opsFlow.setStore('appSidebarLayout', {
+        width: resizedWidth,
+        collapsed: false
+      })
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
+
+  function toggleAppSidebar() {
+    setServerSwitcherOpen(false)
+    setServerSwitcherQuery('')
+    setAppSidebarCollapsed((current) => {
+      const collapsed = !current
+      window.opsFlow.setStore('appSidebarLayout', {
+        width: appSidebarWidth,
+        collapsed
+      })
+      return collapsed
+    })
+  }
+
+  function openServerSwitcher() {
+    setServerSwitcherQuery('')
+    setServerSwitcherOpen((current) => !current)
+  }
+
+  function selectServerFromSwitcher(server) {
+    selectServer(server)
+    setServerSwitcherOpen(false)
+    setServerSwitcherQuery('')
+  }
+
+  function addServerFromCollapsedSidebar() {
+    setServerSwitcherOpen(false)
+    setServerSwitcherQuery('')
+    openAddServer()
+  }
+
+  function toggleWorkspaceAuxiliaryPanel() {
+    setWorkspaceAuxiliaryCollapsed((current) => {
+      const collapsed = !current
+      window.opsFlow.setStore('workspaceAuxiliaryLayout', {
+        width: workspaceAuxiliaryWidth,
+        collapsed
+      })
+      return collapsed
+    })
+  }
+
+  function startWorkspaceAuxiliaryResize(event) {
+    event.preventDefault()
+    if (workspaceAuxiliaryCollapsed) return
+    const bounds = desktopGridRef.current?.getBoundingClientRect()
+    if (!bounds?.width) return
+    const startX = event.clientX
+    const startWidth = workspaceAuxiliaryWidth
+    let resizedWidth = startWidth
+    document.body.classList.add('is-resizing-panel')
+
+    const handleMove = (moveEvent) => {
+      const availableMaximum = Math.max(WORKSPACE_AUXILIARY_MIN_WIDTH, bounds.width - 634)
+      const maximum = Math.min(WORKSPACE_AUXILIARY_MAX_WIDTH, availableMaximum)
+      resizedWidth = Math.min(maximum, Math.max(
+        WORKSPACE_AUXILIARY_MIN_WIDTH,
+        startWidth + moveEvent.clientX - startX
+      ))
+      setWorkspaceAuxiliaryWidth(resizedWidth)
+    }
+
+    const handleUp = () => {
+      document.body.classList.remove('is-resizing-panel')
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+      window.opsFlow.setStore('workspaceAuxiliaryLayout', {
+        width: resizedWidth,
+        collapsed: false
+      })
     }
 
     window.addEventListener('mousemove', handleMove)
@@ -8233,56 +8612,179 @@ export default function App() {
   return (
     <I18nContext.Provider value={{ language, t, themeMode, resolvedTheme }}>
     <div
-      className="app-shell"
-      style={{ gridTemplateColumns: `${appSidebarWidth}px 10px minmax(0, 1fr)` }}
+      className={`app-shell ${appSidebarCollapsed ? 'server-sidebar-collapsed' : ''}`}
+      style={{
+        gridTemplateColumns: appSidebarCollapsed
+          ? `${APP_SIDEBAR_COLLAPSED_WIDTH}px 8px minmax(0, 1fr)`
+          : `${appSidebarWidth}px 10px minmax(0, 1fr)`
+      }}
     >
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark"><Boxes size={22} /></div>
-          <div>
-            <strong>Ops Flow</strong>
-            <span>{t('app.serverOperations', 'Server operations')}</span>
-          </div>
-        </div>
-
-        <button className="primary-button" onClick={openAddServer}>
-          <Plus size={16} />
-          {t('app.addServer', 'Add server')}
-        </button>
-
-        <div className="server-list">
-          {servers.length ? (
-            servers.map((server) => (
-              <button
-                key={server.id}
-                className={`server-item server-${server.status || 'disconnected'} ${server.id === selectedServerId ? 'active' : ''}`}
-                onClick={() => selectServer(server)}
-              >
-                <Server size={18} />
-                <span>
-                  <strong title={server.name}>{server.name}</strong>
-                  <small title={`${server.host}:${server.port}`}>{server.host}:{server.port}</small>
-                </span>
-              </button>
-            ))
-          ) : (
-            <div className="server-empty">
-              <strong>{t('app.noServers', 'No servers')}</strong>
-              <span>{t('app.addFirstSsh', 'Add your first SSH connection.')}</span>
+      <aside className={`sidebar ${appSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+        <div className="sidebar-expanded-content" aria-hidden={appSidebarCollapsed}>
+          <div className="brand">
+            <div className="brand-mark"><Boxes size={22} /></div>
+            <div>
+              <strong>Ops Flow</strong>
+              <span>{t('app.serverOperations', 'Server operations')}</span>
             </div>
-          )}
+            <button
+              type="button"
+              className="sidebar-collapse-button"
+              title={t('app.collapseSidebar', 'Collapse server navigation')}
+              aria-label={t('app.collapseSidebar', 'Collapse server navigation')}
+              aria-expanded="true"
+              onClick={toggleAppSidebar}
+            >
+              <ChevronLeft size={16} />
+            </button>
+          </div>
+
+          <button className="primary-button" onClick={openAddServer}>
+            <Plus size={16} />
+            {t('app.addServer', 'Add server')}
+          </button>
+
+          <div className="server-list">
+            {servers.length ? (
+              servers.map((server) => (
+                <button
+                  key={server.id}
+                  className={`server-item server-${server.status || 'disconnected'} ${server.id === selectedServerId ? 'active' : ''}`}
+                  onClick={() => selectServer(server)}
+                >
+                  <Server size={18} />
+                  <span>
+                    <strong title={server.name}>{server.name}</strong>
+                    <small title={`${server.host}:${server.port}`}>{server.host}:{server.port}</small>
+                  </span>
+                </button>
+              ))
+            ) : (
+              <div className="server-empty">
+                <strong>{t('app.noServers', 'No servers')}</strong>
+                <span>{t('app.addFirstSsh', 'Add your first SSH connection.')}</span>
+              </div>
+            )}
+          </div>
+
+          <section className="side-log">
+            <div>{t('app.toolLog', 'Tool log')}</div>
+            <pre>{logs.slice(-6).join('\n')}</pre>
+          </section>
         </div>
 
-        <section className="side-log">
-          <div>{t('app.toolLog', 'Tool log')}</div>
-          <pre>{logs.slice(-6).join('\n')}</pre>
-        </section>
+        <div className="sidebar-collapsed-content" aria-hidden={!appSidebarCollapsed}>
+          <button
+            type="button"
+            className="collapsed-sidebar-brand"
+            title={t('app.expandSidebar', 'Expand server navigation')}
+            aria-label={t('app.expandSidebar', 'Expand server navigation')}
+            aria-expanded="false"
+            onClick={toggleAppSidebar}
+          >
+            <Boxes size={20} />
+            <ChevronRight size={11} />
+          </button>
+
+          <div className="server-switcher-control" ref={serverSwitcherRef}>
+            <button
+              type="button"
+              className={`collapsed-current-server server-${selectedServer.status || 'disconnected'} ${serverSwitcherOpen ? 'selected' : ''}`}
+              title={selectedServer.id
+                ? `${t('app.openServerSwitcher', 'Choose server')}: ${selectedServer.name}`
+                : t('app.openServerSwitcher', 'Choose server')}
+              aria-label={t('app.openServerSwitcher', 'Choose server')}
+              aria-expanded={serverSwitcherOpen}
+              onClick={openServerSwitcher}
+            >
+              <Server size={19} />
+              <span className="collapsed-server-status" />
+            </button>
+
+            {serverSwitcherOpen && (
+              <section className="server-switcher-popover">
+                <div className="server-switcher-title">
+                  <div>
+                    <strong>{t('app.serverSwitcher', 'Servers')}</strong>
+                    <span>{servers.length}</span>
+                  </div>
+                  <button
+                    type="button"
+                    title={t('common.close', 'Close')}
+                    aria-label={t('common.close', 'Close')}
+                    onClick={() => setServerSwitcherOpen(false)}
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+                <label className="server-switcher-search">
+                  <Search size={15} />
+                  <input
+                    autoFocus
+                    value={serverSwitcherQuery}
+                    placeholder={t('app.searchServers', 'Search name, address or user')}
+                    onChange={(event) => setServerSwitcherQuery(event.target.value)}
+                  />
+                  {serverSwitcherQuery && (
+                    <button
+                      type="button"
+                      title={t('common.clearSearch', 'Clear search')}
+                      aria-label={t('common.clearSearch', 'Clear search')}
+                      onClick={() => setServerSwitcherQuery('')}
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </label>
+                <div className="server-switcher-list">
+                  {filteredServerSwitcherServers.length ? (
+                    filteredServerSwitcherServers.map((server) => (
+                      <button
+                        type="button"
+                        key={server.id}
+                        className={`server-switcher-item ${server.id === selectedServerId ? 'selected' : ''}`}
+                        onClick={() => selectServerFromSwitcher(server)}
+                      >
+                        <span className={`server-switcher-icon server-${server.status || 'disconnected'}`}>
+                          <Server size={17} />
+                        </span>
+                        <span>
+                          <strong>{server.name}</strong>
+                          <small>{server.username}@{server.host}:{server.port}</small>
+                        </span>
+                        <em className={`server-switcher-state server-${server.status || 'disconnected'}`}>
+                          {t(`status.${server.status || 'disconnected'}`, server.status || 'disconnected')}
+                        </em>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="server-switcher-empty">{t('app.noMatchingServers', 'No matching servers.')}</div>
+                  )}
+                </div>
+                <button type="button" className="server-switcher-add" onClick={addServerFromCollapsedSidebar}>
+                  <Plus size={15} />
+                  {t('app.addServer', 'Add server')}
+                </button>
+              </section>
+            )}
+          </div>
+
+          <button
+            type="button"
+            className="collapsed-add-server"
+            title={t('app.addServer', 'Add server')}
+            aria-label={t('app.addServer', 'Add server')}
+            onClick={addServerFromCollapsedSidebar}
+          >
+            <Plus size={19} />
+          </button>
+        </div>
       </aside>
       <div
-        className="app-shell-splitter"
+        className={`app-shell-splitter ${appSidebarCollapsed ? 'disabled' : ''}`}
         role="separator"
         aria-orientation="vertical"
-        title="Drag to resize sidebar"
+        title={appSidebarCollapsed ? undefined : 'Drag to resize sidebar'}
         onMouseDown={startAppSidebarResize}
       />
 
@@ -8345,8 +8847,16 @@ export default function App() {
           <Metric icon={<ShieldCheck />} label={t('metric.status', 'Status')} value={t(`status.${selectedServer.status}`, selectedServer.status)} tone={selectedServer.status} />
         </section>
 
-        <section className="desktop-grid">
-          <div className="left-stack">
+        <section
+          ref={desktopGridRef}
+          className={`desktop-grid ${workspaceAuxiliaryCollapsed ? 'auxiliary-collapsed' : ''}`}
+          style={{
+            gridTemplateColumns: workspaceAuxiliaryCollapsed
+              ? '32px minmax(0, 1fr)'
+              : `${workspaceAuxiliaryWidth}px 14px minmax(0, 1fr)`
+          }}
+        >
+          <div className="left-stack" aria-hidden={workspaceAuxiliaryCollapsed}>
             <Panel title={t('panel.basicInfo', 'Basic info')} icon={<Server size={17} />}>
               <InfoGrid server={selectedServer} history={resourceHistory} onCopy={(value) => copyText(value, showToast)} />
             </Panel>
@@ -8395,6 +8905,44 @@ export default function App() {
               onExitPrivilege={disableRemotePrivilegeAccess}
             />
           </div>
+
+          {workspaceAuxiliaryCollapsed ? (
+            <aside className="workspace-auxiliary-rail">
+              <button
+                type="button"
+                title={t('workspace.expandAuxiliary', 'Expand basic information and remote files')}
+                aria-label={t('workspace.expandAuxiliary', 'Expand basic information and remote files')}
+                aria-expanded="false"
+                onClick={toggleWorkspaceAuxiliaryPanel}
+              >
+                <ChevronRight size={16} />
+                <span>{t('workspace.auxiliaryLabel', 'Info & files')}</span>
+              </button>
+            </aside>
+          ) : (
+            <div
+              className="workspace-auxiliary-splitter"
+              role="separator"
+              aria-orientation="vertical"
+              aria-valuemin={WORKSPACE_AUXILIARY_MIN_WIDTH}
+              aria-valuemax={WORKSPACE_AUXILIARY_MAX_WIDTH}
+              aria-valuenow={Math.round(workspaceAuxiliaryWidth)}
+              title={t('workspace.resizeAuxiliary', 'Drag to resize basic information and remote files')}
+              onMouseDown={startWorkspaceAuxiliaryResize}
+            >
+              <button
+                type="button"
+                className="workspace-auxiliary-toggle"
+                title={t('workspace.collapseAuxiliary', 'Collapse basic information and remote files')}
+                aria-label={t('workspace.collapseAuxiliary', 'Collapse basic information and remote files')}
+                aria-expanded="true"
+                onMouseDown={(buttonEvent) => buttonEvent.stopPropagation()}
+                onClick={toggleWorkspaceAuxiliaryPanel}
+              >
+                <ChevronLeft size={16} />
+              </button>
+            </div>
+          )}
 
           <div className="right-stack">
             <section className="ops-panel">
@@ -8786,7 +9334,7 @@ export default function App() {
                 </div>
               )}
 
-              {activeModule === 'database' && (
+              <div className={activeModule === 'database' ? 'module-keepalive active' : 'module-keepalive'}>
                 <MaintenanceModule
                   empty={false}
                   title={t('database.emptyTitle', 'No database configured')}
@@ -8823,11 +9371,15 @@ export default function App() {
                     onOpenBackup={openDatabaseBackup}
                     onSqlChange={(value) => {
                       setSqlScript(value)
-                      setSqlFileInfo((current) => current ? { ...current, modified: true } : null)
+                      setSqlFileInfo((current) => current?.directExecution
+                        ? null
+                        : current ? { ...current, modified: true } : null)
                     }}
                     onSelectSqlFile={selectLocalSqlFile}
                     onClearSqlFile={clearLocalSqlFile}
                     onRunSql={runSql}
+                    onChangeSqlResultPage={changeSqlResultPage}
+                    onExportSqlResult={exportSqlQueryResult}
                     onCancelSql={cancelSqlFileExecution}
                     onSqlFileOptionChange={(patch) => setSqlFileInfo((current) => current ? { ...current, ...patch } : null)}
                     onCopy={(value) => copyText(value, showToast)}
@@ -8839,7 +9391,7 @@ export default function App() {
                     onDeleteColumn={deleteColumn}
                   />
                 </MaintenanceModule>
-              )}
+              </div>
 
               {activeModule === 'redis' && (
                 <MaintenanceModule
@@ -9135,6 +9687,8 @@ export default function App() {
             resumeWorkflowAfterResource()
           }}
           onSave={saveCronEntry}
+          onRunOnce={runCronEntryOnce}
+          onCancelRun={cancelCronEntryRun}
         />
       )}
       {firewallPortDialogOpen && (
@@ -9818,7 +10372,7 @@ function SettingsDialog({ language, themeMode, section, onLanguageChange, onThem
                   <span>{t('help.support.text', 'The desktop client supports Windows. SSH, SFTP, commands, deployment, services, runtimes, backup/recovery and host management currently target remote Linux servers. Databases and Redis can be reached directly or through a Linux SSH connection. Full Windows Server deployment and service management are not yet supported.')}</span>
                 </div>
                 <div className="help-step-list">
-                  <HelpTextBlock title={t('help.quick.server.title', '1. Add a server')} text={t('help.quick.server.text', 'Click Add server in the left sidebar, enter the address, SSH port, username and authentication details. For a private server, select a saved SSH jump server. Test the connection before saving.')} />
+                  <HelpTextBlock title={t('help.quick.server.title', '1. Add a server')} text={t('help.quick.server.text', 'Click Add server in the left sidebar, enter the address, SSH port, username and authentication details. For a private server, select a saved SSH jump server. Test the connection before saving. Collapse server navigation with the top arrow; in the narrow rail, click the server-status button to search and switch servers, or click the Ops Flow icon to restore the full list.')} />
                   <HelpTextBlock title={t('help.quick.connect.title', '2. Connect')} text={t('help.quick.connect.text', 'Select a server on the left and click Connect. Basic information, remote files and all feature modules load after the connection succeeds.')} />
                   <HelpTextBlock title={t('help.quick.module.title', '3. Choose a feature')} text={t('help.quick.module.text', 'Use Command for ad hoc tasks; Database and Redis for data maintenance; Workflow for repeatable tasks; Audit for checks; and Deployer or Host Management for system-level work.')} />
                   <HelpTextBlock title={t('help.quick.verify.title', '4. Verify the result')} text={t('help.quick.verify.text', 'Review page results, tool logs and server output. For deletion, restart, deployment or firewall changes, verify the target server and parameters again.')} />
@@ -9833,7 +10387,7 @@ function SettingsDialog({ language, themeMode, section, onLanguageChange, onThem
                   <HelpTextBlock title={t('help.features.terminal.title', 'Command terminal')} text={t('help.features.terminal.text', 'Use the interactive SSH terminal for troubleshooting, one-off commands and live output. The terminal follows the selected server and prompts you to reconnect after disconnection.')} />
                   <HelpTextBlock title={t('help.features.jump.title', 'SSH jump server for private hosts')} text={t('help.features.jump.text', 'First save and test a public SSH server using Direct connection. Add the private server with an address reachable from that server, select the saved server as its SSH jump server, and enter the private server own SSH credentials. Terminal, SFTP, workflows, deployment and host management automatically reuse the route Ops Flow → public jump server → private server. The jump server must allow TCP forwarding and be able to reach the target SSH port.')} />
                   <HelpTextBlock title={t('help.features.tunnel.title', 'SSH tunnels for external clients')} text={t('help.features.tunnel.text', 'Open Tunnels from the top toolbar, select a saved SSH server, and configure a local port plus a destination host and port reachable from that server. Test connection verifies SSH login, the jump chain and the destination port. Start the tunnel, then connect Dameng tools, Oracle SQL Developer, DBeaver or another external client to 127.0.0.1:local-port. The tunnel runs independently from the command terminal, and listeners are restricted to 127.0.0.1 until Ops Flow exits.')} />
-                  <HelpTextBlock title={t('help.features.files.title', 'Remote files')} text={t('help.features.files.text', 'Browse SFTP directories, go to the parent folder, refresh, upload, download, edit, rename or delete files. After a simple cd command runs in the terminal, the file browser automatically opens the corresponding directory. Sort by file name or filter names in real time; clearing the search restores the full list.')} />
+                  <HelpTextBlock title={t('help.features.files.title', 'Remote files')} text={t('help.features.files.text', 'Browse SFTP directories, go to the parent folder, refresh, upload, download, edit, rename or delete files. After a simple cd command runs in the terminal, the file browser automatically opens the corresponding directory. Use the arrow on the auxiliary-area divider to collapse basic information and remote files so the main workspace can expand; click the narrow rail to restore it. The app remembers the saved width and collapsed state.')} />
                   <HelpTextBlock title={t('help.features.database.title', 'Database management')} text={t('help.features.database.text', 'Manage database connections, inspect tables, fields and data, run SQL, and export query results. Independent table and field searches make large schemas easier to navigate.')} />
                   <HelpTextBlock title={t('help.features.redis.title', 'Redis management')} text={t('help.features.redis.text', 'Manage Redis connections, load and inspect keys, and delete confirmed keys. Search and refresh help investigate cache, queue and temporary state data.')} />
                   <HelpTextBlock title={t('help.features.workflow.title', 'Workflow')} text={t('help.features.workflow.text', 'Combine command, file, database, Redis and scheduled-task steps into reusable flows for inspections, release checks and repeated maintenance, with a result for every step.')} />
@@ -9899,8 +10453,9 @@ function SettingsDialog({ language, themeMode, section, onLanguageChange, onThem
                 <p className="help-lead">{t('help.data.intro', 'Database and transfer tasks publish progress, success, failure and cancellation in Transfers. Important data changes still require the database own backup and restore strategy.')}</p>
                 <div className="help-step-list">
                   <HelpTextBlock title={t('help.data.database.title', 'Database objects and SQL editor')} text={t('help.data.database.text', 'Connections can use the current server SSH tunnel or connect directly. Saved connections can be copied into a new connection to reuse transport, endpoint and account details. In SSH mode, TCP host and port are reached from the remote server’s perspective; MySQL can alternatively use an instance-specific Unix Socket path. Dameng table browsing defaults to the current login schema and provides a schema selector for other accessible schemas. Tables copied from another schema automatically include the schema-qualified SQL name. Table and column names support fuzzy filtering, and SQL can be reviewed before execution.')} />
+                  <HelpTextBlock title={t('help.data.queryExport.title', 'Paginated queries and full Excel export')} text={t('help.data.queryExport.text', 'A single read-only SELECT or WITH query is fetched one database page at a time. Export Excel re-runs that same read-only query, writes the complete result to .xlsx in batches, and reports row progress and cancellation in Transfers. Data-changing statements cannot use result export.')} />
                   <HelpTextBlock title={t('help.data.logicalBackup.title', '1. Export a database logical backup')} text={t('help.data.logicalBackup.text', 'Select a database connection, choose Backup, then select scope, content and plain or GZIP-compressed SQL output. Choose a local path to start. Progress, cancellation and results appear in the dialog and Transfers.')} />
-                  <HelpTextBlock title={t('help.data.sqlFile.title', '2. Import an SQL or GZIP backup')} text={t('help.data.sqlFile.text', 'Select the target database first, preferably an empty database or schema for a full restore. Choose Run script and select an .sql or .sql.gz file. Small scripts can be reviewed in the editor; scripts larger than 10 MB are scanned and executed as streams without an editor size limit.')} />
+                  <HelpTextBlock title={t('help.data.sqlFile.title', '2. Import an SQL or GZIP backup')} text={t('help.data.sqlFile.text', 'Select the target database first, preferably an empty database or schema for a full restore. Choose Select script and select an .sql or .sql.gz file, then click Run to execute it. Small scripts can be reviewed in the editor; scripts larger than 10 MB are scanned and executed as streams without an editor size limit.')} />
                   <HelpTextBlock title={t('help.data.sqlRollback.title', '3. Rollback on error and Stop & rollback')} text={t('help.data.sqlRollback.text', 'Rollback on error/stop is enabled by default for a loaded SQL file. A failed batch rolls back the transaction. Stop & rollback waits for the current batch to finish, then rolls back at a safe boundary. Some MySQL, Oracle and DM DDL implicitly commits, and administration statements may be non-transactional, so a complete rollback cannot always be guaranteed.')} />
                   <HelpTextBlock title={t('help.data.redis.title', '4. Back up and restore a Redis logical database')} text={t('help.data.redis.text', 'Back up Redis DUMP payloads and expiration times to .opsredis, or restore a verified backup into the selected database with skip, replace, or stop-on-conflict behavior.')} />
                   <HelpTextBlock title={t('help.data.status.title', '5. Track progress in Transfers')} text={t('help.data.status.text', 'Transfers keeps recent uploads, downloads, saves, deletes, deployments and SQL-file tasks. When everything succeeds or is intentionally canceled, the panel closes automatically. Errors keep it open with the failure message until you close or clear it.')} />
@@ -10122,7 +10677,7 @@ function WorkflowRunDialog({ workflow, servers, config, onChange, onToggleServer
               ? t('workflow.runDialogDescription', 'Select target servers and execution policy. Disconnected servers are connected automatically.')
               : t('workflow.selectedReady', 'All selected servers are connected and ready to run.')}</span>
           </div>
-          <button onClick={onClose}><X size={18} /></button>
+          <button type="button" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="workflow-run-body">
           <section className="workflow-run-summary">
@@ -13092,7 +13647,7 @@ function TransferPopover({ transfers, onClear, onCancelTask, onRetryRollback }) 
             </div>
             <div className="transfer-row-status">
               <em>{transferStatusLabel(task)}</em>
-              {['sql-file', 'database-table-delete', 'upload', 'download', 'deploy', 'backup-restore'].includes(task.type) && task.status === 'running' && (
+              {['sql-file', 'database-table-delete', 'database-query-export', 'upload', 'download', 'deploy', 'backup-restore'].includes(task.type) && task.status === 'running' && (
                 <button
                   type="button"
                   title={task.type === 'sql-file' ? t('database.stopRollback', 'Stop and rollback') : (task.type === 'database-table-delete' ? '停止批量删除' : (task.type === 'deploy' ? '停止远程命令' : t('transfer.cancel', 'Cancel transfer')))}
@@ -13349,7 +13904,6 @@ function RemoteFilesPanel({ serverId, path, items, sort, scrollTop = 0, focusedI
   const tableWrapRef = useRef(null)
   const pathInputRef = useRef(null)
   const focusedRowRef = useRef(null)
-  const breadcrumbClickTimerRef = useRef(null)
   const itemCopyTimerRef = useRef(null)
   const globalSearchExecutionRef = useRef('')
   const normalizedNameQuery = nameQuery.trim().toLocaleLowerCase()
@@ -13400,7 +13954,6 @@ function RemoteFilesPanel({ serverId, path, items, sort, scrollTop = 0, focusedI
   }, [items, globalSearch.active, globalSearch.items])
 
   useEffect(() => () => {
-    window.clearTimeout(breadcrumbClickTimerRef.current)
     window.clearTimeout(itemCopyTimerRef.current)
   }, [])
 
@@ -13423,13 +13976,7 @@ function RemoteFilesPanel({ serverId, path, items, sort, scrollTop = 0, focusedI
     })
   }, [scrollTop, path, items.length, focusedItemName, loading])
 
-  const openBreadcrumbPath = (nextPath) => {
-    window.clearTimeout(breadcrumbClickTimerRef.current)
-    breadcrumbClickTimerRef.current = window.setTimeout(() => onOpenPath(nextPath), 180)
-  }
-
   const enterPathTextMode = () => {
-    window.clearTimeout(breadcrumbClickTimerRef.current)
     setIsPathTextMode(true)
   }
 
@@ -13708,7 +14255,7 @@ function RemoteFilesPanel({ serverId, path, items, sort, scrollTop = 0, focusedI
                 <button
                   type="button"
                   title={part.path}
-                  onClick={() => openBreadcrumbPath(part.path)}
+                  onClick={() => onOpenPath(part.path)}
                   onDoubleClick={(event) => {
                     event.preventDefault()
                     event.stopPropagation()
@@ -14027,6 +14574,7 @@ function transferTypeLabel(task) {
   if (task.type === 'delete') return 'Delete'
   if (task.type === 'export') return 'Export'
   if (task.type === 'database-table-delete') return 'DB delete'
+  if (task.type === 'database-query-export') return 'Excel export'
   if (task.type === 'database-backup') return 'DB backup'
   if (task.type === 'redis-backup') return 'Redis backup'
   if (task.type === 'redis-restore') return 'Redis restore'
@@ -14043,6 +14591,7 @@ function transferPathLabel(task) {
   if (task.type === 'deploy') return task.message || task.remotePath || 'Remote command'
   if (task.type === 'sql-file') return task.message || task.remotePath || task.localPath
   if (task.type === 'database-table-delete') return task.message || task.remotePath || 'Database table deletion'
+  if (task.type === 'database-query-export') return task.message || task.localPath || 'Query result export'
   if (task.type === 'database-backup') return task.message || task.localPath || task.remotePath || 'Database backup'
   if (task.type === 'redis-backup') return task.message || task.localPath || 'Redis backup'
   if (task.type === 'redis-restore') return task.message || task.localPath || 'Redis restore'
@@ -14343,7 +14892,7 @@ function RedisBrowser({ connections, selected, connectionAvailable, servers, dat
             if (connection) onSelect(connection)
           }}
         >
-          {connections.map((item) => <option key={item.id} value={item.id}>{item.name} · {resourceConnectionLabel(item, servers, t)}</option>)}
+          {connections.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
         <button onClick={onAdd}><Plus size={14} />{t('common.add', 'Add')}</button>
         <button onClick={() => onEdit()} disabled={!selected}><SquarePen size={14} />{t('common.edit', 'Edit')}</button>
@@ -14919,15 +15468,15 @@ function CronSection({ crons = [], busy, onAdd, onEdit, onDelete }) {
     <section className="cron-section">
       <div className="inspector-section-head">
         <strong>{t('inspector.cron', 'Cron')}</strong>
-        <button onClick={onAdd} disabled={busy}><Plus size={14} />{t('common.add', 'Add')}</button>
+        <button type="button" onClick={onAdd} disabled={busy}><Plus size={14} />{t('common.add', 'Add')}</button>
       </div>
       <div className="cron-list">
         {crons.length ? crons.map((cron) => (
           <div key={cron.index} className={cron.enabled ? 'cron-row' : 'cron-row disabled'}>
             <code title={cron.line}>{cron.line}</code>
             <div className="row-actions compact">
-              <button title={t('common.edit', 'Edit')} disabled={busy} onClick={() => onEdit(cron)}><SquarePen size={14} /></button>
-              <button title={t('common.delete', 'Delete')} disabled={busy} onClick={() => onDelete(cron)}><Trash2 size={14} /></button>
+              <button type="button" title={t('common.edit', 'Edit')} disabled={busy} onClick={() => onEdit(cron)}><SquarePen size={14} /></button>
+              <button type="button" title={t('common.delete', 'Delete')} disabled={busy} onClick={() => onDelete(cron)}><Trash2 size={14} /></button>
             </div>
           </div>
         )) : <div className="inspector-inline-empty">{t('inspector.noCron', 'No user crontab entries.')}</div>}
@@ -15059,7 +15608,7 @@ function FirewallPortDialog({ firewall, value, saving, onChange, onClose, onSave
             <strong>{t('firewall.addPortTitle', 'Add allowed port')}</strong>
             <span>{t('firewall.addPortDescription', 'The rule is applied to the active firewall backend. Persistent changes survive reboot.')}</span>
           </div>
-          <button onClick={onClose}><X size={18} /></button>
+          <button type="button" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="server-form">
           <Field label={t('firewall.port', 'Port')}>
@@ -15093,24 +15642,90 @@ function FirewallPortDialog({ firewall, value, saving, onChange, onClose, onSave
   )
 }
 
-function CronDialog({ mode, value, saving, onChange, onClose, onSave }) {
+function CronDialog({ mode, value, saving, onChange, onClose, onSave, onRunOnce, onCancelRun }) {
   const { t } = useI18n()
   const expression = buildCronExpression(value)
   const preview = buildCronLineFromForm(value)
+  const autoLogPath = deriveCronLogPath(value.command)
+  const dialogRef = useRef(null)
+  const commandInputRef = useRef(null)
+  const lastDialogFocusRef = useRef(null)
+  const [runState, setRunState] = useState({ running: false, status: '', output: '', exitCode: null, message: '' })
+
+  useEffect(() => {
+    document.body.classList.remove('is-resizing-panel', 'is-resizing-row', 'is-resizing-column')
+    const focusCommand = () => {
+      commandInputRef.current?.focus({ preventScroll: true })
+      lastDialogFocusRef.current = commandInputRef.current
+    }
+    const keepFocusInDialog = (event) => {
+      if (dialogRef.current?.contains(event.target)) {
+        lastDialogFocusRef.current = event.target
+        return
+      }
+      window.requestAnimationFrame(() => {
+        const focusTarget = lastDialogFocusRef.current || commandInputRef.current
+        if (dialogRef.current?.contains(focusTarget)) focusTarget?.focus?.({ preventScroll: true })
+      })
+    }
+    focusCommand()
+    const focusFrame = window.requestAnimationFrame(focusCommand)
+    document.addEventListener('focusin', keepFocusInDialog, true)
+    return () => {
+      window.cancelAnimationFrame(focusFrame)
+      document.removeEventListener('focusin', keepFocusInDialog, true)
+    }
+  }, [])
 
   const update = (key, nextValue) => {
     onChange({ ...value, [key]: nextValue })
   }
 
+  const runOnce = async () => {
+    const command = String(value.command || '').trim()
+    if (!command || runState.running) return
+    if (!window.confirm(`立即在当前服务器执行一次？\n\n${command}`)) return
+    let streamedOutput = ''
+    setRunState({ running: true, status: 'running', output: '', exitCode: null, message: '正在执行…' })
+    const result = await onRunOnce(command, (chunk) => {
+      streamedOutput = `${streamedOutput}${String(chunk || '')}`.slice(-120000)
+      setRunState((current) => ({ ...current, output: streamedOutput }))
+    })
+    const cancelled = Boolean(result?.cancelled || result?.canceled)
+    const output = streamedOutput.trim() ? streamedOutput : String(result?.output || '').trim()
+    setRunState({
+      running: false,
+      status: cancelled ? 'cancelled' : result?.ok ? 'success' : 'error',
+      output,
+      exitCode: result?.code ?? null,
+      message: cancelled ? '执行已停止。' : result?.ok ? '执行成功。' : (result?.message || '执行失败。')
+    })
+  }
+
+  const cancelRun = async () => {
+    if (!runState.running) return
+    setRunState((current) => ({ ...current, message: '正在停止…' }))
+    await onCancelRun?.()
+  }
+
   return (
-    <div className="modal-backdrop">
-      <section className="server-dialog cron-dialog">
+    <div className="modal-backdrop cron-modal-backdrop">
+      <section
+        ref={dialogRef}
+        className="server-dialog cron-dialog"
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
+        onKeyUp={(event) => event.stopPropagation()}
+      >
         <div className="dialog-title">
           <div>
             <strong>{mode === 'edit' ? t('cron.editTitle', 'Edit cron') : t('cron.addTitle', 'Add cron')}</strong>
             <span>{t('cron.description', 'Select a schedule and enter the command or script path to run.')}</span>
           </div>
-          <button onClick={onClose}><X size={18} /></button>
+          <button type="button" onClick={onClose} disabled={runState.running}><X size={18} /></button>
         </div>
         <div className="server-form">
           <Field label={t('cron.schedule', 'Schedule')}>
@@ -15171,16 +15786,48 @@ function CronDialog({ mode, value, saving, onChange, onClose, onSave }) {
           )}
 
           <Field label={t('cron.command', 'Command')}>
-            <input value={value.command} onChange={(event) => update('command', event.target.value)} placeholder="/opt/app/scripts/backup.sh or systemctl restart demo.service" />
+            <input
+              ref={commandInputRef}
+              value={value.command}
+              onChange={(event) => update('command', event.target.value)}
+              placeholder="/opt/app/scripts/backup.sh or systemctl restart demo.service"
+            />
           </Field>
+          <label className="field checkbox-field cron-auto-log-field">
+            <span>自动记录脚本日志</span>
+            <input
+              type="checkbox"
+              checked={value.autoLog !== false}
+              onChange={(event) => update('autoLog', event.target.checked)}
+            />
+            <small>
+              {autoLogPath
+                ? `定时执行时追加到 ${autoLogPath}`
+                : '仅对未包含重定向、管道等操作的 .sh/.bash 脚本命令自动补全日志。'}
+            </small>
+          </label>
           <div className="cron-preview">
             <span>{t('cron.preview', 'Preview')}</span>
             <code>{preview || `${expression} ${t('cron.commandPlaceholder', '<command>')}`}</code>
           </div>
+          {(runState.running || runState.status) && (
+            <section className={`cron-run-result ${runState.status || 'running'}`}>
+              <div>
+                <strong>手动执行结果</strong>
+                <span>{runState.message}{runState.exitCode !== null ? ` 退出码：${runState.exitCode}` : ''}</span>
+              </div>
+              <pre>{runState.output || (runState.running ? '等待脚本输出…' : '命令没有输出。')}</pre>
+            </section>
+          )}
         </div>
         <div className="dialog-actions">
-          <button onClick={onClose}>{t('common.cancel', 'Cancel')}</button>
-          <button className="primary" onClick={onSave} disabled={saving}>{saving ? t('common.saving', 'Saving') : t('common.save', 'Save')}</button>
+          {runState.running ? (
+            <button type="button" className="danger-confirm-button" onClick={cancelRun}><CircleStop size={15} />停止执行</button>
+          ) : (
+            <button type="button" onClick={runOnce} disabled={saving || !String(value.command || '').trim()}><CirclePlay size={15} />手动执行一次</button>
+          )}
+          <button type="button" onClick={onClose} disabled={runState.running}>{t('common.cancel', 'Cancel')}</button>
+          <button type="button" className="primary" onClick={onSave} disabled={saving || runState.running}>{saving ? t('common.saving', 'Saving') : t('common.save', 'Save')}</button>
         </div>
       </section>
     </div>
@@ -15837,6 +16484,9 @@ function ColumnDialog({ mode, form, notice = null, onChange, onClose, onSave }) 
               <Field label={t('database.column.default', 'Default')}>
                 <input value={form.defaultValue} onChange={(event) => onChange('defaultValue', event.target.value)} placeholder="optional SQL expression" />
               </Field>
+              <Field label={t('database.column.comment', 'Comment')}>
+                <input value={form.comment} onChange={(event) => onChange('comment', event.target.value)} placeholder="optional column comment" />
+              </Field>
             </>
           ) : (
             <>
@@ -15854,6 +16504,9 @@ function ColumnDialog({ mode, form, notice = null, onChange, onClose, onSave }) 
               </Field>
               <Field label={t('database.column.default', 'Default')}>
                 <input value={form.defaultValue} onChange={(event) => onChange('defaultValue', event.target.value)} placeholder="optional SQL expression" />
+              </Field>
+              <Field label={t('database.column.comment', 'Comment')}>
+                <input value={form.comment} onChange={(event) => onChange('comment', event.target.value)} placeholder="optional column comment" />
               </Field>
             </>
           )}
@@ -15955,7 +16608,7 @@ function TableDialog({ mode, form, onChange, onClose, onSave }) {
   )
 }
 
-function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, servers, selectedTable, selectedColumn, privileges, columns, loading, privilegeLoading, sqlScript, sqlFileInfo, sqlRunning, sqlExecutionTaskId, sqlResult, onAdd, onCreateDatabase, onSelectDatabase, onSelectColumn, onEdit, onDuplicate, onDelete, onRefreshTables, onSelectSchema, onOpenTable, onExportTables, onOpenBackup, onSqlChange, onSelectSqlFile, onClearSqlFile, onRunSql, onCancelSql, onSqlFileOptionChange, onCopy, onAddTable, onEditTable, onDeleteTable, onAddColumn, onEditColumn, onDeleteColumn }) {
+function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, servers, selectedTable, selectedColumn, privileges, columns, loading, privilegeLoading, sqlScript, sqlFileInfo, sqlRunning, sqlExecutionTaskId, sqlResult, onAdd, onCreateDatabase, onSelectDatabase, onSelectColumn, onEdit, onDuplicate, onDelete, onRefreshTables, onSelectSchema, onOpenTable, onExportTables, onOpenBackup, onSqlChange, onSelectSqlFile, onClearSqlFile, onRunSql, onChangeSqlResultPage, onExportSqlResult, onCancelSql, onSqlFileOptionChange, onCopy, onAddTable, onEditTable, onDeleteTable, onAddColumn, onEditColumn, onDeleteColumn }) {
   const { t } = useI18n()
   const allTables = selectedDatabase?.tables || []
   const schemas = selectedDatabase?.engine === 'dm'
@@ -15984,10 +16637,44 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
   const canDrop = hasPrivilege(privileges, 'drop')
   const ddlRollbackLimited = ['mysql', 'mariadb', 'oracle', 'dm'].includes(selectedDatabase?.engine)
   const [schemaSplit, setSchemaSplit] = useState(50)
+  const [schemaPanelHeight, setSchemaPanelHeight] = useState(null)
   const [sqlPanelHeight, setSqlPanelHeight] = useState(170)
+  const databaseBrowserRef = useRef(null)
   const schemaBrowserRef = useRef(null)
   const copyTimerRef = useRef(null)
   const addMenuRef = useRef(null)
+  const sqlEditorRef = useRef(null)
+  const sqlEditorSelectionRef = useRef({ start: 0, end: 0, direction: 'none' })
+  const rememberSqlEditorSelection = (editor = sqlEditorRef.current) => {
+    if (!editor) return
+    sqlEditorSelectionRef.current = {
+      start: editor.selectionStart ?? 0,
+      end: editor.selectionEnd ?? editor.selectionStart ?? 0,
+      direction: editor.selectionDirection || 'none'
+    }
+  }
+  const restoreSqlEditorFocus = () => {
+    window.requestAnimationFrame(() => {
+      const editor = sqlEditorRef.current
+      if (!editor) return
+      editor.focus({ preventScroll: true })
+      const valueLength = editor.value.length
+      const selection = sqlEditorSelectionRef.current
+      editor.setSelectionRange(
+        Math.min(selection.start, valueLength),
+        Math.min(selection.end, valueLength),
+        selection.direction
+      )
+    })
+  }
+  const runSqlFromEditor = () => {
+    rememberSqlEditorSelection()
+    const execution = onRunSql()
+    // window.confirm and the run button can both take focus from the textarea.
+    // Restore once immediately and once again when execution settles.
+    restoreSqlEditorFocus()
+    Promise.resolve(execution).then(restoreSqlEditorFocus, restoreSqlEditorFocus)
+  }
   const copyOnSingleClick = (value) => {
     window.clearTimeout(copyTimerRef.current)
     copyTimerRef.current = window.setTimeout(() => onCopy(value), 180)
@@ -16004,7 +16691,7 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
   ), [tables, normalizedTableQuery])
   const visibleColumns = useMemo(() => (
     normalizedColumnQuery
-      ? columns.filter((column) => String(column.name || '').toLocaleLowerCase().includes(normalizedColumnQuery))
+      ? columns.filter((column) => `${column.name || ''} ${column.comment || ''}`.toLocaleLowerCase().includes(normalizedColumnQuery))
       : columns
   ), [columns, normalizedColumnQuery])
 
@@ -16101,11 +16788,37 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
     window.addEventListener('mousemove', handleMove)
     window.addEventListener('mouseup', handleUp)
   }
+  const startSchemaSqlResize = (event) => {
+    event.preventDefault()
+    const browserBounds = databaseBrowserRef.current?.getBoundingClientRect()
+    const schemaBounds = schemaBrowserRef.current?.getBoundingClientRect()
+    if (!browserBounds?.height || !schemaBounds?.height) return
+    const startY = event.clientY
+    const startHeight = schemaBounds.height
+    document.body.classList.add('is-resizing-row')
+
+    const handleMove = (moveEvent) => {
+      const reservedHeight = 54 + 30 + 10 + sqlPanelHeight + 10 + 110 + (6 * 8)
+      const maxHeight = Math.max(110, browserBounds.height - reservedHeight)
+      const nextHeight = Math.min(maxHeight, Math.max(110, startHeight + moveEvent.clientY - startY))
+      setSchemaPanelHeight(nextHeight)
+    }
+
+    const handleUp = () => {
+      document.body.classList.remove('is-resizing-row')
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
 
   return (
     <div
       className="database-browser"
-      style={{ gridTemplateRows: `54px 30px minmax(180px, 2fr) ${sqlPanelHeight}px 10px minmax(110px, 1fr)` }}
+      ref={databaseBrowserRef}
+      style={{ gridTemplateRows: `54px 30px ${schemaPanelHeight ? `${schemaPanelHeight}px` : 'minmax(150px, 1.5fr)'} 10px ${sqlPanelHeight}px 10px minmax(110px, 1fr)` }}
     >
       {selectedDatabase && !connectionAvailable && <div className="module-disabled-banner">{resourceConnectionError(selectedDatabase)}</div>}
       <div className="database-toolbar">
@@ -16120,9 +16833,7 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
           >
             {!databases.length && <option value="">暂无数据库连接</option>}
             {databases.map((database) => (
-              <option key={database.id} value={database.id}>
-                {database.name} / {database.engine} / {database.database} · {resourceConnectionLabel(database, servers, t)}
-              </option>
+              <option key={database.id} value={database.id}>{database.name}</option>
             ))}
           </select>
         </div>
@@ -16175,19 +16886,33 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
         </div>
       </div>
       <div className={`privilege-strip ${privileges?.ok === false ? 'error' : privileges ? '' : 'empty'}`}>
-        {privilegeLoading ? (
-          <span>{t('database.checkingPrivileges', 'Checking privileges...')}</span>
-        ) : privileges?.ok === false ? (
-          <span>{privileges.message}</span>
-        ) : privileges ? (
-          <>
-          <span title={privileges.user}>{privileges.user}</span>
-          {['select', 'insert', 'update', 'delete', 'create', 'alter', 'drop'].map((name) => (
-            <em key={name} className={privilegeClass(privileges.privileges?.[name])}>{name}</em>
-          ))}
-          </>
-        ) : (
-          <span>{t('database.privilegesNotChecked', 'Privileges not checked')}</span>
+        <div className="privilege-strip-status">
+          {privilegeLoading ? (
+            <span>{t('database.checkingPrivileges', 'Checking privileges...')}</span>
+          ) : privileges?.ok === false ? (
+            <span>{privileges.message}</span>
+          ) : privileges ? (
+            <>
+            <span title={privileges.user}>{privileges.user}</span>
+            {['select', 'insert', 'update', 'delete', 'create', 'alter', 'drop'].map((name) => (
+              <em key={name} className={privilegeClass(privileges.privileges?.[name])}>{name}</em>
+            ))}
+            </>
+          ) : (
+            <span>{t('database.privilegesNotChecked', 'Privileges not checked')}</span>
+          )}
+        </div>
+        {selectedDatabase?.engine === 'dm' && schemas.length > 0 && (
+          <label className="schema-picker privilege-schema-picker" title={showingOtherSchema ? t('database.schemaCopyHint', 'Table copies include the selected schema.') : t('database.currentSchema', 'Current schema')}>
+            <span>{t('database.schema', 'Schema')}</span>
+            <select value={activeSchema} onChange={(event) => onSelectSchema(event.target.value)} disabled={loading}>
+              {schemas.map((schema) => (
+                <option key={schema} value={schema}>
+                  {schema}{schema === currentSchema ? ` · ${t('database.currentSchema', 'current')}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
       </div>
 
@@ -16200,18 +16925,6 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
           <div className="database-head">
             <strong>{t('database.tables', 'Tables')}</strong>
             <div className="column-actions table-actions">
-              {selectedDatabase?.engine === 'dm' && schemas.length > 0 && (
-                <label className="schema-picker" title={showingOtherSchema ? t('database.schemaCopyHint', 'Table copies include the selected schema.') : t('database.currentSchema', 'Current schema')}>
-                  <span>{t('database.schema', 'Schema')}</span>
-                  <select value={activeSchema} onChange={(event) => onSelectSchema(event.target.value)} disabled={loading}>
-                    {schemas.map((schema) => (
-                      <option key={schema} value={schema}>
-                        {schema}{schema === currentSchema ? ` · ${t('database.currentSchema', 'current')}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
               <span className="count-badge">{normalizedTableQuery ? `${visibleTables.length}/${tables.length}` : tables.length}</span>
               <InlineSearch
                 value={tableQuery}
@@ -16321,6 +17034,7 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
               <colgroup>
                 <col className="field-name-col" />
                 <col className="field-type-col" />
+                <col className="field-comment-col" />
                 <col className="field-null-col" />
                 <col className="field-default-col" />
               </colgroup>
@@ -16328,6 +17042,7 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
                 <tr>
                   <th>{t('database.header.name', 'Name')}</th>
                   <th>{t('database.header.type', 'Type')}</th>
+                  <th>{t('database.header.comment', 'Comment')}</th>
                   <th>{t('database.header.nullable', 'Nullable')}</th>
                   <th>{t('database.header.default', 'Default')}</th>
                 </tr>
@@ -16349,13 +17064,14 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
                         {column.name}
                       </td>
                       <td title={column.type}>{column.type}</td>
+                      <td title={column.comment}>{column.comment}</td>
                       <td>{column.nullable}</td>
                       <td title={column.defaultValue}>{column.defaultValue}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="4" className="db-empty-row">
+                    <td colSpan="5" className="db-empty-row">
                       {normalizedColumnQuery
                         ? t('database.noMatchingColumns', 'No matching columns.')
                         : t('database.doubleClickTable', 'Double-click a table to view fields.')}
@@ -16367,6 +17083,15 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
           </div>
         </div>
       </div>
+
+      <div
+        className="vertical-panel-splitter schema-sql-splitter"
+        role="separator"
+        aria-orientation="horizontal"
+        title={t('database.resizeSchemaSql', 'Drag to resize tables/fields and SQL')}
+        onMouseDown={startSchemaSqlResize}
+        onDoubleClick={() => setSchemaPanelHeight(null)}
+      />
 
       <div className="sql-editor-panel">
         <div className="database-head">
@@ -16399,22 +17124,37 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
                 <span>{ddlRollbackLimited ? '数据回滚（DDL除外）' : t('database.rollbackOnStop', 'Rollback on error/stop')}</span>
               </label>
             )}
-            <button type="button" onClick={onSelectSqlFile} disabled={sqlRunning} title={t('database.selectSqlFile', 'Select SQL or compressed SQL script')}><File size={15} />{t('database.runFile', 'Run script')}</button>
+            <button type="button" onClick={onSelectSqlFile} disabled={sqlRunning} title={t('database.selectSqlFile', 'Select SQL or compressed SQL script')}><File size={15} />{t('database.runFile', 'Select script')}</button>
             {sqlRunning && sqlExecutionTaskId ? (
               <button className="danger-button" onClick={() => onCancelSql(sqlExecutionTaskId)}><CircleStop size={15} />{t('database.stopRollback', 'Stop and rollback')}</button>
             ) : (
-              <button className="solid-button" onClick={onRunSql} disabled={!connectionAvailable || sqlRunning || (!sqlScript.trim() && !sqlFileInfo?.directExecution)}><CirclePlay size={15} />{sqlRunning ? t('database.sqlRunning', 'Running') : t('database.run', 'Run')}</button>
+              <button
+                className="solid-button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={runSqlFromEditor}
+                disabled={!connectionAvailable || sqlRunning || (!sqlScript.trim() && !sqlFileInfo?.directExecution)}
+              ><CirclePlay size={15} />{sqlRunning ? t('database.sqlRunning', 'Running') : t('database.run', 'Run')}</button>
             )}
           </div>
         </div>
         <textarea
+          ref={sqlEditorRef}
           value={sqlScript}
-          readOnly={Boolean(sqlFileInfo?.directExecution)}
-          onChange={(event) => onSqlChange(event.target.value)}
+          onChange={(event) => {
+            rememberSqlEditorSelection(event.currentTarget)
+            onSqlChange(event.currentTarget.value)
+          }}
+          onSelect={(event) => rememberSqlEditorSelection(event.currentTarget)}
+          onFocus={() => {
+            document.body.classList.remove('is-resizing-row')
+            document.body.classList.remove('is-resizing-panel')
+          }}
+          placeholder={t('database.sqlPlaceholder', 'Enter SQL statements')}
+          spellCheck="false"
           onKeyDown={(event) => {
             if (connectionAvailable && !sqlRunning && event.ctrlKey && event.key === 'Enter') {
               event.preventDefault()
-              onRunSql()
+              runSqlFromEditor()
             }
           }}
         />
@@ -16431,7 +17171,50 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
       <div className="sql-result-panel">
         <div className="database-head">
           <strong>{t('database.result', 'Result')}</strong>
-          <span>{resultSummary(sqlResult)}</span>
+          <div className="sql-result-head-actions">
+            <span>{resultSummary(sqlResult)}</span>
+            {sqlResult?.query && (
+              <div className="sql-result-pagination">
+                <button
+                  type="button"
+                  title="上一页"
+                  aria-label="上一页"
+                  disabled={sqlRunning || sqlResult.loading || sqlResult.page <= 1}
+                  onClick={() => onChangeSqlResultPage(sqlResult.page - 1, sqlResult.pageSize)}
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <em>第 {sqlResult.page} 页</em>
+                <select
+                  title="每页行数"
+                  aria-label="每页行数"
+                  value={sqlResult.pageSize}
+                  disabled={sqlRunning || sqlResult.loading}
+                  onChange={(event) => onChangeSqlResultPage(1, Number(event.target.value))}
+                >
+                  {[50, 100, 200, 500].map((size) => <option key={size} value={size}>{size} 行/页</option>)}
+                </select>
+                <button
+                  type="button"
+                  title="下一页"
+                  aria-label="下一页"
+                  disabled={sqlRunning || sqlResult.loading || !sqlResult.hasMore}
+                  onClick={() => onChangeSqlResultPage(sqlResult.page + 1, sqlResult.pageSize)}
+                >
+                  <ChevronRight size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="sql-result-export"
+                  title="重新执行当前只读查询并分批导出全量结果；建议查询使用唯一键 ORDER BY"
+                  disabled={sqlRunning || sqlResult.loading}
+                  onClick={() => onExportSqlResult(sqlResult)}
+                >
+                  <Download size={14} />导出 Excel
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         <SqlResultView result={sqlResult} onCopy={onCopy} />
       </div>
@@ -19603,14 +20386,15 @@ function parseServiceLines(lines = []) {
 }
 
 function parseCronLines(lines = []) {
-  return lines
-    .map((line, index) => ({ line: line.trim(), index }))
-    .filter((item) => item.line && !/^no crontab/i.test(item.line))
+  return sanitizeCronSourceLines(lines)
+    .map((line, index) => ({ line, index }))
+    .filter((item) => isCronTaskLine(item.line))
     .map((item) => {
       const normalizedLine = item.line.replace(/^#\s*/, '')
       const parts = normalizedLine.split(/\s+/)
-      const expression = parts.length >= 5 ? parts.slice(0, 5).join(' ') : ''
-      const command = parts.length >= 6 ? parts.slice(5).join(' ') : normalizedLine
+      const isMacro = parts[0]?.startsWith('@')
+      const expression = isMacro ? parts[0] : parts.slice(0, 5).join(' ')
+      const command = isMacro ? parts.slice(1).join(' ') : parts.slice(5).join(' ')
       return {
         ...item,
         expression,
@@ -19618,6 +20402,41 @@ function parseCronLines(lines = []) {
         enabled: !item.line.startsWith('#')
       }
     })
+}
+
+function sanitizeCronSourceLines(lines = []) {
+  return lines
+    .map((line) => stripTerminalControlSequences(line).trim())
+    .filter((line) => line && !/^no crontab/i.test(line) && isCronSourceLine(line))
+}
+
+function stripTerminalControlSequences(value = '') {
+  return String(value)
+    .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, '')
+    .replace(/(?:\u001b|\u009b)\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/\ufffd\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, '')
+}
+
+function isCronSourceLine(line = '') {
+  const text = String(line || '').trim()
+  if (!text) return false
+  if (/^[A-Za-z_][A-Za-z0-9_]*\s*=/.test(text)) return true
+  if (text.startsWith('#')) return true
+  return isCronTaskLine(text)
+}
+
+function isCronTaskLine(line = '') {
+  const text = String(line || '').trim().replace(/^#\s*/, '')
+  if (/^@(reboot|yearly|annually|monthly|weekly|daily|midnight|hourly)\s+\S/i.test(text)) return true
+  const parts = text.split(/\s+/)
+  if (parts.length < 6) return false
+  const [minute, hour, dayOfMonth, month, weekday] = parts
+  return /^[0-9*,/-]+$/.test(minute)
+    && /^[0-9*,/-]+$/.test(hour)
+    && /^[0-9*?,/LW#-]+$/i.test(dayOfMonth)
+    && /^(?:[0-9*,/-]+|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(?:[-/,](?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC))*)$/i.test(month)
+    && /^(?:[0-9*?,/#L-]+|(?:SUN|MON|TUE|WED|THU|FRI|SAT)(?:[-/,#](?:SUN|MON|TUE|WED|THU|FRI|SAT|[0-9L]+))*)$/i.test(weekday)
 }
 
 function buildBackupTaskInventoryCommand() {
@@ -20232,8 +21051,18 @@ function parseCronLineToForm(line = '') {
   if (parts.length < 6) return { ...emptyCronForm, scheduleType: 'advanced', expression: '', command: line }
   const [minute, hour, dayOfMonth, month, weekday, ...commandParts] = parts
   const expression = [minute, hour, dayOfMonth, month, weekday].join(' ')
-  const command = commandParts.join(' ')
-  const base = { ...emptyCronForm, minute, hour, dayOfMonth, month, weekday, expression, command }
+  const parsedCommand = splitCronAutoLogRedirect(commandParts.join(' '))
+  const base = {
+    ...emptyCronForm,
+    minute,
+    hour,
+    dayOfMonth,
+    month,
+    weekday,
+    expression,
+    command: parsedCommand.command,
+    autoLog: parsedCommand.autoLog || Boolean(deriveCronLogPath(parsedCommand.command))
+  }
 
   if (expression === '* * * * *') return { ...base, scheduleType: 'every-minute' }
   if (/^\*\/\d+$/.test(minute) && hour === '*' && dayOfMonth === '*' && month === '*' && weekday === '*') {
@@ -20248,9 +21077,38 @@ function parseCronLineToForm(line = '') {
 
 function buildCronLineFromForm(form = emptyCronForm) {
   const expression = buildCronExpression(form)
-  const command = String(form.command || '').trim()
+  const command = buildCronCommandFromForm(form)
   if (!expression || !command) return ''
   return `${expression} ${command}`
+}
+
+function buildCronCommandFromForm(form = emptyCronForm) {
+  const command = String(form.command || '').trim()
+  if (!command || form.autoLog === false) return command
+  const logPath = deriveCronLogPath(command)
+  return logPath ? `${command} >> ${shellQuote(logPath)} 2>&1` : command
+}
+
+function deriveCronLogPath(command = '') {
+  const text = String(command || '').trim()
+  if (!text || /(?:\|\||&&|\$\(|[|;<>`]|[\r\n])/.test(text)) return ''
+  const scriptPattern = /(?:^|\s)(?:"([^"]+\.(?:sh|bash))"|'([^']+\.(?:sh|bash))'|([^\s"'|;&<>]+\.(?:sh|bash)))(?=\s|$)/gi
+  let scriptPath = ''
+  for (const match of text.matchAll(scriptPattern)) {
+    const candidate = match[1] || match[2] || match[3] || ''
+    if (candidate && !/[*?\[\]]/.test(candidate)) scriptPath = candidate
+  }
+  return scriptPath ? scriptPath.replace(/\.(?:sh|bash)$/i, '.log') : ''
+}
+
+function splitCronAutoLogRedirect(command = '') {
+  const text = String(command || '').trim()
+  const match = text.match(/^(.*?)\s+>>\s+(?:"([^"]+)"|'([^']+)'|(\S+))\s+2>&1\s*$/)
+  if (!match) return { command: text, autoLog: false }
+  const baseCommand = String(match[1] || '').trim()
+  const redirectedPath = match[2] || match[3] || match[4] || ''
+  if (!baseCommand || deriveCronLogPath(baseCommand) !== redirectedPath) return { command: text, autoLog: false }
+  return { command: baseCommand, autoLog: true }
 }
 
 function buildCronExpression(form = emptyCronForm) {
@@ -20598,9 +21456,14 @@ function buildCronInstallCommand(lines = []) {
   const body = lines.join('\n')
   return [
     'tmp="/tmp/ops-flow-cron-$(date +%s)-$$"',
-    `printf %s ${shellQuote(body)} > "$tmp"`,
-    'crontab "$tmp"',
-    'rm -f "$tmp"'
+    'cleanup_ops_cron() { rm -f -- "$tmp"; }',
+    'trap cleanup_ops_cron EXIT',
+    `expected=${shellQuote(body)}`,
+    'if ! printf "%s\\n" "$expected" > "$tmp"; then echo "Failed to create temporary crontab" >&2; exit 1; fi',
+    'if ! crontab "$tmp"; then echo "Failed to install crontab" >&2; exit 1; fi',
+    'actual=$(crontab -l 2>/dev/null) || actual=""',
+    'if [ "$actual" != "$expected" ]; then echo "Crontab verification failed after installation" >&2; exit 1; fi',
+    'printf "__OPS_CRON_SAVED__\\n"'
   ].join('\n')
 }
 
@@ -20975,7 +21838,8 @@ function normalizeDbColumns(columns = []) {
     name: column.column_name || column.COLUMN_NAME || column.name || '-',
     type: column.data_type || column.DATA_TYPE || column.column_type || column.COLUMN_TYPE || '-',
     nullable: column.is_nullable || column.IS_NULLABLE || '-',
-    defaultValue: column.column_default ?? column.COLUMN_DEFAULT ?? '-'
+    defaultValue: column.column_default ?? column.COLUMN_DEFAULT ?? column.defaultValue ?? '-',
+    comment: column.column_comment || column.COLUMN_COMMENT || column.comments || column.COMMENTS || column.comment || '-'
   }))
 }
 
@@ -21040,11 +21904,21 @@ function formatSqlResult(result) {
     ? result.message || `${result.completedStatements || result.statementCount || 0}/${result.statementCount || 0} SQL batches completed`
     : ''
   if (Array.isArray(rows)) {
+    const page = Math.max(1, Number(result.page) || 1)
+    const pageSize = Math.max(1, Number(result.pageSize) || 100)
+    const queryMessage = result.query
+      ? `第 ${page} 页 · 本页 ${rows.length} 行${result.hasMore ? ' · 还有更多' : ' · 已到末页'}`
+      : ''
     return {
       ok: true,
-      rows: rows.slice(0, 500),
+      query: Boolean(result.query),
+      rows,
+      columns: result.columns || [],
       rowCount: typeof result.rowCount === 'number' ? result.rowCount : rows.length,
-      message: scriptMessage || (rows.length ? `${rows.length} row${rows.length === 1 ? '' : 's'} returned` : 'Query OK, 0 rows returned')
+      page,
+      pageSize,
+      hasMore: Boolean(result.hasMore),
+      message: scriptMessage || queryMessage || (rows.length ? `${rows.length} row${rows.length === 1 ? '' : 's'} returned` : 'Query OK, 0 rows returned')
     }
   }
 
@@ -21073,6 +21947,44 @@ function scriptHasRollbackRisk(sql, engine) {
   const containsDdl = /\b(?:CREATE|ALTER|DROP|TRUNCATE|RENAME|GRANT|REVOKE|COMMENT)\b/i.test(source)
   if (['mysql', 'mariadb', 'oracle', 'dm'].includes(dialect) && containsDdl) return true
   return /\b(?:VACUUM|CREATE\s+DATABASE|ALTER\s+SYSTEM|REINDEX\s+CONCURRENTLY)\b/i.test(source)
+}
+
+function scriptHasMutation(sql) {
+  return /\b(?:UPDATE|DELETE)\b/i.test(sqlKeywordScanSource(sql))
+}
+
+function scriptHasNonQueryOperation(sql) {
+  return /\b(?:INSERT|UPDATE|DELETE|MERGE|REPLACE|UPSERT|CREATE|ALTER|DROP|TRUNCATE|RENAME|GRANT|REVOKE|CALL|EXEC(?:UTE)?|DO|COPY|LOAD|IMPORT|VACUUM|ANALYZE|COMMENT|SET|INTO|LOCK|UNLOCK)\b/i.test(sqlKeywordScanSource(sql))
+}
+
+function sqlKeywordScanSource(sql) {
+  return String(sql || '')
+    .replace(/'(?:''|[^'])*'/g, ' ')
+    .replace(/"(?:""|[^"])*"/g, ' ')
+    .replace(/`(?:``|[^`])*`/g, ' ')
+    .replace(/\[(?:]]|[^\]])*\]/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/--.*$/gm, ' ')
+}
+
+function scriptStartsWithSelect(sql) {
+  let source = String(sql || '').replace(/^\uFEFF/, '')
+  while (source) {
+    source = source.trimStart()
+    if (source.startsWith('--')) {
+      const lineEnd = source.search(/[\r\n]/)
+      source = lineEnd < 0 ? '' : source.slice(lineEnd + 1)
+      continue
+    }
+    if (source.startsWith('/*')) {
+      const commentEnd = source.indexOf('*/', 2)
+      if (commentEnd < 0) return false
+      source = source.slice(commentEnd + 2)
+      continue
+    }
+    break
+  }
+  return /^SELECT\b/i.test(source)
 }
 
 function resultSummary(result) {
