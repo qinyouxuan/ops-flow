@@ -776,6 +776,10 @@ ipcMain.handle('ssh:exec', async (_event, config, command) => {
   return withSshClient(config, (client) => execCommand(client, wrapInteractiveCommand(command), { pty: true }))
 })
 
+ipcMain.handle('ssh:exec-raw', async (_event, config, command) => {
+  return withSshClient(config, (client) => execCommand(client, `bash -lc ${shellQuote(command)}`))
+})
+
 ipcMain.handle('ssh:exec-stream', async (event, config, command, executionId, privilege) => {
   return execStreamingCommand(event.sender, config, command, executionId, privilege)
 })
@@ -872,15 +876,20 @@ ipcMain.handle('ssh:shell:start', async (event, config, size = {}) => {
   return startShellSession(event.sender, config, size)
 })
 
-ipcMain.handle('ssh:shell:write', async (event, sessionId, data) => {
+ipcMain.on('ssh:shell:write', (event, sessionId, data) => {
   const session = shellSessions.get(sessionId)
-  if (!session?.stream) return { ok: false, message: 'Terminal session is not connected' }
-  const submittedCommands = captureShellInput(session, data)
-  session.stream.write(data)
-  submittedCommands.forEach((command) => {
-    if (!event.sender.isDestroyed()) event.sender.send('ssh:shell:command', { sessionId, command })
-  })
-  return { ok: true }
+  if (!session?.stream || session.stream.destroyed || !session.stream.writable) return
+  try {
+    const submittedCommands = captureShellInput(session, data)
+    session.stream.write(data)
+    submittedCommands.forEach((command) => {
+      if (!event.sender.isDestroyed()) event.sender.send('ssh:shell:command', { sessionId, command })
+    })
+  } catch (error) {
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('ssh:shell:error', { sessionId, message: error.message || 'Terminal input failed' })
+    }
+  }
 })
 
 ipcMain.handle('ssh:shell:resize', async (_event, sessionId, size = {}) => {
@@ -970,10 +979,9 @@ ipcMain.handle('sftp:upload', async (event, config, targetDirectory = '/', optio
     webContents: event.sender
   }
   prepareFileTransferSession(progress, null)
-  let result = await withActiveShellClient(event.sender, config, (client, connection) => {
-    progress.sharedConnection = connection.shared
-    return uploadRemoteFile(client, localPath, remotePath, progress)
-  })
+  let result = await uploadWithReconnect(event.sender, config, progress, (client) => (
+    uploadRemoteFile(client, localPath, remotePath, progress)
+  ))
   result = settlePendingFileTransfer(progress, result)
   if (result.canceled && result.partialRemotePath) {
     void cleanupCanceledRemoteUpload(config, result.partialRemotePath)
@@ -1029,12 +1037,11 @@ ipcMain.handle('sftp:upload-path', async (event, config, localPath, remotePath) 
     webContents: event.sender
   }
   prepareFileTransferSession(progress, null)
-  let result = await withActiveShellClient(event.sender, config, (client, connection) => {
-    progress.sharedConnection = connection.shared
-    return stats.isDirectory()
+  let result = await uploadWithReconnect(event.sender, config, progress, (client) => (
+    stats.isDirectory()
       ? uploadRemoteDirectory(client, localPath, targetRemotePath, progress)
       : uploadRemoteFile(client, localPath, targetRemotePath, progress)
-  })
+  ))
   result = settlePendingFileTransfer(progress, result)
   if (result.canceled && result.partialRemotePath) {
     void cleanupCanceledRemoteUpload(config, result.partialRemotePath)
@@ -2642,6 +2649,28 @@ async function withActiveShellClient(webContents, config, task) {
   }
 }
 
+async function uploadWithReconnect(webContents, config, progress, upload) {
+  let result = await withActiveShellClient(webContents, config, (client, connection) => {
+    progress.sharedConnection = connection.shared
+    return upload(client)
+  })
+  if (!shouldRetryUploadConnection(result)) return result
+
+  emitTransferProgress(progress, {
+    transferred: 0,
+    status: 'running',
+    message: 'SFTP connection interrupted before transfer; reconnecting once'
+  })
+  progress.sharedConnection = false
+  result = await withSshClient(config, (client) => upload(client))
+  return { ...result, retried: true }
+}
+
+function shouldRetryUploadConnection(result = {}) {
+  if (result.ok || result.canceled || Number(result.transferred || 0) > 0) return false
+  return /(?:ECONNRESET|ECONNABORTED|EPIPE|ETIMEDOUT|connection (?:was )?closed|connection lost|no response from server|channel open failure|unable to open channel|not connected|write EOF)/i.test(String(result.message || ''))
+}
+
 async function connectSshClient(client, config, shouldAbort = () => false) {
   const prepared = await prepareSshConnection(config)
   let cleanedUp = false
@@ -2658,6 +2687,7 @@ async function connectSshClient(client, config, shouldAbort = () => false) {
   client.once('error', cleanup)
   try {
     client.connect(prepared.connection)
+    client.setNoDelay(true)
   } catch (error) {
     cleanup()
     throw error
@@ -2747,6 +2777,7 @@ async function openPreparedSshClient(config, visitedServerIds) {
         .once('error', fail)
         .once('close', () => fail(new Error('SSH jump connection closed before authentication completed')))
         .connect(prepared.connection)
+      client.setNoDelay(true)
     })
     // Keep a listener installed so a later transport error cannot become an
     // unhandled EventEmitter error while the downstream connection is active.
@@ -3135,6 +3166,7 @@ function startShellSession(webContents, config, size = {}) {
 
     client
       .on('ready', () => {
+        client.setNoDelay(true)
         client.shell(
           {
             term: 'xterm-256color',
@@ -3148,6 +3180,11 @@ function startShellSession(webContents, config, size = {}) {
               finish({ ok: false, message: error.message })
               return
             }
+
+            // Do not let the initial prompt race ahead of the IPC response that
+            // gives the renderer its session id. This is especially important
+            // while automatically reopening a dropped interactive shell.
+            stream.pause()
 
             shellSessions.set(sessionId, {
               id: sessionId,
@@ -3169,9 +3206,18 @@ function startShellSession(webContents, config, size = {}) {
                 cleanup()
                 client.end()
               })
+              .on('error', (streamError) => {
+                send('ssh:shell:error', { message: streamError.message })
+                notifyClose(streamError.message, 'channel')
+                cleanup()
+                client.end()
+              })
               .stderr?.on('data', (data) => send('ssh:shell:data', { data: data.toString('utf8') }))
 
             finish({ ok: true, sessionId })
+            setImmediate(() => {
+              if (!stream.destroyed) stream.resume()
+            })
           }
         )
       })
@@ -3672,7 +3718,6 @@ function uploadLocalFileToStage(client, localPath, stagePath, progress) {
     client.sftp((error, sftp) => {
       if (session) session.sftp = sftp || null
       if (session?.canceled) {
-        sftp?.end()
         finish(canceledFileTransferResult(progress, session, { partialRemotePath: stagePath }))
         return
       }
@@ -3687,7 +3732,7 @@ function uploadLocalFileToStage(client, localPath, stagePath, progress) {
         }
       }, (putError) => {
         if (session?.canceled) finish(canceledFileTransferResult(progress, session, { partialRemotePath: stagePath }))
-        else finish(putError ? { ok: false, message: putError.message } : { ok: true })
+        else finish(putError ? { ok: false, message: putError.message, transferred: session?.transferred || 0 } : { ok: true })
       })
     })
   })
@@ -3818,9 +3863,10 @@ async function deletePrivilegedRemoteItem(webContents, config, remotePath, type,
     webContents
   }
   emitTransferProgress(progress, { transferred: 0, status: 'running', currentPath: normalizedPath })
+  const quotedPath = shellQuote(normalizedPath)
   const command = type === 'dir'
-    ? `test -d ${shellQuote(normalizedPath)} && rm -rf -- ${shellQuote(normalizedPath)}`
-    : `test -e ${shellQuote(normalizedPath)} && rm -f -- ${shellQuote(normalizedPath)}`
+    ? `test -d ${quotedPath} && rm -rf -- ${quotedPath} && test ! -e ${quotedPath} && test ! -L ${quotedPath}`
+    : `(test -e ${quotedPath} || test -L ${quotedPath}) && rm -f -- ${quotedPath} && test ! -e ${quotedPath} && test ! -L ${quotedPath}`
   const result = await runPrivilegedFileCommand(webContents, config, command, privilege, 'delete')
   emitTransferProgress(progress, result.ok
     ? { transferred: 1, status: 'done', currentPath: normalizedPath }
@@ -3981,7 +4027,6 @@ function uploadRemoteFile(client, localPath, remotePath, progress = null) {
     client.sftp(async (error, sftp) => {
       if (session) session.sftp = sftp || null
       if (session?.canceled) {
-        sftp?.end()
         finish(canceledFileTransferResult(progress, session, { partialRemotePath: remotePath }))
         return
       }
@@ -4012,7 +4057,7 @@ function uploadRemoteFile(client, localPath, remotePath, progress = null) {
           return
         }
         if (putError) {
-          finish({ ok: false, message: putError.message, localPath, remotePath }, { status: 'failed', message: putError.message })
+          finish({ ok: false, message: putError.message, localPath, remotePath, transferred: session?.transferred || 0 }, { status: 'failed', message: putError.message })
           return
         }
         finish(
@@ -4046,7 +4091,6 @@ function uploadRemoteDirectory(client, localPath, remotePath, progress = null) {
     client.sftp(async (error, sftp) => {
       if (session) session.sftp = sftp || null
       if (session?.canceled) {
-        sftp?.end()
         finish(canceledFileTransferResult(progress, session))
         return
       }
@@ -4091,10 +4135,19 @@ function uploadRemoteDirectory(client, localPath, remotePath, progress = null) {
         )
       } catch (uploadError) {
         if (session?.canceled) finish(canceledFileTransferResult(progress, session))
-        else finish({ ok: false, message: uploadError.message, localPath, remotePath }, { status: 'failed', message: uploadError.message })
+        else finish({ ok: false, message: uploadError.message, localPath, remotePath, transferred: session?.transferred || 0 }, { status: 'failed', message: uploadError.message })
       }
     })
   })
+}
+
+function closeSftpChannel(sftp) {
+  if (!sftp) return
+  try {
+    sftp.end()
+  } catch {
+    // The SSH transport may already be closed after a network failure.
+  }
 }
 
 function uploadFileWithSftp(sftp, localPath, remotePath, progress = null) {
@@ -4196,6 +4249,7 @@ function finishFileTransferSession(progress, session) {
   if (!progress?.id || !session) return
   if (fileTransferSessions.get(progress.id) === session) fileTransferSessions.delete(progress.id)
   session.cancelTransfer = null
+  closeSftpChannel(session.sftp)
   session.sftp = null
   session.client = null
   session.sharedConnection = false
@@ -4334,33 +4388,42 @@ async function cleanupCanceledRemoteUpload(config, remotePath) {
 function readRemoteTextFile(client, remotePath) {
   const maxBytes = 2 * 1024 * 1024
   return new Promise((resolve) => {
+    let settled = false
+    let sftpSession = null
+    const finish = (result) => {
+      if (settled) return
+      settled = true
+      closeSftpChannel(sftpSession)
+      resolve(result)
+    }
     client.sftp((error, sftp) => {
       if (error) {
-        resolve({ ok: false, message: error.message })
+        finish({ ok: false, message: error.message })
         return
       }
+      sftpSession = sftp
 
       sftp.stat(remotePath, (statError, attrs) => {
         if (statError) {
-          resolve({ ok: false, message: statError.message })
+          finish({ ok: false, message: statError.message })
           return
         }
         if (attrs?.size > maxBytes) {
-          resolve({ ok: false, message: 'File is larger than 2 MB. Download it instead.' })
+          finish({ ok: false, message: 'File is larger than 2 MB. Download it instead.' })
           return
         }
 
         const chunks = []
         const stream = sftp.createReadStream(remotePath)
         stream.on('data', (chunk) => chunks.push(chunk))
-        stream.on('error', (streamError) => resolve({ ok: false, message: streamError.message }))
+        stream.on('error', (streamError) => finish({ ok: false, message: streamError.message }))
         stream.on('end', () => {
           const buffer = Buffer.concat(chunks)
           if (buffer.includes(0)) {
-            resolve({ ok: false, message: 'Binary file preview is not supported.' })
+            finish({ ok: false, message: 'Binary file preview is not supported.' })
             return
           }
-          resolve({ ok: true, path: remotePath, content: buffer.toString('utf8'), size: attrs?.size || buffer.length })
+          finish({ ok: true, path: remotePath, content: buffer.toString('utf8'), size: attrs?.size || buffer.length })
         })
       })
     })
@@ -4373,18 +4436,24 @@ function writeRemoteTextFile(client, remotePath, content) {
 
 function createRemoteFile(client, remotePath) {
   return new Promise((resolve) => {
+    let sftpSession = null
+    const finish = (result) => {
+      closeSftpChannel(sftpSession)
+      resolve(result)
+    }
     client.sftp((error, sftp) => {
       if (error) {
-        resolve({ ok: false, message: error.message, path: remotePath })
+        finish({ ok: false, message: error.message, path: remotePath })
         return
       }
+      sftpSession = sftp
       sftp.open(remotePath, 'wx', 0o644, (openError, handle) => {
         if (openError) {
-          resolve({ ok: false, message: openError.message, path: remotePath })
+          finish({ ok: false, message: openError.message, path: remotePath })
           return
         }
         sftp.close(handle, (closeError) => {
-          resolve(closeError
+          finish(closeError
             ? { ok: false, message: closeError.message, path: remotePath }
             : { ok: true, message: 'File created', path: remotePath, name: posix.basename(remotePath), type: 'file', size: 0 })
         })
@@ -4428,22 +4497,28 @@ function createRemoteDirectory(client, remotePath) {
 
 function renameRemoteItem(client, sourcePath, targetPath) {
   return new Promise((resolve) => {
+    let sftpSession = null
+    const finish = (result) => {
+      closeSftpChannel(sftpSession)
+      resolve(result)
+    }
     client.sftp((error, sftp) => {
       if (error) {
-        resolve({ ok: false, message: error.message, sourcePath, path: targetPath })
+        finish({ ok: false, message: error.message, sourcePath, path: targetPath })
         return
       }
+      sftpSession = sftp
       sftp.lstat(targetPath, (targetError) => {
         if (!targetError) {
-          resolve({ ok: false, message: `Target already exists: ${targetPath}`, sourcePath, path: targetPath })
+          finish({ ok: false, message: `Target already exists: ${targetPath}`, sourcePath, path: targetPath })
           return
         }
         if (!isRemotePathMissingError(targetError)) {
-          resolve({ ok: false, message: targetError.message, sourcePath, path: targetPath })
+          finish({ ok: false, message: targetError.message, sourcePath, path: targetPath })
           return
         }
         sftp.rename(sourcePath, targetPath, (renameError) => {
-          resolve(renameError
+          finish(renameError
             ? { ok: false, message: renameError.message, sourcePath, path: targetPath }
             : {
                 ok: true,
@@ -4475,6 +4550,7 @@ function writeRemoteBufferFile(client, remotePath, buffer) {
         if (settled) return
         settled = true
         clearTimeout(timer)
+        closeSftpChannel(sftp)
         resolve(result)
       }
       const timer = setTimeout(() => {
@@ -4531,6 +4607,7 @@ function deleteRemoteItem(client, remotePath, type, progress = null) {
           emitTransferProgress(progress, { status: 'failed', message: deleteError.message, currentPath: remotePath })
           resolve({ ok: false, message: deleteError.message, path: remotePath })
         })
+        .finally(() => closeSftpChannel(sftp))
     })
   })
 }
@@ -4538,6 +4615,7 @@ function deleteRemoteItem(client, remotePath, type, progress = null) {
 async function deleteRemoteItemWithProgress(sftp, remotePath, type, progress) {
   if (type !== 'dir') {
     await sftpUnlink(sftp, remotePath)
+    await verifySftpPathDeleted(sftp, remotePath)
     emitTransferProgress(progress, { transferred: 1, total: 1, status: 'done', currentPath: remotePath })
     return { ok: true, message: 'Deleted', path: remotePath, deletedCount: 1 }
   }
@@ -4557,12 +4635,31 @@ async function deleteRemoteItemWithProgress(sftp, remotePath, type, progress) {
     emitTransferProgress(progress, {
       transferred: deleted,
       total,
-      status: deleted === total ? 'done' : 'running',
+      status: 'running',
       currentPath: entry.path
     })
   }
 
+  await verifySftpPathDeleted(sftp, remotePath)
+  emitTransferProgress(progress, { transferred: deleted, total, status: 'done', currentPath: remotePath })
+
   return { ok: true, message: 'Deleted', path: remotePath, deletedCount: deleted }
+}
+
+function verifySftpPathDeleted(sftp, remotePath) {
+  return new Promise((resolve, reject) => {
+    sftp.lstat(remotePath, (error) => {
+      if (error && isRemotePathMissingError(error)) {
+        resolve()
+        return
+      }
+      if (error) {
+        reject(error)
+        return
+      }
+      reject(new Error(`Delete verification failed; remote path still exists: ${remotePath}`))
+    })
+  })
 }
 
 async function collectRemoteDeleteEntries(sftp, remotePath) {

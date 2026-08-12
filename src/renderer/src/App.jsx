@@ -866,6 +866,7 @@ const I18N_MESSAGES = {
     'database.header.default': '默认值',
     'database.doubleClickTable': '双击数据表查看字段。',
     'database.ctrlEnter': 'Ctrl+Enter 运行',
+    'database.sqlPlaceholder': '输入 SQL 语句',
     'database.run': '运行',
     'database.runFile': '选择脚本',
     'database.selectSqlFile': '选择 SQL 或压缩 SQL 脚本',
@@ -876,6 +877,8 @@ const I18N_MESSAGES = {
     'database.clearSqlConfirm': '清除已加载的 SQL 文件及编辑器内容？',
     'database.sqlRunning': '执行中',
     'database.rollbackOnStop': '异常/停止时回滚',
+    'database.executionConfirm': '确定在数据库“{name}”中运行当前 SQL 吗？',
+    'database.mutationConfirm': 'SQL 包含修改或删除数据的操作，确定在数据库“{name}”中执行吗？\n\n请确认目标数据库、表名和 WHERE 条件；执行后可能难以恢复。',
     'database.rollbackRiskConfirm': '脚本包含可能发生隐式提交的 DDL 或数据库管理语句，无法保证完整回滚。仍以事务模式执行吗？',
     'database.stopRollback': '停止并回滚',
     'database.stopRequested': '已请求停止，当前 SQL 批次结束后将执行回滚。',
@@ -1631,7 +1634,8 @@ const emptyCronForm = {
   weekday: '*',
   everyMinutes: '5',
   expression: '0 2 * * *',
-  command: ''
+  command: '',
+  autoLog: true
 }
 
 const emptyFirewallPortForm = {
@@ -1979,6 +1983,7 @@ export default function App() {
   const shellSessionRef = useRef(null)
   const shellServerIdRef = useRef('')
   const shellSessionsRef = useRef({})
+  const pendingShellInputRef = useRef({})
   const shellDirectoriesRef = useRef({})
   const shellDirectorySyncRef = useRef(0)
   const shellInputCaptureRef = useRef({})
@@ -1990,6 +1995,7 @@ export default function App() {
   const redisAutoLoadKeyRef = useRef('')
   const systemInspectorAutoLoadKeyRef = useRef('')
   const systemInspectorExecutionRef = useRef('')
+  const cronManualExecutionRef = useRef('')
   const serversLiveRef = useRef(servers)
   const shellRecoveryRef = useRef(new Set())
   const serverInspectInFlightRef = useRef(new Set())
@@ -2007,6 +2013,14 @@ export default function App() {
   const remoteDirectoryRequestRef = useRef(0)
   const lastWorkspaceServerIdRef = useRef('')
   const selectedServerIdLiveRef = useRef('')
+  const focusTerminalIfAvailable = () => {
+    if (activeModuleRef.current !== 'command') return false
+    if (document.querySelector('.modal-backdrop')) return false
+    const activeElement = document.activeElement
+    if (activeElement?.matches?.('input, textarea, select, [contenteditable="true"]')) return false
+    terminalRef.current?.focus()
+    return true
+  }
   const [logs, setLogs] = useState([
     '[09:30:12] Ops Flow ready',
     '[09:30:13] No server configured'
@@ -2255,7 +2269,7 @@ export default function App() {
     }
     shellSessionRef.current = sessionId
     shellServerIdRef.current = selectedServer.id
-    terminalRef.current.focus()
+    focusTerminalIfAvailable()
     terminalRef.current.paste(command)
     terminalRef.current.scrollToBottom()
     showToast('info', t('command.filled', 'Command pasted into the terminal. Review it, then press Enter to run.'))
@@ -2527,13 +2541,16 @@ export default function App() {
       const serverId = selectedServerIdLiveRef.current
       captureSubmittedTerminalCommands(shellInputCaptureRef.current, serverId, text)
         .forEach((submittedCommand) => void syncRemoteDirectoryFromShellCommand(serverId, submittedCommand))
-      terminalRef.current?.focus()
+      focusTerminalIfAvailable()
       window.opsFlow.writeSshShell(sessionId, text)
       return true
     }
 
     const terminal = new Terminal({
       cursorBlink: true,
+      cursorStyle: 'bar',
+      cursorInactiveStyle: 'bar',
+      cursorWidth: 2,
       fontFamily: '"Cascadia Mono", Consolas, "Liberation Mono", monospace',
       fontSize: 14,
       fontWeight: 400,
@@ -2593,19 +2610,20 @@ export default function App() {
 
     terminal.onData((data) => {
       if (activeModuleRef.current !== 'command') return
-      const sessionId = getShellSessionId(selectedServerIdLiveRef.current)
+      const serverId = selectedServerIdLiveRef.current
+      const sessionId = getShellSessionId(serverId)
       if (sessionId) {
-        const serverId = selectedServerIdLiveRef.current
         const submittedCommands = captureSubmittedTerminalCommands(shellInputCaptureRef.current, serverId, data)
         if (!submittedCommands.length && /[\r\n]/.test(data)) {
           const displayedCommand = readDisplayedTerminalCommand(terminal)
           if (displayedCommand) submittedCommands.push(displayedCommand)
         }
         submittedCommands.forEach((submittedCommand) => void syncRemoteDirectoryFromShellCommand(serverId, submittedCommand))
-        terminal.scrollToBottom()
         shellSessionRef.current = sessionId
         shellServerIdRef.current = serverId
         window.opsFlow.writeSshShell(sessionId, data)
+      } else if (serverId && (shellRecoveryRef.current.has(serverId) || terminalAutoOpenRef.current === serverId)) {
+        pendingShellInputRef.current[serverId] = `${pendingShellInputRef.current[serverId] || ''}${data}`.slice(-4096)
       } else {
         showToast('error', 'Click Connect to open the SSH terminal.')
       }
@@ -2707,6 +2725,7 @@ export default function App() {
           setRemoteItems([])
           setSelectedRemoteItem(null)
         }
+        delete pendingShellInputRef.current[serverId]
         appendLog(`Server connection check failed after ${result?.attempts || 1} attempts: ${result?.message || 'SSH unavailable'}`)
         showToast('error', '服务器 SSH 已不可达，连接状态已更新。')
       }).catch((error) => {
@@ -2814,7 +2833,7 @@ export default function App() {
       window.setTimeout(() => {
         if (!terminalHostRef.current?.clientWidth || !terminalHostRef.current?.clientHeight) return
         fitAddonRef.current?.fit()
-        terminalRef.current?.focus()
+        focusTerminalIfAvailable()
         terminalRef.current?.scrollToBottom()
         const sessionId = getShellSessionId(selectedServer.id)
         if (sessionId && terminalRef.current) {
@@ -3157,12 +3176,13 @@ export default function App() {
     if (existingSessionId) {
       shellSessionRef.current = existingSessionId
       shellServerIdRef.current = server.id
-      terminalRef.current.focus()
+      focusTerminalIfAvailable()
       fitAddonRef.current?.fit()
       window.opsFlow.resizeSshShell(existingSessionId, {
         cols: terminalRef.current.cols,
         rows: terminalRef.current.rows
       })
+      flushPendingShellInput(server.id, existingSessionId)
       void initializeShellDirectory(server)
       return { ok: true }
     }
@@ -3176,6 +3196,7 @@ export default function App() {
       rows: terminalRef.current.rows
     })
     if (!result.ok) {
+      delete pendingShellInputRef.current[server.id]
       terminalRef.current.writeln(`Connection failed: ${result.message}`)
       return result
     }
@@ -3183,9 +3204,16 @@ export default function App() {
     shellSessionsRef.current[server.id] = result.sessionId
     shellSessionRef.current = result.sessionId
     shellServerIdRef.current = server.id
+    flushPendingShellInput(server.id, result.sessionId)
     void initializeShellDirectory(server)
-    terminalRef.current.focus()
+    focusTerminalIfAvailable()
     return result
+  }
+
+  const flushPendingShellInput = (serverId, sessionId) => {
+    const pending = pendingShellInputRef.current[serverId] || ''
+    delete pendingShellInputRef.current[serverId]
+    if (pending && sessionId) window.opsFlow.writeSshShell(sessionId, pending)
   }
 
   const ensureCurrentTerminalShell = async () => {
@@ -3196,7 +3224,7 @@ export default function App() {
     if (existingSessionId) {
       shellSessionRef.current = existingSessionId
       shellServerIdRef.current = selectedServer.id
-      terminalRef.current.focus()
+      focusTerminalIfAvailable()
       return
     }
     if (terminalAutoOpenRef.current === selectedServer.id) return
@@ -3228,6 +3256,7 @@ export default function App() {
       shellSessionRef.current = null
       shellServerIdRef.current = ''
     }
+    if (serverId) delete pendingShellInputRef.current[serverId]
     if (message) terminalRef.current?.writeln(`\r\n${message}`)
   }
 
@@ -5321,46 +5350,106 @@ export default function App() {
       showToast('error', 'Schedule and command are required.')
       return
     }
-    const cronLines = systemInspectorResult?.cronEntries?.map((item) => item.line) || []
+    const cronEntries = systemInspectorResult?.cronEntries || []
+    const cronLines = sanitizeCronSourceLines(systemInspectorResult?.sections?.CRON || cronEntries.map((item) => item.line))
     const nextLines =
       cronDialog?.mode === 'edit'
         ? cronLines.map((item, index) => (index === cronDialog.cron.index ? line : item))
         : [...cronLines, line]
-    await saveCronLines(nextLines)
+    const saved = await saveCronLines(nextLines)
+    if (!saved) return
     applyWorkflowPendingResource('cron', {
       cronLine: line,
       cron: buildCronExpression(cronForm),
-      command: cronForm.command
+      command: buildCronCommandFromForm(cronForm)
     })
     closeCronDialog()
     resumeWorkflowAfterResource()
   }
 
-  const deleteCronEntry = async (cron) => {
-    if (!window.confirm(t('confirm.deleteCron', 'Delete cron entry?\n{line}', { line: cron.line }))) return
-    const nextLines = (systemInspectorResult?.cronEntries || [])
-      .filter((item) => item.index !== cron.index)
-      .map((item) => item.line)
+  const performDeleteCronEntry = async (cron) => {
+    const cronLines = sanitizeCronSourceLines(systemInspectorResult?.sections?.CRON || [])
+    const nextLines = cronLines.filter((_item, index) => index !== cron.index)
     await saveCronLines(nextLines)
+  }
+
+  const deleteCronEntry = (cron) => {
+    setDangerConfirm({
+      title: '删除定时任务',
+      target: cron.line,
+      warning: '该任务将从当前 SSH 用户的 crontab 中删除。',
+      confirmLabel: '删除任务',
+      onConfirm: () => performDeleteCronEntry(cron)
+    })
   }
 
   const saveCronLines = async (lines) => {
     if (selectedServer.status !== 'connected') {
       showToast('error', 'Connect server first.')
-      return
+      return false
     }
     setInspectorBusyKey('cron:save')
     try {
-      const result = await window.opsFlow.execSsh(selectedServer, buildCronInstallCommand(lines))
+      const executeCronCommand = window.opsFlow.execSshRaw || window.opsFlow.execSsh
+      const result = await executeCronCommand(selectedServer, buildCronInstallCommand(lines))
       if (!result.ok) {
-        showToast('error', result.message || 'Cron update failed')
-        return
+        showToast('error', String(result.stderr || result.stdout || result.message || 'Cron update failed').trim())
+        return false
       }
+      const cronEntries = parseCronLines(lines)
+      setSystemInspectorResult((current) => {
+        if (!current || current.ok === false) return current
+        return {
+          ...current,
+          sections: { ...current.sections, CRON: [...lines] },
+          cronEntries
+        }
+      })
       showToast('success', 'Cron updated.')
-      await loadSystemInspector()
+      return true
+    } catch (error) {
+      showToast('error', error?.message || 'Cron update failed')
+      return false
     } finally {
       setInspectorBusyKey('')
     }
+  }
+
+  const runCronEntryOnce = async (command, onOutput) => {
+    const executableCommand = String(command || '').trim()
+    if (!executableCommand) return { ok: false, message: 'Command is required.', output: '' }
+    if (selectedServer.status !== 'connected') return { ok: false, message: 'Connect server first.', output: '' }
+
+    const executionId = `cron-manual-${selectedServer.id}-${Date.now()}`
+    const outputChunks = []
+    cronManualExecutionRef.current = executionId
+    const stopListening = window.opsFlow.onSshExecData?.((payload) => {
+      if (payload?.executionId !== executionId) return
+      const chunk = String(payload.data || '')
+      if (!chunk) return
+      outputChunks.push(chunk)
+      onOutput?.(chunk, payload.stream || 'stdout')
+    })
+
+    try {
+      const result = window.opsFlow.execSshStream
+        ? await window.opsFlow.execSshStream(selectedServer, executableCommand, executionId, { mode: 'normal' })
+        : await window.opsFlow.execSsh(selectedServer, executableCommand)
+      const streamedOutput = outputChunks.join('').trim()
+      const finalOutput = streamedOutput || [result.stdout, result.stderr].filter(Boolean).join('\n').trim()
+      return { ...result, output: finalOutput }
+    } catch (error) {
+      return { ok: false, message: error?.message || 'Manual execution failed.', output: outputChunks.join('').trim() }
+    } finally {
+      stopListening?.()
+      if (cronManualExecutionRef.current === executionId) cronManualExecutionRef.current = ''
+    }
+  }
+
+  const cancelCronEntryRun = async () => {
+    const executionId = cronManualExecutionRef.current
+    if (!executionId) return
+    await window.opsFlow.cancelSshExec?.(executionId).catch(() => null)
   }
 
   const openFirewallPortDialog = () => {
@@ -5780,7 +5869,7 @@ export default function App() {
     const privilege = options.privileged === false ? null : (options.privilege || getRemotePrivilege(server))
     setRemoteServerId(requestServerId)
     setRemotePath(path)
-    if (remoteServerId !== requestServerId) setRemoteItems([])
+    setRemoteItems([])
     setRemoteLoadError({ serverId: requestServerId, message: '' })
     setIsRemoteLoading(true)
 
@@ -6076,6 +6165,12 @@ export default function App() {
 
       const completed = results.filter((result) => result.ok)
       const failed = results.filter((result) => !result.ok)
+      if (completed.length) {
+        const deletedPaths = new Set(completed.map((result) => result.path))
+        setRemoteItems((current) => current.filter((item) => (
+          !deletedPaths.has(item.path || joinRemotePath(remotePath, item.name))
+        )))
+      }
       if (failed.length) showToast('error', `${failed.length} item(s) could not be deleted`)
       else showToast('success', targets.length === 1 ? `Deleted: ${targets[0].name}` : `${completed.length} items deleted`)
       setSelectedRemoteItem(null)
@@ -7021,13 +7116,29 @@ export default function App() {
       return
     }
     const rollbackOnError = Boolean(sqlFileInfo && sqlFileInfo.rollbackOnError !== false)
-    if (rollbackOnError && (sqlFileInfo?.directExecution || scriptHasRollbackRisk(sqlScript, target.engine))) {
-      const confirmed = window.confirm(t(
-        'database.rollbackRiskConfirm',
-        'This script contains DDL or administration statements that may implicitly commit, so a full rollback cannot be guaranteed. Continue in transaction mode?'
-      ))
-      if (!confirmed) return
-    }
+    const hasMutation = !sqlFileInfo?.directExecution && scriptHasMutation(sqlScript)
+    const hasRollbackRisk = rollbackOnError && (sqlFileInfo?.directExecution || scriptHasRollbackRisk(sqlScript, target.engine))
+    const isReadOnlySelect = !sqlFileInfo?.directExecution
+      && scriptStartsWithSelect(sqlScript)
+      && !scriptHasNonQueryOperation(sqlScript)
+    const executionConfirmation = hasMutation
+      ? t(
+          'database.mutationConfirm',
+          'This SQL modifies or deletes data. Run it on database "{name}"?\n\nConfirm the target database, table names, and WHERE clauses first; the changes may be difficult to undo.',
+          { name: target.name }
+        )
+      : t(
+          'database.executionConfirm',
+          'Run the current SQL on database "{name}"?',
+          { name: target.name }
+        )
+    const rollbackWarning = hasRollbackRisk
+      ? `\n\n${t(
+          'database.rollbackRiskConfirm',
+          'This script contains DDL or administration statements that may implicitly commit, so a full rollback cannot be guaranteed. Continue in transaction mode?'
+        )}`
+      : ''
+    if (!isReadOnlySelect && !window.confirm(`${executionConfirmation}${rollbackWarning}`)) return
     const taskId = sqlFileInfo ? `sql-file-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : ''
     setSqlExecutionTaskId(taskId)
     setIsSqlRunning(true)
@@ -7938,7 +8049,7 @@ export default function App() {
       ? terminalTextRef.current
       : (workspaceCacheRef.current[serverId]?.terminalOutput || '')
     const rawNext = `${base}${chunk}`
-    const next = limitTerminalOutput(rawNext)
+    const next = rawNext.length > 60000 ? rawNext.slice(-60000) : rawNext
 
     if (serverId) {
       workspaceCacheRef.current[serverId] = {
@@ -7949,7 +8060,6 @@ export default function App() {
 
     if (isSelectedServerShell) {
       terminalTextRef.current = next
-      setTerminalOutput(next)
     }
 
   }
@@ -8142,7 +8252,7 @@ export default function App() {
       sqlFileInfo,
       sqlResult,
       terminalInput,
-      terminalOutput,
+      terminalOutput: terminalTextRef.current,
       resourceHistory,
       systemInspectorResult,
       servicePrivilege: { ...servicePrivilege, password: '' },
@@ -9261,7 +9371,9 @@ export default function App() {
                     onOpenBackup={openDatabaseBackup}
                     onSqlChange={(value) => {
                       setSqlScript(value)
-                      setSqlFileInfo((current) => current ? { ...current, modified: true } : null)
+                      setSqlFileInfo((current) => current?.directExecution
+                        ? null
+                        : current ? { ...current, modified: true } : null)
                     }}
                     onSelectSqlFile={selectLocalSqlFile}
                     onClearSqlFile={clearLocalSqlFile}
@@ -9575,6 +9687,8 @@ export default function App() {
             resumeWorkflowAfterResource()
           }}
           onSave={saveCronEntry}
+          onRunOnce={runCronEntryOnce}
+          onCancelRun={cancelCronEntryRun}
         />
       )}
       {firewallPortDialogOpen && (
@@ -10563,7 +10677,7 @@ function WorkflowRunDialog({ workflow, servers, config, onChange, onToggleServer
               ? t('workflow.runDialogDescription', 'Select target servers and execution policy. Disconnected servers are connected automatically.')
               : t('workflow.selectedReady', 'All selected servers are connected and ready to run.')}</span>
           </div>
-          <button onClick={onClose}><X size={18} /></button>
+          <button type="button" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="workflow-run-body">
           <section className="workflow-run-summary">
@@ -13790,7 +13904,6 @@ function RemoteFilesPanel({ serverId, path, items, sort, scrollTop = 0, focusedI
   const tableWrapRef = useRef(null)
   const pathInputRef = useRef(null)
   const focusedRowRef = useRef(null)
-  const breadcrumbClickTimerRef = useRef(null)
   const itemCopyTimerRef = useRef(null)
   const globalSearchExecutionRef = useRef('')
   const normalizedNameQuery = nameQuery.trim().toLocaleLowerCase()
@@ -13841,7 +13954,6 @@ function RemoteFilesPanel({ serverId, path, items, sort, scrollTop = 0, focusedI
   }, [items, globalSearch.active, globalSearch.items])
 
   useEffect(() => () => {
-    window.clearTimeout(breadcrumbClickTimerRef.current)
     window.clearTimeout(itemCopyTimerRef.current)
   }, [])
 
@@ -13864,13 +13976,7 @@ function RemoteFilesPanel({ serverId, path, items, sort, scrollTop = 0, focusedI
     })
   }, [scrollTop, path, items.length, focusedItemName, loading])
 
-  const openBreadcrumbPath = (nextPath) => {
-    window.clearTimeout(breadcrumbClickTimerRef.current)
-    breadcrumbClickTimerRef.current = window.setTimeout(() => onOpenPath(nextPath), 180)
-  }
-
   const enterPathTextMode = () => {
-    window.clearTimeout(breadcrumbClickTimerRef.current)
     setIsPathTextMode(true)
   }
 
@@ -14149,7 +14255,7 @@ function RemoteFilesPanel({ serverId, path, items, sort, scrollTop = 0, focusedI
                 <button
                   type="button"
                   title={part.path}
-                  onClick={() => openBreadcrumbPath(part.path)}
+                  onClick={() => onOpenPath(part.path)}
                   onDoubleClick={(event) => {
                     event.preventDefault()
                     event.stopPropagation()
@@ -15362,15 +15468,15 @@ function CronSection({ crons = [], busy, onAdd, onEdit, onDelete }) {
     <section className="cron-section">
       <div className="inspector-section-head">
         <strong>{t('inspector.cron', 'Cron')}</strong>
-        <button onClick={onAdd} disabled={busy}><Plus size={14} />{t('common.add', 'Add')}</button>
+        <button type="button" onClick={onAdd} disabled={busy}><Plus size={14} />{t('common.add', 'Add')}</button>
       </div>
       <div className="cron-list">
         {crons.length ? crons.map((cron) => (
           <div key={cron.index} className={cron.enabled ? 'cron-row' : 'cron-row disabled'}>
             <code title={cron.line}>{cron.line}</code>
             <div className="row-actions compact">
-              <button title={t('common.edit', 'Edit')} disabled={busy} onClick={() => onEdit(cron)}><SquarePen size={14} /></button>
-              <button title={t('common.delete', 'Delete')} disabled={busy} onClick={() => onDelete(cron)}><Trash2 size={14} /></button>
+              <button type="button" title={t('common.edit', 'Edit')} disabled={busy} onClick={() => onEdit(cron)}><SquarePen size={14} /></button>
+              <button type="button" title={t('common.delete', 'Delete')} disabled={busy} onClick={() => onDelete(cron)}><Trash2 size={14} /></button>
             </div>
           </div>
         )) : <div className="inspector-inline-empty">{t('inspector.noCron', 'No user crontab entries.')}</div>}
@@ -15502,7 +15608,7 @@ function FirewallPortDialog({ firewall, value, saving, onChange, onClose, onSave
             <strong>{t('firewall.addPortTitle', 'Add allowed port')}</strong>
             <span>{t('firewall.addPortDescription', 'The rule is applied to the active firewall backend. Persistent changes survive reboot.')}</span>
           </div>
-          <button onClick={onClose}><X size={18} /></button>
+          <button type="button" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="server-form">
           <Field label={t('firewall.port', 'Port')}>
@@ -15536,24 +15642,90 @@ function FirewallPortDialog({ firewall, value, saving, onChange, onClose, onSave
   )
 }
 
-function CronDialog({ mode, value, saving, onChange, onClose, onSave }) {
+function CronDialog({ mode, value, saving, onChange, onClose, onSave, onRunOnce, onCancelRun }) {
   const { t } = useI18n()
   const expression = buildCronExpression(value)
   const preview = buildCronLineFromForm(value)
+  const autoLogPath = deriveCronLogPath(value.command)
+  const dialogRef = useRef(null)
+  const commandInputRef = useRef(null)
+  const lastDialogFocusRef = useRef(null)
+  const [runState, setRunState] = useState({ running: false, status: '', output: '', exitCode: null, message: '' })
+
+  useEffect(() => {
+    document.body.classList.remove('is-resizing-panel', 'is-resizing-row', 'is-resizing-column')
+    const focusCommand = () => {
+      commandInputRef.current?.focus({ preventScroll: true })
+      lastDialogFocusRef.current = commandInputRef.current
+    }
+    const keepFocusInDialog = (event) => {
+      if (dialogRef.current?.contains(event.target)) {
+        lastDialogFocusRef.current = event.target
+        return
+      }
+      window.requestAnimationFrame(() => {
+        const focusTarget = lastDialogFocusRef.current || commandInputRef.current
+        if (dialogRef.current?.contains(focusTarget)) focusTarget?.focus?.({ preventScroll: true })
+      })
+    }
+    focusCommand()
+    const focusFrame = window.requestAnimationFrame(focusCommand)
+    document.addEventListener('focusin', keepFocusInDialog, true)
+    return () => {
+      window.cancelAnimationFrame(focusFrame)
+      document.removeEventListener('focusin', keepFocusInDialog, true)
+    }
+  }, [])
 
   const update = (key, nextValue) => {
     onChange({ ...value, [key]: nextValue })
   }
 
+  const runOnce = async () => {
+    const command = String(value.command || '').trim()
+    if (!command || runState.running) return
+    if (!window.confirm(`立即在当前服务器执行一次？\n\n${command}`)) return
+    let streamedOutput = ''
+    setRunState({ running: true, status: 'running', output: '', exitCode: null, message: '正在执行…' })
+    const result = await onRunOnce(command, (chunk) => {
+      streamedOutput = `${streamedOutput}${String(chunk || '')}`.slice(-120000)
+      setRunState((current) => ({ ...current, output: streamedOutput }))
+    })
+    const cancelled = Boolean(result?.cancelled || result?.canceled)
+    const output = streamedOutput.trim() ? streamedOutput : String(result?.output || '').trim()
+    setRunState({
+      running: false,
+      status: cancelled ? 'cancelled' : result?.ok ? 'success' : 'error',
+      output,
+      exitCode: result?.code ?? null,
+      message: cancelled ? '执行已停止。' : result?.ok ? '执行成功。' : (result?.message || '执行失败。')
+    })
+  }
+
+  const cancelRun = async () => {
+    if (!runState.running) return
+    setRunState((current) => ({ ...current, message: '正在停止…' }))
+    await onCancelRun?.()
+  }
+
   return (
-    <div className="modal-backdrop">
-      <section className="server-dialog cron-dialog">
+    <div className="modal-backdrop cron-modal-backdrop">
+      <section
+        ref={dialogRef}
+        className="server-dialog cron-dialog"
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
+        onKeyUp={(event) => event.stopPropagation()}
+      >
         <div className="dialog-title">
           <div>
             <strong>{mode === 'edit' ? t('cron.editTitle', 'Edit cron') : t('cron.addTitle', 'Add cron')}</strong>
             <span>{t('cron.description', 'Select a schedule and enter the command or script path to run.')}</span>
           </div>
-          <button onClick={onClose}><X size={18} /></button>
+          <button type="button" onClick={onClose} disabled={runState.running}><X size={18} /></button>
         </div>
         <div className="server-form">
           <Field label={t('cron.schedule', 'Schedule')}>
@@ -15614,16 +15786,48 @@ function CronDialog({ mode, value, saving, onChange, onClose, onSave }) {
           )}
 
           <Field label={t('cron.command', 'Command')}>
-            <input value={value.command} onChange={(event) => update('command', event.target.value)} placeholder="/opt/app/scripts/backup.sh or systemctl restart demo.service" />
+            <input
+              ref={commandInputRef}
+              value={value.command}
+              onChange={(event) => update('command', event.target.value)}
+              placeholder="/opt/app/scripts/backup.sh or systemctl restart demo.service"
+            />
           </Field>
+          <label className="field checkbox-field cron-auto-log-field">
+            <span>自动记录脚本日志</span>
+            <input
+              type="checkbox"
+              checked={value.autoLog !== false}
+              onChange={(event) => update('autoLog', event.target.checked)}
+            />
+            <small>
+              {autoLogPath
+                ? `定时执行时追加到 ${autoLogPath}`
+                : '仅对未包含重定向、管道等操作的 .sh/.bash 脚本命令自动补全日志。'}
+            </small>
+          </label>
           <div className="cron-preview">
             <span>{t('cron.preview', 'Preview')}</span>
             <code>{preview || `${expression} ${t('cron.commandPlaceholder', '<command>')}`}</code>
           </div>
+          {(runState.running || runState.status) && (
+            <section className={`cron-run-result ${runState.status || 'running'}`}>
+              <div>
+                <strong>手动执行结果</strong>
+                <span>{runState.message}{runState.exitCode !== null ? ` 退出码：${runState.exitCode}` : ''}</span>
+              </div>
+              <pre>{runState.output || (runState.running ? '等待脚本输出…' : '命令没有输出。')}</pre>
+            </section>
+          )}
         </div>
         <div className="dialog-actions">
-          <button onClick={onClose}>{t('common.cancel', 'Cancel')}</button>
-          <button className="primary" onClick={onSave} disabled={saving}>{saving ? t('common.saving', 'Saving') : t('common.save', 'Save')}</button>
+          {runState.running ? (
+            <button type="button" className="danger-confirm-button" onClick={cancelRun}><CircleStop size={15} />停止执行</button>
+          ) : (
+            <button type="button" onClick={runOnce} disabled={saving || !String(value.command || '').trim()}><CirclePlay size={15} />手动执行一次</button>
+          )}
+          <button type="button" onClick={onClose} disabled={runState.running}>{t('common.cancel', 'Cancel')}</button>
+          <button type="button" className="primary" onClick={onSave} disabled={saving || runState.running}>{saving ? t('common.saving', 'Saving') : t('common.save', 'Save')}</button>
         </div>
       </section>
     </div>
@@ -16439,6 +16643,38 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
   const schemaBrowserRef = useRef(null)
   const copyTimerRef = useRef(null)
   const addMenuRef = useRef(null)
+  const sqlEditorRef = useRef(null)
+  const sqlEditorSelectionRef = useRef({ start: 0, end: 0, direction: 'none' })
+  const rememberSqlEditorSelection = (editor = sqlEditorRef.current) => {
+    if (!editor) return
+    sqlEditorSelectionRef.current = {
+      start: editor.selectionStart ?? 0,
+      end: editor.selectionEnd ?? editor.selectionStart ?? 0,
+      direction: editor.selectionDirection || 'none'
+    }
+  }
+  const restoreSqlEditorFocus = () => {
+    window.requestAnimationFrame(() => {
+      const editor = sqlEditorRef.current
+      if (!editor) return
+      editor.focus({ preventScroll: true })
+      const valueLength = editor.value.length
+      const selection = sqlEditorSelectionRef.current
+      editor.setSelectionRange(
+        Math.min(selection.start, valueLength),
+        Math.min(selection.end, valueLength),
+        selection.direction
+      )
+    })
+  }
+  const runSqlFromEditor = () => {
+    rememberSqlEditorSelection()
+    const execution = onRunSql()
+    // window.confirm and the run button can both take focus from the textarea.
+    // Restore once immediately and once again when execution settles.
+    restoreSqlEditorFocus()
+    Promise.resolve(execution).then(restoreSqlEditorFocus, restoreSqlEditorFocus)
+  }
   const copyOnSingleClick = (value) => {
     window.clearTimeout(copyTimerRef.current)
     copyTimerRef.current = window.setTimeout(() => onCopy(value), 180)
@@ -16892,18 +17128,33 @@ function DatabaseBrowser({ databases, selectedDatabase, connectionAvailable, ser
             {sqlRunning && sqlExecutionTaskId ? (
               <button className="danger-button" onClick={() => onCancelSql(sqlExecutionTaskId)}><CircleStop size={15} />{t('database.stopRollback', 'Stop and rollback')}</button>
             ) : (
-              <button className="solid-button" onClick={onRunSql} disabled={!connectionAvailable || sqlRunning || (!sqlScript.trim() && !sqlFileInfo?.directExecution)}><CirclePlay size={15} />{sqlRunning ? t('database.sqlRunning', 'Running') : t('database.run', 'Run')}</button>
+              <button
+                className="solid-button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={runSqlFromEditor}
+                disabled={!connectionAvailable || sqlRunning || (!sqlScript.trim() && !sqlFileInfo?.directExecution)}
+              ><CirclePlay size={15} />{sqlRunning ? t('database.sqlRunning', 'Running') : t('database.run', 'Run')}</button>
             )}
           </div>
         </div>
         <textarea
+          ref={sqlEditorRef}
           value={sqlScript}
-          readOnly={Boolean(sqlFileInfo?.directExecution)}
-          onChange={(event) => onSqlChange(event.target.value)}
+          onChange={(event) => {
+            rememberSqlEditorSelection(event.currentTarget)
+            onSqlChange(event.currentTarget.value)
+          }}
+          onSelect={(event) => rememberSqlEditorSelection(event.currentTarget)}
+          onFocus={() => {
+            document.body.classList.remove('is-resizing-row')
+            document.body.classList.remove('is-resizing-panel')
+          }}
+          placeholder={t('database.sqlPlaceholder', 'Enter SQL statements')}
+          spellCheck="false"
           onKeyDown={(event) => {
             if (connectionAvailable && !sqlRunning && event.ctrlKey && event.key === 'Enter') {
               event.preventDefault()
-              onRunSql()
+              runSqlFromEditor()
             }
           }}
         />
@@ -20135,14 +20386,15 @@ function parseServiceLines(lines = []) {
 }
 
 function parseCronLines(lines = []) {
-  return lines
-    .map((line, index) => ({ line: line.trim(), index }))
-    .filter((item) => item.line && !/^no crontab/i.test(item.line))
+  return sanitizeCronSourceLines(lines)
+    .map((line, index) => ({ line, index }))
+    .filter((item) => isCronTaskLine(item.line))
     .map((item) => {
       const normalizedLine = item.line.replace(/^#\s*/, '')
       const parts = normalizedLine.split(/\s+/)
-      const expression = parts.length >= 5 ? parts.slice(0, 5).join(' ') : ''
-      const command = parts.length >= 6 ? parts.slice(5).join(' ') : normalizedLine
+      const isMacro = parts[0]?.startsWith('@')
+      const expression = isMacro ? parts[0] : parts.slice(0, 5).join(' ')
+      const command = isMacro ? parts.slice(1).join(' ') : parts.slice(5).join(' ')
       return {
         ...item,
         expression,
@@ -20150,6 +20402,41 @@ function parseCronLines(lines = []) {
         enabled: !item.line.startsWith('#')
       }
     })
+}
+
+function sanitizeCronSourceLines(lines = []) {
+  return lines
+    .map((line) => stripTerminalControlSequences(line).trim())
+    .filter((line) => line && !/^no crontab/i.test(line) && isCronSourceLine(line))
+}
+
+function stripTerminalControlSequences(value = '') {
+  return String(value)
+    .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, '')
+    .replace(/(?:\u001b|\u009b)\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/\ufffd\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, '')
+}
+
+function isCronSourceLine(line = '') {
+  const text = String(line || '').trim()
+  if (!text) return false
+  if (/^[A-Za-z_][A-Za-z0-9_]*\s*=/.test(text)) return true
+  if (text.startsWith('#')) return true
+  return isCronTaskLine(text)
+}
+
+function isCronTaskLine(line = '') {
+  const text = String(line || '').trim().replace(/^#\s*/, '')
+  if (/^@(reboot|yearly|annually|monthly|weekly|daily|midnight|hourly)\s+\S/i.test(text)) return true
+  const parts = text.split(/\s+/)
+  if (parts.length < 6) return false
+  const [minute, hour, dayOfMonth, month, weekday] = parts
+  return /^[0-9*,/-]+$/.test(minute)
+    && /^[0-9*,/-]+$/.test(hour)
+    && /^[0-9*?,/LW#-]+$/i.test(dayOfMonth)
+    && /^(?:[0-9*,/-]+|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(?:[-/,](?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC))*)$/i.test(month)
+    && /^(?:[0-9*?,/#L-]+|(?:SUN|MON|TUE|WED|THU|FRI|SAT)(?:[-/,#](?:SUN|MON|TUE|WED|THU|FRI|SAT|[0-9L]+))*)$/i.test(weekday)
 }
 
 function buildBackupTaskInventoryCommand() {
@@ -20764,8 +21051,18 @@ function parseCronLineToForm(line = '') {
   if (parts.length < 6) return { ...emptyCronForm, scheduleType: 'advanced', expression: '', command: line }
   const [minute, hour, dayOfMonth, month, weekday, ...commandParts] = parts
   const expression = [minute, hour, dayOfMonth, month, weekday].join(' ')
-  const command = commandParts.join(' ')
-  const base = { ...emptyCronForm, minute, hour, dayOfMonth, month, weekday, expression, command }
+  const parsedCommand = splitCronAutoLogRedirect(commandParts.join(' '))
+  const base = {
+    ...emptyCronForm,
+    minute,
+    hour,
+    dayOfMonth,
+    month,
+    weekday,
+    expression,
+    command: parsedCommand.command,
+    autoLog: parsedCommand.autoLog || Boolean(deriveCronLogPath(parsedCommand.command))
+  }
 
   if (expression === '* * * * *') return { ...base, scheduleType: 'every-minute' }
   if (/^\*\/\d+$/.test(minute) && hour === '*' && dayOfMonth === '*' && month === '*' && weekday === '*') {
@@ -20780,9 +21077,38 @@ function parseCronLineToForm(line = '') {
 
 function buildCronLineFromForm(form = emptyCronForm) {
   const expression = buildCronExpression(form)
-  const command = String(form.command || '').trim()
+  const command = buildCronCommandFromForm(form)
   if (!expression || !command) return ''
   return `${expression} ${command}`
+}
+
+function buildCronCommandFromForm(form = emptyCronForm) {
+  const command = String(form.command || '').trim()
+  if (!command || form.autoLog === false) return command
+  const logPath = deriveCronLogPath(command)
+  return logPath ? `${command} >> ${shellQuote(logPath)} 2>&1` : command
+}
+
+function deriveCronLogPath(command = '') {
+  const text = String(command || '').trim()
+  if (!text || /(?:\|\||&&|\$\(|[|;<>`]|[\r\n])/.test(text)) return ''
+  const scriptPattern = /(?:^|\s)(?:"([^"]+\.(?:sh|bash))"|'([^']+\.(?:sh|bash))'|([^\s"'|;&<>]+\.(?:sh|bash)))(?=\s|$)/gi
+  let scriptPath = ''
+  for (const match of text.matchAll(scriptPattern)) {
+    const candidate = match[1] || match[2] || match[3] || ''
+    if (candidate && !/[*?\[\]]/.test(candidate)) scriptPath = candidate
+  }
+  return scriptPath ? scriptPath.replace(/\.(?:sh|bash)$/i, '.log') : ''
+}
+
+function splitCronAutoLogRedirect(command = '') {
+  const text = String(command || '').trim()
+  const match = text.match(/^(.*?)\s+>>\s+(?:"([^"]+)"|'([^']+)'|(\S+))\s+2>&1\s*$/)
+  if (!match) return { command: text, autoLog: false }
+  const baseCommand = String(match[1] || '').trim()
+  const redirectedPath = match[2] || match[3] || match[4] || ''
+  if (!baseCommand || deriveCronLogPath(baseCommand) !== redirectedPath) return { command: text, autoLog: false }
+  return { command: baseCommand, autoLog: true }
 }
 
 function buildCronExpression(form = emptyCronForm) {
@@ -21130,9 +21456,14 @@ function buildCronInstallCommand(lines = []) {
   const body = lines.join('\n')
   return [
     'tmp="/tmp/ops-flow-cron-$(date +%s)-$$"',
-    `printf %s ${shellQuote(body)} > "$tmp"`,
-    'crontab "$tmp"',
-    'rm -f "$tmp"'
+    'cleanup_ops_cron() { rm -f -- "$tmp"; }',
+    'trap cleanup_ops_cron EXIT',
+    `expected=${shellQuote(body)}`,
+    'if ! printf "%s\\n" "$expected" > "$tmp"; then echo "Failed to create temporary crontab" >&2; exit 1; fi',
+    'if ! crontab "$tmp"; then echo "Failed to install crontab" >&2; exit 1; fi',
+    'actual=$(crontab -l 2>/dev/null) || actual=""',
+    'if [ "$actual" != "$expected" ]; then echo "Crontab verification failed after installation" >&2; exit 1; fi',
+    'printf "__OPS_CRON_SAVED__\\n"'
   ].join('\n')
 }
 
@@ -21616,6 +21947,44 @@ function scriptHasRollbackRisk(sql, engine) {
   const containsDdl = /\b(?:CREATE|ALTER|DROP|TRUNCATE|RENAME|GRANT|REVOKE|COMMENT)\b/i.test(source)
   if (['mysql', 'mariadb', 'oracle', 'dm'].includes(dialect) && containsDdl) return true
   return /\b(?:VACUUM|CREATE\s+DATABASE|ALTER\s+SYSTEM|REINDEX\s+CONCURRENTLY)\b/i.test(source)
+}
+
+function scriptHasMutation(sql) {
+  return /\b(?:UPDATE|DELETE)\b/i.test(sqlKeywordScanSource(sql))
+}
+
+function scriptHasNonQueryOperation(sql) {
+  return /\b(?:INSERT|UPDATE|DELETE|MERGE|REPLACE|UPSERT|CREATE|ALTER|DROP|TRUNCATE|RENAME|GRANT|REVOKE|CALL|EXEC(?:UTE)?|DO|COPY|LOAD|IMPORT|VACUUM|ANALYZE|COMMENT|SET|INTO|LOCK|UNLOCK)\b/i.test(sqlKeywordScanSource(sql))
+}
+
+function sqlKeywordScanSource(sql) {
+  return String(sql || '')
+    .replace(/'(?:''|[^'])*'/g, ' ')
+    .replace(/"(?:""|[^"])*"/g, ' ')
+    .replace(/`(?:``|[^`])*`/g, ' ')
+    .replace(/\[(?:]]|[^\]])*\]/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/--.*$/gm, ' ')
+}
+
+function scriptStartsWithSelect(sql) {
+  let source = String(sql || '').replace(/^\uFEFF/, '')
+  while (source) {
+    source = source.trimStart()
+    if (source.startsWith('--')) {
+      const lineEnd = source.search(/[\r\n]/)
+      source = lineEnd < 0 ? '' : source.slice(lineEnd + 1)
+      continue
+    }
+    if (source.startsWith('/*')) {
+      const commentEnd = source.indexOf('*/', 2)
+      if (commentEnd < 0) return false
+      source = source.slice(commentEnd + 2)
+      continue
+    }
+    break
+  }
+  return /^SELECT\b/i.test(source)
 }
 
 function resultSummary(result) {

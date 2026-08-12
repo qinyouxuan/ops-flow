@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.5 - 2026-08-12
+
 ### Added
 
 - Added a collapsible, resizable auxiliary workspace for basic server information
@@ -21,6 +23,20 @@
 - Kept the database browser mounted and cached across top-level tab switches.
   Table metadata now reloads only when the selected database connection changes,
   when the user refreshes it explicitly, or after a schema-changing operation.
+- Added confirmation for SQL statements that modify data or schema while keeping
+  read-only `SELECT` execution immediate, and restored SQL editor focus after
+  confirmations, successful execution and errors.
+- Improved interactive terminal input latency, cursor behavior and reconnect
+  handling so asynchronous SSH recovery no longer steals focus from dialogs.
+- Stabilized multi-file SFTP upload, download and deletion by reusing the active
+  SSH transport, closing channels deterministically, retrying eligible upload
+  connection failures once and verifying remote deletion.
+- Fixed remote-file batch deletion refresh and breadcrumb navigation state.
+- Fixed user crontab management by filtering terminal control sequences,
+  verifying writes through a non-PTY command, preserving comments and environment
+  assignments, and updating only the Cron list instead of reloading host inspection.
+- Added automatic `.log` redirection for simple shell-script schedules and an
+  interactive one-time run action with live output, exit status and cancellation.
 
 ## 0.2.4 - 2026-08-11
 

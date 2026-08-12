@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('opsFlow', {
     return () => ipcRenderer.removeListener('ssh-tunnel:status', listener)
   },
   execSsh: (config, command) => ipcRenderer.invoke('ssh:exec', config, command),
+  execSshRaw: (config, command) => ipcRenderer.invoke('ssh:exec-raw', config, command),
   execSshStream: (config, command, executionId, privilege) => ipcRenderer.invoke('ssh:exec-stream', config, command, executionId, privilege),
   execSshPrivileged: (config, command, privilege) => ipcRenderer.invoke('ssh:exec-privileged', config, command, privilege),
   cancelSshExec: (executionId) => ipcRenderer.invoke('ssh:exec-cancel', executionId),
@@ -51,7 +52,7 @@ contextBridge.exposeInMainWorld('opsFlow', {
     return () => ipcRenderer.removeListener('ssh:exec:data', listener)
   },
   startSshShell: (config, size) => ipcRenderer.invoke('ssh:shell:start', config, size),
-  writeSshShell: (sessionId, data) => ipcRenderer.invoke('ssh:shell:write', sessionId, data),
+  writeSshShell: (sessionId, data) => ipcRenderer.send('ssh:shell:write', sessionId, data),
   resizeSshShell: (sessionId, size) => ipcRenderer.invoke('ssh:shell:resize', sessionId, size),
   stopSshShell: (sessionId) => ipcRenderer.invoke('ssh:shell:stop', sessionId),
   onSshShellData: (callback) => {
