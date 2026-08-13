@@ -40,11 +40,13 @@ contextBridge.exposeInMainWorld('opsFlow', {
   },
   execSsh: (config, command) => ipcRenderer.invoke('ssh:exec', config, command),
   execSshRaw: (config, command) => ipcRenderer.invoke('ssh:exec-raw', config, command),
-  execSshStream: (config, command, executionId, privilege) => ipcRenderer.invoke('ssh:exec-stream', config, command, executionId, privilege),
+  startWorkflowSshSession: (config, sessionId) => ipcRenderer.invoke('ssh:workflow-session:start', config, sessionId),
+  stopWorkflowSshSession: (sessionId) => ipcRenderer.invoke('ssh:workflow-session:stop', sessionId),
+  execSshStream: (config, command, executionId, privilege, workflowSessionId) => ipcRenderer.invoke('ssh:exec-stream', config, command, executionId, privilege, workflowSessionId),
   execSshPrivileged: (config, command, privilege) => ipcRenderer.invoke('ssh:exec-privileged', config, command, privilege),
   cancelSshExec: (executionId) => ipcRenderer.invoke('ssh:exec-cancel', executionId),
-  detectSshPrivilege: (config) => ipcRenderer.invoke('ssh:privilege-detect', config),
-  verifySshPrivilege: (config, privilege) => ipcRenderer.invoke('ssh:privilege-verify', config, privilege),
+  detectSshPrivilege: (config, workflowSessionId) => ipcRenderer.invoke('ssh:privilege-detect', config, workflowSessionId),
+  verifySshPrivilege: (config, privilege, workflowSessionId) => ipcRenderer.invoke('ssh:privilege-verify', config, privilege, workflowSessionId),
   forgetSshPrivilege: (config, mode) => ipcRenderer.invoke('ssh:privilege-forget', config, mode),
   onSshExecData: (callback) => {
     const listener = (_event, payload) => callback(payload)
@@ -88,7 +90,7 @@ contextBridge.exposeInMainWorld('opsFlow', {
   uploadRemoteFile: (config, path, options) => ipcRenderer.invoke('sftp:upload', config, path, options),
   uploadPrivilegedRemoteFile: (config, path, privilege) => ipcRenderer.invoke('sftp:privileged-upload', config, path, privilege),
   uploadPrivilegedRemotePath: (config, localPath, path, privilege) => ipcRenderer.invoke('sftp:privileged-upload-path', config, localPath, path, privilege),
-  uploadRemotePath: (config, localPath, remotePath) => ipcRenderer.invoke('sftp:upload-path', config, localPath, remotePath),
+  uploadRemotePath: (config, localPath, remotePath, workflowSessionId) => ipcRenderer.invoke('sftp:upload-path', config, localPath, remotePath, workflowSessionId),
   onUploadProgress: (callback) => {
     const listener = (_event, payload) => callback(payload)
     ipcRenderer.on('sftp:upload-progress', listener)
@@ -103,7 +105,7 @@ contextBridge.exposeInMainWorld('opsFlow', {
   downloadRemoteFile: (config, path) => ipcRenderer.invoke('sftp:download', config, path),
   downloadPrivilegedRemoteFile: (config, path, privilege) => ipcRenderer.invoke('sftp:privileged-download', config, path, privilege),
   downloadRemoteFiles: (config, paths, privilege) => ipcRenderer.invoke('sftp:download-files', config, paths, privilege),
-  downloadRemotePath: (config, remotePath, localPath) => ipcRenderer.invoke('sftp:download-path', config, remotePath, localPath),
+  downloadRemotePath: (config, remotePath, localPath, workflowSessionId) => ipcRenderer.invoke('sftp:download-path', config, remotePath, localPath, workflowSessionId),
   readRemoteFile: (config, path) => ipcRenderer.invoke('sftp:read-file', config, path),
   readPrivilegedRemoteFile: (config, path, privilege) => ipcRenderer.invoke('sftp:privileged-read-file', config, path, privilege),
   writeRemoteFile: (config, path, content) => ipcRenderer.invoke('sftp:write-file', config, path, content),

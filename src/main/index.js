@@ -34,6 +34,7 @@ let dmdbDriverPromise = null
 let dmdbDriverLoadedPath = ''
 const shellSessionsByWebContents = new Map()
 const sshExecSessions = new Map()
+const workflowSshSessions = new Map()
 const workflowPrivilegeCredentials = new Map()
 const databaseScriptSessions = new Map()
 const databaseQueryExportSessions = new Map()
@@ -300,6 +301,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   workflowPrivilegeCredentials.clear()
+  for (const sessionId of [...workflowSshSessions.keys()]) closeWorkflowSshSession(sessionId)
   databaseScriptSessions.clear()
   for (const tunnelId of [...sshTunnelSessions.keys()]) stopManagedSshTunnel(tunnelId, false)
   for (const worker of damengLegacyWorkers) worker.terminate()
@@ -780,8 +782,19 @@ ipcMain.handle('ssh:exec-raw', async (_event, config, command) => {
   return withSshClient(config, (client) => execCommand(client, `bash -lc ${shellQuote(command)}`))
 })
 
-ipcMain.handle('ssh:exec-stream', async (event, config, command, executionId, privilege) => {
-  return execStreamingCommand(event.sender, config, command, executionId, privilege)
+ipcMain.handle('ssh:workflow-session:start', async (event, config, sessionId) => {
+  return startWorkflowSshSession(event.sender, config, sessionId)
+})
+
+ipcMain.handle('ssh:workflow-session:stop', async (event, sessionId) => {
+  const session = workflowSshSessions.get(String(sessionId || ''))
+  if (session && session.webContentsId !== event.sender.id) return { ok: false, message: 'Workflow SSH session belongs to another window' }
+  closeWorkflowSshSession(sessionId)
+  return { ok: true }
+})
+
+ipcMain.handle('ssh:exec-stream', async (event, config, command, executionId, privilege, workflowSessionId) => {
+  return execStreamingCommand(event.sender, config, command, executionId, privilege, workflowSessionId)
 })
 
 ipcMain.handle('ssh:exec-privileged', async (event, config, command, privilege = {}) => {
@@ -796,8 +809,8 @@ ipcMain.handle('ssh:exec-cancel', async (_event, executionId) => {
   return { ok: true, canceled: true, message: 'Cancellation requested' }
 })
 
-ipcMain.handle('ssh:privilege-detect', async (event, config) => {
-  return withSshClient(config, async (client) => {
+ipcMain.handle('ssh:privilege-detect', async (event, config, workflowSessionId = '') => {
+  return withPreferredSshClient(event.sender, config, workflowSessionId, async (client) => {
     const identity = await execCommand(client, 'id -u')
     if (!identity.ok) return { ok: false, message: identity.message || 'Unable to detect the remote user' }
     if (String(identity.stdout || '').trim() === '0') {
@@ -817,7 +830,7 @@ ipcMain.handle('ssh:privilege-detect', async (event, config) => {
       const cached = workflowPrivilegeCredentials.get(key)
       if (!cached?.password) continue
       const executionId = `privilege-cache-check-${Date.now()}-${Math.random().toString(16).slice(2)}`
-      const verified = await execStreamingCommand(event.sender, config, 'true', executionId, { mode, password: cached.password })
+      const verified = await execStreamingCommand(event.sender, config, 'true', executionId, { mode, password: cached.password }, workflowSessionId)
       if (verified.ok) return { ok: true, mode, isRoot: false, passwordRequired: false, cached: true }
       workflowPrivilegeCredentials.delete(key)
     }
@@ -830,7 +843,7 @@ ipcMain.handle('ssh:privilege-detect', async (event, config) => {
   })
 })
 
-ipcMain.handle('ssh:privilege-verify', async (event, config, privilege = {}) => {
+ipcMain.handle('ssh:privilege-verify', async (event, config, privilege = {}, workflowSessionId = '') => {
   const mode = ['sudo', 'su'].includes(privilege?.mode) ? privilege.mode : 'normal'
   if (mode === 'normal') return { ok: true, mode: 'normal', isRoot: false, cached: false }
   const key = workflowPrivilegeKey(config, mode)
@@ -844,7 +857,7 @@ ipcMain.handle('ssh:privilege-verify', async (event, config, privilege = {}) => 
   const result = await execStreamingCommand(event.sender, config, 'id -u', executionId, {
     mode,
     password: suppliedPassword || cachedPassword
-  })
+  }, workflowSessionId)
   const isRoot = String(result.stdout || '').split(/\r?\n/).some((line) => line.trim() === '0')
   if (!result.ok || !isRoot) {
     workflowPrivilegeCredentials.delete(key)
@@ -997,7 +1010,7 @@ ipcMain.handle('sftp:privileged-upload-path', async (event, config, localPath, t
   return uploadPrivilegedRemotePath(event.sender, config, localPath, targetDirectory, privilege)
 })
 
-ipcMain.handle('sftp:upload-path', async (event, config, localPath, remotePath) => {
+ipcMain.handle('sftp:upload-path', async (event, config, localPath, remotePath, workflowSessionId = '') => {
   if (!localPath || !remotePath) return { ok: false, message: 'Local path and remote path are required' }
   let stats
   try {
@@ -1041,7 +1054,7 @@ ipcMain.handle('sftp:upload-path', async (event, config, localPath, remotePath) 
     stats.isDirectory()
       ? uploadRemoteDirectory(client, localPath, targetRemotePath, progress)
       : uploadRemoteFile(client, localPath, targetRemotePath, progress)
-  ))
+  ), workflowSessionId)
   result = settlePendingFileTransfer(progress, result)
   if (result.canceled && result.partialRemotePath) {
     void cleanupCanceledRemoteUpload(config, result.partialRemotePath)
@@ -1124,11 +1137,11 @@ ipcMain.handle('sftp:download-files', async (event, config, remotePaths = [], pr
   }
 })
 
-ipcMain.handle('sftp:download-path', async (event, config, remotePath, localPath) => {
+ipcMain.handle('sftp:download-path', async (event, config, remotePath, localPath, workflowSessionId = '') => {
   if (!remotePath || !localPath) return { ok: false, message: 'Remote path and local path are required' }
   mkdirSync(dirname(localPath), { recursive: true })
   const transferId = `download-${Date.now()}-${Math.random().toString(16).slice(2)}`
-  return withActiveShellClient(event.sender, config, (client, connection) => downloadRemoteFile(client, remotePath, localPath, {
+  return withPreferredSshClient(event.sender, config, workflowSessionId, (client, connection) => downloadRemoteFile(client, remotePath, localPath, {
     id: transferId,
     type: 'download',
     name: posix.basename(remotePath),
@@ -2637,6 +2650,101 @@ function activeShellSessionFor(webContents, config) {
   return session
 }
 
+function workflowSshSessionFor(webContents, config, sessionId = '') {
+  const normalizedSessionId = String(sessionId || '')
+  if (!normalizedSessionId || !webContents || webContents.isDestroyed()) return null
+  const session = workflowSshSessions.get(normalizedSessionId)
+  if (!session || session.closed || session.webContentsId !== webContents.id) return null
+  const requestedServerId = String(config?.id || '')
+  if (requestedServerId && session.serverId && session.serverId !== requestedServerId) return null
+  return session
+}
+
+function startWorkflowSshSession(webContents, config, requestedSessionId = '') {
+  const sessionId = String(requestedSessionId || `workflow-ssh-${Date.now()}-${Math.random().toString(16).slice(2)}`)
+  const existing = workflowSshSessionFor(webContents, config, sessionId)
+  if (existing) return Promise.resolve({ ok: true, sessionId, reused: true, sharedTerminal: !existing.ownsClient })
+  if (workflowSshSessions.has(sessionId)) {
+    return Promise.resolve({ ok: false, message: 'Workflow SSH session id is already in use' })
+  }
+
+  const activeShell = activeShellSessionFor(webContents, config)
+  if (activeShell) {
+    workflowSshSessions.set(sessionId, {
+      id: sessionId,
+      client: activeShell.client,
+      webContentsId: webContents.id,
+      serverId: String(config?.id || ''),
+      ownsClient: false,
+      closed: false
+    })
+    return Promise.resolve({ ok: true, sessionId, reused: true, sharedTerminal: true })
+  }
+
+  return new Promise((resolve) => {
+    const client = new Client()
+    const session = {
+      id: sessionId,
+      client,
+      webContentsId: webContents.id,
+      serverId: String(config?.id || ''),
+      ownsClient: true,
+      closed: false
+    }
+    let settled = false
+    const finish = (result) => {
+      if (settled) return
+      settled = true
+      resolve(result)
+    }
+    const cleanup = () => {
+      session.closed = true
+      if (workflowSshSessions.get(sessionId) === session) workflowSshSessions.delete(sessionId)
+    }
+
+    client
+      .once('ready', () => {
+        client.setNoDelay(true)
+        workflowSshSessions.set(sessionId, session)
+        webContents.once('destroyed', () => closeWorkflowSshSession(sessionId))
+        finish({ ok: true, sessionId, reused: false, sharedTerminal: false })
+      })
+      .once('error', (error) => {
+        cleanup()
+        finish({ ok: false, message: error.message })
+      })
+      .once('close', () => {
+        cleanup()
+        finish({ ok: false, message: 'SSH transport closed before the workflow session was ready' })
+      })
+
+    connectSshClient(client, config).catch((error) => {
+      cleanup()
+      finish({ ok: false, message: error.message })
+    })
+  })
+}
+
+function closeWorkflowSshSession(sessionId) {
+  const normalizedSessionId = String(sessionId || '')
+  const session = workflowSshSessions.get(normalizedSessionId)
+  if (!session) return
+  session.closed = true
+  workflowSshSessions.delete(normalizedSessionId)
+  if (!session.ownsClient) return
+  try {
+    session.client?.end()
+  } catch {
+    // The transport may already have been closed by the server.
+  }
+}
+
+async function withPreferredSshClient(webContents, config, workflowSessionId, task) {
+  const workflowSession = workflowSshSessionFor(webContents, config, workflowSessionId)
+  if (workflowSession) return task(workflowSession.client, { shared: true, sessionId: workflowSession.id, workflow: true })
+  return withActiveShellClient(webContents, config, task)
+}
+
 async function withActiveShellClient(webContents, config, task) {
   const session = activeShellSessionFor(webContents, config)
   if (!session) {
@@ -2649,8 +2757,8 @@ async function withActiveShellClient(webContents, config, task) {
   }
 }
 
-async function uploadWithReconnect(webContents, config, progress, upload) {
-  let result = await withActiveShellClient(webContents, config, (client, connection) => {
+async function uploadWithReconnect(webContents, config, progress, upload, workflowSessionId = '') {
+  let result = await withPreferredSshClient(webContents, config, workflowSessionId, (client, connection) => {
     progress.sharedConnection = connection.shared
     return upload(client)
   })
@@ -2891,7 +2999,7 @@ function execCommand(client, command, options = {}) {
   })
 }
 
-function execStreamingCommand(webContents, config, command, requestedExecutionId, privilege = { mode: 'normal', password: '' }) {
+function execStreamingCommand(webContents, config, command, requestedExecutionId, privilege = { mode: 'normal', password: '' }, workflowSessionId = '') {
   return new Promise((resolve) => {
     const executionId = requestedExecutionId || `ssh-exec-${Date.now()}-${Math.random().toString(16).slice(2)}`
     const privilegeMode = ['sudo', 'su'].includes(privilege?.mode) ? privilege.mode : 'normal'
@@ -2901,7 +3009,10 @@ function execStreamingCommand(webContents, config, command, requestedExecutionId
       ? `__OPS_PRIVILEGE_READY_${executionId.replace(/[^a-zA-Z0-9]/g, '_')}__`
       : ''
     const preparedCommand = buildStreamingPrivilegeCommand(command, privilegeMode, privilegePromptToken, Boolean(privilegePassword))
-    const client = new Client()
+    const reusableSession = workflowSshSessionFor(webContents, config, workflowSessionId)
+      || activeShellSessionFor(webContents, config)
+    const client = reusableSession?.client || new Client()
+    const ownsClient = !reusableSession
     let stream = null
     let stdout = ''
     let stderr = ''
@@ -2909,7 +3020,9 @@ function execStreamingCommand(webContents, config, command, requestedExecutionId
     let canceled = false
     let cancelTimer = null
     let privilegePasswordSent = false
+    let privilegePromptSeen = false
     let privilegeOutputBuffer = ''
+    let privilegePromptTimer = null
     const maxCapturedOutputLength = 2 * 1024 * 1024
     const appendCapturedOutput = (current, chunk) => {
       const next = `${current}${chunk}`
@@ -2926,6 +3039,18 @@ function execStreamingCommand(webContents, config, command, requestedExecutionId
       }
     }
 
+    const sendPrivilegePassword = () => {
+      if (privilegePasswordSent) return
+      privilegePasswordSent = true
+      if (privilegePromptTimer) clearTimeout(privilegePromptTimer)
+      privilegePromptTimer = null
+      try {
+        stream?.write(`${privilegePassword}\n`)
+      } catch {
+        // The command close handler will report a failed privilege switch.
+      }
+    }
+
     const sendVisibleData = (streamName, data) => {
       const text = String(data || '')
       if (!privilegePromptToken || privilegePasswordSent) {
@@ -2933,23 +3058,33 @@ function execStreamingCommand(webContents, config, command, requestedExecutionId
         return
       }
 
-      const combined = `${privilegeOutputBuffer}${text}`
-      const tokenIndex = combined.indexOf(privilegePromptToken)
-      if (tokenIndex >= 0) {
-        const visible = `${combined.slice(0, tokenIndex)}${combined.slice(tokenIndex + privilegePromptToken.length)}`
-          .replace(/^\r?\n/, '')
-        privilegeOutputBuffer = ''
-        privilegePasswordSent = true
-        try {
-          stream?.write(`${privilegePassword}\n`)
-        } catch {
-          // The command close handler will report a failed privilege switch.
+      let combined = `${privilegeOutputBuffer}${text}`
+      privilegeOutputBuffer = ''
+      if (!privilegePromptSeen) {
+        const tokenIndex = combined.indexOf(privilegePromptToken)
+        if (tokenIndex < 0) {
+          const retainedLength = Math.min(privilegePromptToken.length - 1, combined.length)
+          const visibleLength = combined.length - retainedLength
+          if (visibleLength > 0) send(streamName, combined.slice(0, visibleLength))
+          privilegeOutputBuffer = combined.slice(visibleLength)
+          return
         }
-        if (visible) send(streamName, visible)
+        privilegePromptSeen = true
+        combined = `${combined.slice(0, tokenIndex)}${combined.slice(tokenIndex + privilegePromptToken.length)}`
+          .replace(/^\r?\n/, '')
+        if (privilegeMode !== 'su') sendPrivilegePassword()
+        else {
+          privilegePromptTimer = setTimeout(sendPrivilegePassword, 1500)
+        }
+      }
+
+      if (privilegeMode === 'su' && /password\s*:/i.test(combined)) sendPrivilegePassword()
+      if (privilegePasswordSent) {
+        if (combined) send(streamName, combined)
         return
       }
 
-      const retainedLength = Math.min(privilegePromptToken.length - 1, combined.length)
+      const retainedLength = Math.min(64, combined.length)
       const visibleLength = combined.length - retainedLength
       if (visibleLength > 0) send(streamName, combined.slice(0, visibleLength))
       privilegeOutputBuffer = combined.slice(visibleLength)
@@ -2959,11 +3094,16 @@ function execStreamingCommand(webContents, config, command, requestedExecutionId
       if (settled) return
       settled = true
       if (cancelTimer) clearTimeout(cancelTimer)
+      if (privilegePromptTimer) clearTimeout(privilegePromptTimer)
       sshExecSessions.delete(executionId)
-      try {
-        client.end()
-      } catch {
-        // The SSH client may already be closed after a remote exit.
+      client.removeListener('error', handleSharedClientError)
+      client.removeListener('close', handleSharedClientClose)
+      if (ownsClient) {
+        try {
+          client.end()
+        } catch {
+          // The SSH client may already be closed after a remote exit.
+        }
       }
       resolve({ executionId, ...result })
     }
@@ -2995,13 +3135,12 @@ function execStreamingCommand(webContents, config, command, requestedExecutionId
 
     sshExecSessions.set(executionId, { cancel })
 
-    client
-      .on('ready', () => {
+    const openCommandChannel = () => {
         if (canceled) {
           finish({ ok: false, canceled: true, code: null, stdout, stderr, message: 'Command canceled' })
           return
         }
-        client.exec(wrapInteractiveCommand(preparedCommand), { pty: true }, (error, channel) => {
+        client.exec(wrapWorkflowCommand(preparedCommand), { pty: true }, (error, channel) => {
           if (error) {
             finish({ ok: false, canceled, code: null, stdout, stderr, message: canceled ? 'Command canceled' : error.message })
             return
@@ -3034,8 +3173,48 @@ function execStreamingCommand(webContents, config, command, requestedExecutionId
             sendVisibleData('stderr', text)
           })
         })
+    }
+
+    function handleSharedClientError(error) {
+      finish({
+        ok: false,
+        canceled,
+        code: null,
+        stdout,
+        stderr,
+        message: canceled ? 'Command canceled' : error.message
       })
-      .on('error', (error) => {
+    }
+
+    function handleSharedClientClose() {
+      finish({
+        ok: false,
+        canceled,
+        code: null,
+        stdout,
+        stderr,
+        message: canceled ? 'Command canceled' : 'SSH transport closed during command execution'
+      })
+    }
+
+    if (reusableSession) {
+      client.once('error', handleSharedClientError)
+      client.once('close', handleSharedClientClose)
+      openCommandChannel()
+    } else {
+      client
+        .on('ready', openCommandChannel)
+        .on('error', (error) => {
+          finish({
+            ok: false,
+            canceled,
+            code: null,
+            stdout,
+            stderr,
+            message: canceled ? 'Command canceled' : error.message
+          })
+        })
+      connectSshClient(client, config, () => settled || canceled).catch((error) => {
         finish({
           ok: false,
           canceled,
@@ -3045,22 +3224,13 @@ function execStreamingCommand(webContents, config, command, requestedExecutionId
           message: canceled ? 'Command canceled' : error.message
         })
       })
-    connectSshClient(client, config, () => settled || canceled).catch((error) => {
-      finish({
-        ok: false,
-        canceled,
-        code: null,
-        stdout,
-        stderr,
-        message: canceled ? 'Command canceled' : error.message
-      })
-    })
+    }
   })
 }
 
 function buildStreamingPrivilegeCommand(command, mode = 'normal', promptToken = '', hasPassword = false) {
   if (mode === 'sudo') {
-    const innerCommand = `bash -lc ${shellQuote(command)} </dev/null`
+    const innerCommand = `bash -c ${shellQuote(command)} </dev/null`
     if (!hasPassword) return `sudo -n ${innerCommand}`
     return [
       'stty -echo',
@@ -3074,12 +3244,12 @@ function buildStreamingPrivilegeCommand(command, mode = 'normal', promptToken = 
   }
 
   if (mode === 'su') {
-    const rootCommand = `bash -lc ${shellQuote(command)} </dev/null`
-    if (!hasPassword) return `LC_ALL=C su - root -c ${shellQuote(rootCommand)}`
+    const rootCommand = `bash -c ${shellQuote(command)} </dev/null`
+    if (!hasPassword) return `LC_ALL=C su root -c ${shellQuote(rootCommand)}`
     return [
       'stty -echo',
       `printf '%s\\n' ${shellQuote(promptToken)}`,
-      `LC_ALL=C su - root -c ${shellQuote(rootCommand)}`,
+      `LC_ALL=C su root -c ${shellQuote(rootCommand)}`,
       '__ops_privilege_status=$?',
       'stty echo',
       'exit $__ops_privilege_status'
@@ -4712,6 +4882,10 @@ function sftpRmdir(sftp, remotePath) {
 
 function wrapInteractiveCommand(command) {
   return `bash -ilc ${shellQuote(command)}`
+}
+
+function wrapWorkflowCommand(command) {
+  return `bash -c ${shellQuote(command)}`
 }
 
 function shellQuote(value) {
