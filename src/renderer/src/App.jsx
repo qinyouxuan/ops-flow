@@ -3502,7 +3502,7 @@ export default function App() {
     showToast('info', t('workflow.cancelling', 'Cancelling…'))
   }
 
-  const resolveSessionPrivilege = async (server, requested = { mode: 'auto', password: '' }) => {
+  const resolveSessionPrivilege = async (server, requested = { mode: 'auto', password: '' }, workflowSessionId = '') => {
     if (!window.opsFlow.detectSshPrivilege || !window.opsFlow.verifySshPrivilege) {
       return { ok: true, mode: 'normal', cached: false }
     }
@@ -3512,7 +3512,7 @@ export default function App() {
     if (requestedMode === 'normal') return { ok: true, mode: 'normal', cached: false }
 
     if (requestedMode === 'auto') {
-      const detected = await window.opsFlow.detectSshPrivilege(server)
+      const detected = await window.opsFlow.detectSshPrivilege(server, workflowSessionId)
       if (!detected?.ok) return detected
       if (!detected.passwordRequired) return detected
       if (!password) {
@@ -3523,11 +3523,11 @@ export default function App() {
           message: detected.mode === 'su' ? '请输入 root 密码后继续。' : '当前 SSH 用户需要 sudo 密码，请输入后继续。'
         }
       }
-      const verified = await window.opsFlow.verifySshPrivilege(server, { mode: detected.mode || 'sudo', password })
+      const verified = await window.opsFlow.verifySshPrivilege(server, { mode: detected.mode || 'sudo', password }, workflowSessionId)
       return { ...verified, mode: verified?.suggestedMode || detected.mode || 'sudo' }
     }
 
-    const verified = await window.opsFlow.verifySshPrivilege(server, { mode: requestedMode, password })
+    const verified = await window.opsFlow.verifySshPrivilege(server, { mode: requestedMode, password }, workflowSessionId)
     return { ...verified, mode: verified?.suggestedMode || requestedMode }
   }
 
@@ -3582,9 +3582,29 @@ export default function App() {
       return
     }
 
+    const workflowBatchId = `workflow-batch-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    const sshSessionIdsByServerId = new Map()
+    const closePreparedSessions = async () => {
+      await Promise.all(Array.from(sshSessionIdsByServerId.values()).map((sessionId) => (
+        window.opsFlow.stopWorkflowSshSession?.(sessionId).catch(() => null)
+      )))
+      sshSessionIdsByServerId.clear()
+    }
     const privilegesByServerId = {}
     for (const server of targetServers) {
-      const resolved = await resolveSessionPrivilege(server, workflowRunConfig.privilege)
+      let workflowSessionId = ''
+      if (window.opsFlow.startWorkflowSshSession) {
+        workflowSessionId = `${workflowBatchId}-${server.id}`
+        const connected = await window.opsFlow.startWorkflowSshSession(server, workflowSessionId)
+          .catch((error) => ({ ok: false, message: error.message }))
+        if (!connected?.ok) {
+          await closePreparedSessions()
+          showToast('error', `${server.name}: ${connected?.message || 'SSH connection failed'}`)
+          return
+        }
+        sshSessionIdsByServerId.set(server.id, workflowSessionId)
+      }
+      const resolved = await resolveSessionPrivilege(server, workflowRunConfig.privilege, workflowSessionId)
       if (!resolved?.ok) {
         setWorkflowRunConfig((current) => ({
           ...current,
@@ -3596,6 +3616,7 @@ export default function App() {
             suggestedMode: resolved?.suggestedMode || resolved?.mode || 'sudo'
           }
         }))
+        await closePreparedSessions()
         showToast('error', `${server.name}: ${resolved?.message || '请输入提权密码后重试。'}`)
         return
       }
@@ -3608,13 +3629,14 @@ export default function App() {
     setWorkflowRunDialogOpen(false)
 
     const runControl = {
-      id: `workflow-batch-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      id: workflowBatchId,
       releaseId: createWorkflowReleaseId(),
       cancelled: false,
       rollbackRequested: false,
       rollbackOnCancel: workflowRunConfig.autoRollback && workflowRunConfig.rollbackOnCancel !== false,
       finished: false,
       commandIds: new Set(),
+      sshSessionIdsByServerId,
       privilegesByServerId
     }
     activeWorkflowRunRef.current = runControl
@@ -3706,6 +3728,7 @@ export default function App() {
       )))
       if (!runControl.cancelled) showToast('error', `Workflow stopped: ${error.message}`)
     } finally {
+      await closePreparedSessions()
       runControl.finished = true
       if (activeWorkflowRunRef.current?.id === runControl.id) activeWorkflowRunRef.current = null
       if (runControl.cancelled) {
@@ -3864,6 +3887,14 @@ export default function App() {
     ]))
     const statusByRunId = new Map(runTargets.map((target) => [target.runId, 'pending']))
     const stepLogByRunId = new Map(runTargets.map((target) => [target.runId, createWorkflowStepLogs(steps)]))
+    const openedWorkflowSessionIds = new Map()
+    const closeWorkflowSessions = async () => {
+      await Promise.all(Array.from(openedWorkflowSessionIds.entries()).map(async ([serverId, sessionId]) => {
+        runControl?.sshSessionIdsByServerId?.delete(serverId)
+        await window.opsFlow.stopWorkflowSshSession?.(sessionId).catch(() => null)
+      }))
+      openedWorkflowSessionIds.clear()
+    }
 
     const publishTarget = (runTarget, patch = {}) => {
       setWorkflowRunTargets((current) => current.map((item) => (
@@ -3984,6 +4015,7 @@ export default function App() {
       })
     }
 
+    try {
     setLogs([`[${time()}] Cluster workflow started: ${workflow.name}`])
     setWorkflowRunLogs(stepLogByRunId.get(runTargets[0]?.runId) || createWorkflowStepLogs(steps))
     setSelectedWorkflowLogNodeId('__connect__')
@@ -4018,19 +4050,24 @@ export default function App() {
         cancelTarget(runTarget, 'Cancelled before connection')
         return { runTarget, ok: false, cancelled: true }
       }
-      updateStep(runTarget, '__connect__', 'Connect server', 'running', server?.status === 'connected' ? 'Server already connected' : 'Connecting server', 0)
+      updateStep(runTarget, '__connect__', 'Connect server', 'running', 'Opening reusable SSH session', 0)
       if (!server) {
         updateStep(runTarget, '__connect__', 'Connect server', 'failed', 'Server not found', 0)
         statusByRunId.set(runTarget.runId, 'failed')
         return { runTarget, ok: false }
       }
-      if (server.status !== 'connected') {
-        const connectionResult = await window.opsFlow.testSsh(server)
-        if (!connectionResult.ok) {
-          updateStep(runTarget, '__connect__', 'Connect server', 'failed', connectionResult.message || 'SSH connection failed', 0)
-          statusByRunId.set(runTarget.runId, 'failed')
-          return { runTarget, ok: false }
-        }
+      const sessionId = runControl?.sshSessionIdsByServerId?.get(server.id) || `workflow-ssh-${runTarget.runId}`
+      const connectionResult = window.opsFlow.startWorkflowSshSession
+        ? await window.opsFlow.startWorkflowSshSession(server, sessionId)
+        : await window.opsFlow.testSsh(server)
+      if (!connectionResult.ok) {
+        updateStep(runTarget, '__connect__', 'Connect server', 'failed', connectionResult.message || 'SSH connection failed', 0)
+        statusByRunId.set(runTarget.runId, 'failed')
+        return { runTarget, ok: false }
+      }
+      if (window.opsFlow.startWorkflowSshSession) {
+        openedWorkflowSessionIds.set(server.id, sessionId)
+        runControl?.sshSessionIdsByServerId?.set(server.id, sessionId)
       }
       updateStep(runTarget, '__connect__', 'Connect server', 'done', 'Server ready', 1)
       statusByRunId.set(runTarget.runId, 'running')
@@ -4154,6 +4191,9 @@ export default function App() {
     })
     setLogs((current) => [...current, `[${time()}] Cluster workflow completed`])
     return results
+    } finally {
+      await closeWorkflowSessions()
+    }
   }
 
   const runWorkflow = async ({ server = selectedServer, runConfig = defaultWorkflowRunConfig(), runId = '', serverScopes = ['app'], workflow = selectedWorkflow, runControl } = {}) => {
@@ -4174,6 +4214,8 @@ export default function App() {
     const totalSteps = steps.length + 1
     const taskId = `workflow-${Date.now()}-${Math.random().toString(16).slice(2)}`
     const targetRunId = runId || `workflow-run-${Date.now()}-${server.id}-${Math.random().toString(16).slice(2)}`
+    const workflowSshSessionId = runControl?.sshSessionIdsByServerId?.get(server.id) || `workflow-ssh-${targetRunId}`
+    let workflowSshSessionOpen = false
     const normalizedServerScopes = normalizeWorkflowScopes(serverScopes, ['app'])
     const runtime = createWorkflowRuntime(targetRunId, runConfig, server, runControl?.releaseId, workflow)
     const initialStepLogs = {
@@ -4349,16 +4391,18 @@ export default function App() {
         finishCancelled('Cancelled before connection')
         return false
       }
-      pushConnect('running', server.status === 'connected' ? 'Server already connected' : 'Connecting server', 0)
-      if (server.status !== 'connected') {
-        const connectionResult = await window.opsFlow.testSsh(server)
-        if (!connectionResult.ok) {
-          const message = connectionResult.message || 'SSH connection failed'
-          pushConnect('failed', message, 0)
-          showToast('error', `Workflow connection failed: ${server.name}`)
-          return false
-        }
+      pushConnect('running', 'Opening reusable SSH session', 0)
+      const connectionResult = window.opsFlow.startWorkflowSshSession
+        ? await window.opsFlow.startWorkflowSshSession(server, workflowSshSessionId)
+        : await window.opsFlow.testSsh(server)
+      if (!connectionResult.ok) {
+        const message = connectionResult.message || 'SSH connection failed'
+        pushConnect('failed', message, 0)
+        showToast('error', `Workflow connection failed: ${server.name}`)
+        return false
       }
+      workflowSshSessionOpen = Boolean(window.opsFlow.startWorkflowSshSession)
+      runControl?.sshSessionIdsByServerId?.set(server.id, workflowSshSessionId)
       if (runControl?.cancelled) {
         finishCancelled()
         return false
@@ -4531,6 +4575,11 @@ export default function App() {
       })
       showToast('error', `Workflow failed: ${error.message}`)
       return false
+    } finally {
+      runControl?.sshSessionIdsByServerId?.delete(server.id)
+      if (workflowSshSessionOpen) {
+        await window.opsFlow.stopWorkflowSshSession?.(workflowSshSessionId).catch(() => null)
+      }
     }
   }
 
@@ -4596,7 +4645,8 @@ export default function App() {
       ? `export PS4='+ '; set -x\n${String(command || '')}`
       : String(command || '')
     try {
-      const result = await window.opsFlow.execSshStream(targetServer, tracedCommand, executionId, privilege)
+      const workflowSessionId = runControl?.sshSessionIdsByServerId?.get(targetServer.id) || ''
+      const result = await window.opsFlow.execSshStream(targetServer, tracedCommand, executionId, privilege, workflowSessionId)
       Object.entries(buffers).forEach(([streamName, remaining]) => {
         if (remaining) emitLine(remaining, streamName)
       })
@@ -4692,14 +4742,16 @@ export default function App() {
       if (localPathCheck && !localPathCheck.ok) {
         return { ok: false, message: localPathCheck.message || `Local path not found: ${config.localPath}` }
       }
-      const result = await window.opsFlow.uploadRemotePath(targetServer, config.localPath, config.remotePath)
+      const workflowSessionId = runControl?.sshSessionIdsByServerId?.get(targetServer.id) || ''
+      const result = await window.opsFlow.uploadRemotePath(targetServer, config.localPath, config.remotePath, workflowSessionId)
       return { ...result, message: result.ok ? `Uploaded ${config.localPath} to ${config.remotePath}` : result.message }
     }
 
     if (node.data?.kind === 'file-download') {
       if (!runtime.outputPath) return { ok: false, message: 'No output path from Output format node.' }
       const localPath = joinLocalDownloadPath(config.localDir, runtime.outputPath)
-      const result = await window.opsFlow.downloadRemotePath(targetServer, runtime.outputPath, localPath)
+      const workflowSessionId = runControl?.sshSessionIdsByServerId?.get(targetServer.id) || ''
+      const result = await window.opsFlow.downloadRemotePath(targetServer, runtime.outputPath, localPath, workflowSessionId)
       if (result.ok) {
         const artifact = {
           name: String(runtime.outputPath || '').split(/[\\/]/).filter(Boolean).pop() || 'workflow-output',

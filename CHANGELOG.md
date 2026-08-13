@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Fixed
+
+- Reused one SSH transport per workflow target for file-transfer and command
+  channels, then closed the workflow-owned transport deterministically after the
+  run. An already connected interactive terminal can supply the shared transport
+  without being closed by workflow cleanup.
+- Made streamed workflow commands use a non-login shell so malformed remote
+  profile files cannot corrupt generated commands, and delayed `su` password
+  delivery until the real password prompt is visible.
+
 ## 0.2.5 - 2026-08-12
 
 ### Added
