@@ -7638,6 +7638,37 @@ body.is-resizing-column {
   gap: 8px;
 }
 
+.file-preview-save-options {
+  display: flex;
+  min-width: 0;
+  margin-right: auto;
+  align-items: center;
+  gap: 10px;
+  color: #64748b;
+}
+
+.file-preview-save-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.file-preview-save-options select {
+  height: 36px;
+  padding: 0 30px 0 10px;
+  color: #334155;
+  background: #ffffff;
+  border: 1px solid #dce3ed;
+  border-radius: 7px;
+}
+
+.file-preview-save-options small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .preview-search-bar {
   display: grid;
   gap: 6px;

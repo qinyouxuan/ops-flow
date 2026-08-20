@@ -11,6 +11,7 @@ owned by this project.
 | Electron | MIT |
 | electron-store | MIT |
 | ExcelJS | MIT |
+| iconv-lite | MIT |
 | lucide-react | ISC |
 | mssql | MIT |
 | mysql2 | MIT |

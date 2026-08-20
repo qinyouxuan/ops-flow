@@ -57,6 +57,14 @@ const LANGUAGE_OPTIONS = [
 
 const THEME_OPTIONS = ['system', 'light', 'dark']
 
+const REMOTE_TEXT_ENCODING_OPTIONS = [
+  { value: 'utf8', label: 'UTF-8' },
+  { value: 'utf8-bom', label: 'UTF-8 BOM' },
+  { value: 'gb18030', label: 'GB18030 / GBK' },
+  { value: 'utf16le', label: 'UTF-16 LE' },
+  { value: 'utf16be', label: 'UTF-16 BE' }
+]
+
 const PRODUCT_NAME = 'Ops Flow Plus'
 const PRODUCT_AUTHOR = '秦屿'
 const PRODUCT_EMAIL = '734052482@qq.com'
@@ -643,6 +651,9 @@ const I18N_MESSAGES = {
     'remote.privilegeEnabled': '已启用特权文件访问。',
     'remote.privilegeDisabled': '已退出特权文件访问。',
     'remote.copyBackup': '复制备份',
+    'remote.saveEncoding': '保存编码',
+    'remote.detectedEncoding': '打开时识别：{encoding}',
+    'remote.confirmEncodingConversion': '确定将文件编码从 {source} 转换为 {target} 后保存吗？',
     'remote.copyingBackup': '复制中',
     'remote.backupCreated': '备份已创建：{path}',
     'remote.pathHistory': '路径记录',
@@ -6110,17 +6121,32 @@ export default function App() {
         else showToast('error', result.message)
         return
       }
-      setPreviewFile({ ...item, path: targetPath, loading: false, privileged: Boolean(privilege), privilegeMode: privilege?.mode || '' })
+      setPreviewFile({
+        ...item,
+        path: targetPath,
+        loading: false,
+        privileged: Boolean(privilege),
+        privilegeMode: privilege?.mode || '',
+        encoding: result.encoding || 'utf8',
+        lineEnding: result.lineEnding || 'lf'
+      })
       setPreviewContent(result.content || '')
     } finally {
       setIsFileTransferRunning(false)
     }
   }
 
-  const savePreviewFile = async () => {
+  const savePreviewFile = async (requestedEncoding) => {
     if (!previewFile) return
     const targetServer = selectedServer
     const targetFile = previewFile
+    const sourceEncoding = targetFile.encoding || 'utf8'
+    const targetEncoding = requestedEncoding || sourceEncoding
+    if (targetEncoding !== sourceEncoding && !window.confirm(t(
+      'remote.confirmEncodingConversion',
+      'Save this file after converting its encoding from {source} to {target}?',
+      { source: remoteTextEncodingLabel(sourceEncoding), target: remoteTextEncodingLabel(targetEncoding) }
+    ))) return
     const contentBytes = new TextEncoder().encode(previewContent).length
     const transferId = `file-save-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     setIsPreviewSaving(true)
@@ -6139,9 +6165,10 @@ export default function App() {
 
     try {
       const privilege = targetFile.privileged ? { mode: targetFile.privilegeMode || getRemotePrivilege(targetServer)?.mode || 'normal' } : null
+      const saveOptions = { encoding: targetEncoding, lineEnding: targetFile.lineEnding || 'lf' }
       const result = privilege && window.opsFlow.writePrivilegedRemoteFile
-        ? await window.opsFlow.writePrivilegedRemoteFile(targetServer, targetFile.path, previewContent, privilege)
-        : await window.opsFlow.writeRemoteFile(targetServer, targetFile.path, previewContent)
+        ? await window.opsFlow.writePrivilegedRemoteFile(targetServer, targetFile.path, previewContent, privilege, saveOptions)
+        : await window.opsFlow.writeRemoteFile(targetServer, targetFile.path, previewContent, saveOptions)
       const message = result.ok ? `File saved: ${targetFile.path}` : `Save failed: ${result.message}`
       appendLog(message)
       updateTransferTask({
@@ -6151,6 +6178,9 @@ export default function App() {
         message: result.ok ? 'Remote file saved' : result.message
       })
       if (result.ok) {
+        setPreviewFile((current) => current?.path === targetFile.path
+          ? { ...current, encoding: result.encoding || targetEncoding, size: result.size || current.size }
+          : current)
         showToast('success', result.backupPath ? `File saved; backup: ${result.backupPath}` : `File saved: ${targetFile.name}`)
         await loadRemoteDirectory(remotePath)
       } else {
@@ -14692,6 +14722,10 @@ function findPreviewMatches(sourceText, queryText) {
   return matches
 }
 
+function remoteTextEncodingLabel(encoding) {
+  return REMOTE_TEXT_ENCODING_OPTIONS.find((option) => option.value === encoding)?.label || String(encoding || 'UTF-8')
+}
+
 function FilePreviewDialog({ file, content, saving, copying, onChange, onClose, onCopy, onSave }) {
   const { t } = useI18n()
   const editorRef = useRef(null)
@@ -14702,7 +14736,12 @@ function FilePreviewDialog({ file, content, saving, copying, onChange, onClose, 
   const [searchIndex, setSearchIndex] = useState(0)
   const [replaceValue, setReplaceValue] = useState('')
   const [replaceSummary, setReplaceSummary] = useState('')
+  const [saveEncoding, setSaveEncoding] = useState(file.encoding || 'utf8')
   const searchMatches = useMemo(() => findPreviewMatches(content, searchQuery), [content, searchQuery])
+
+  useEffect(() => {
+    setSaveEncoding(file.encoding || 'utf8')
+  }, [file.encoding, file.path])
 
   const openSearch = () => {
     setSearchOpen(true)
@@ -14893,11 +14932,20 @@ function FilePreviewDialog({ file, content, saving, copying, onChange, onClose, 
           />
         </div>
         <div className="dialog-actions">
+          <div className="file-preview-save-options">
+            <label>
+              <span>{t('remote.saveEncoding', 'Save encoding')}</span>
+              <select value={saveEncoding} onChange={(event) => setSaveEncoding(event.target.value)} disabled={saving || copying || file.loading}>
+                {REMOTE_TEXT_ENCODING_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <small>{t('remote.detectedEncoding', 'Detected when opened: {encoding}', { encoding: remoteTextEncodingLabel(file.encoding) })}</small>
+          </div>
           <button onClick={onClose} disabled={saving || copying}>{t('common.close', 'Close')}</button>
           <button onClick={onCopy} disabled={copying || saving || file.loading}>
             <Copy size={16} />{copying ? t('remote.copyingBackup', 'Copying') : t('remote.copyBackup', 'Copy backup')}
           </button>
-          <button className="solid-button" onClick={onSave} disabled={saving || copying || file.loading}>
+          <button className="solid-button" onClick={() => onSave(saveEncoding)} disabled={saving || copying || file.loading}>
             <Save size={16} />{file.loading ? t('common.loading', 'Loading') : saving ? t('common.saving', 'Saving') : t('common.save', 'Save')}
           </button>
         </div>
