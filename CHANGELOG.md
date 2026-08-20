@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.2.6 - 2026-08-20
+
+### Added
+
+- Added remote text-file encoding detection for UTF-8, UTF-8 BOM, GB18030/GBK
+  and UTF-16, plus an explicit save-encoding selector that preserves the
+  detected source encoding and line endings by default.
+
 ### Fixed
 
 - Reused one SSH transport per workflow target for file-transfer and command

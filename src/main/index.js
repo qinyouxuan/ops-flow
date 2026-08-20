@@ -28,6 +28,7 @@ import {
   summarizeConfig
 } from './configCrypto.mjs'
 import { inspectDatabaseColumnMetadata, setDatabaseColumnComment } from './database/columnMetadataAdapters.mjs'
+import { decodeRemoteTextBuffer, encodeRemoteTextContent } from './remoteTextEncoding.mjs'
 
 const shellSessions = new Map()
 let dmdbDriverPromise = null
@@ -1186,8 +1187,8 @@ ipcMain.handle('sftp:privileged-read-file', async (event, config, remotePath, pr
   return readPrivilegedRemoteTextFile(event.sender, config, remotePath, privilege)
 })
 
-ipcMain.handle('sftp:write-file', async (event, config, remotePath, content) => {
-  return withActiveShellClient(event.sender, config, (client) => writeRemoteTextFile(client, remotePath, content))
+ipcMain.handle('sftp:write-file', async (event, config, remotePath, content, options = {}) => {
+  return withActiveShellClient(event.sender, config, (client) => writeRemoteTextFile(client, remotePath, content, options))
 })
 
 ipcMain.handle('sftp:create-file', async (event, config, parentPath, name) => {
@@ -1217,8 +1218,8 @@ ipcMain.handle('sftp:rename', async (event, config, sourcePath, newName) => {
   }
 })
 
-ipcMain.handle('sftp:privileged-write-file', async (event, config, remotePath, content, privilege = {}) => {
-  return writePrivilegedRemoteTextFile(event.sender, config, remotePath, content, privilege)
+ipcMain.handle('sftp:privileged-write-file', async (event, config, remotePath, content, privilege = {}, options = {}) => {
+  return writePrivilegedRemoteTextFile(event.sender, config, remotePath, content, privilege, options)
 })
 
 ipcMain.handle('sftp:privileged-create-file', async (event, config, parentPath, name, privilege = {}) => {
@@ -3770,13 +3771,14 @@ async function commitPrivilegedStagedFile(webContents, config, stagePath, remote
     : { ok: false, message: result.message, path: normalizedPath }
 }
 
-async function writePrivilegedRemoteTextFile(webContents, config, remotePath, content, privilege) {
+async function writePrivilegedRemoteTextFile(webContents, config, remotePath, content, privilege, options = {}) {
   const stagePath = makePrivilegedStagePath('write')
   try {
-    const staged = await withSshClient(config, (client) => writeRemoteBufferFile(client, stagePath, Buffer.from(String(content || ''), 'utf8')))
+    const encoded = encodeRemoteTextContent(content, options)
+    const staged = await withSshClient(config, (client) => writeRemoteBufferFile(client, stagePath, encoded.buffer))
     if (!staged.ok) return staged
     const result = await commitPrivilegedStagedFile(webContents, config, stagePath, remotePath, privilege)
-    return { ...result, size: Buffer.byteLength(String(content || ''), 'utf8') }
+    return { ...result, size: encoded.buffer.length, encoding: encoded.encoding }
   } catch (error) {
     return { ok: false, message: error.message }
   } finally {
@@ -4589,19 +4591,22 @@ function readRemoteTextFile(client, remotePath) {
         stream.on('error', (streamError) => finish({ ok: false, message: streamError.message }))
         stream.on('end', () => {
           const buffer = Buffer.concat(chunks)
-          if (buffer.includes(0)) {
-            finish({ ok: false, message: 'Binary file preview is not supported.' })
-            return
+          try {
+            const decoded = decodeRemoteTextBuffer(buffer)
+            finish({ ok: true, path: remotePath, ...decoded, size: attrs?.size || buffer.length })
+          } catch (decodeError) {
+            finish({ ok: false, message: decodeError.message })
           }
-          finish({ ok: true, path: remotePath, content: buffer.toString('utf8'), size: attrs?.size || buffer.length })
         })
       })
     })
   })
 }
 
-function writeRemoteTextFile(client, remotePath, content) {
-  return writeRemoteBufferFile(client, remotePath, Buffer.from(content, 'utf8'))
+async function writeRemoteTextFile(client, remotePath, content, options = {}) {
+  const encoded = encodeRemoteTextContent(content, options)
+  const result = await writeRemoteBufferFile(client, remotePath, encoded.buffer)
+  return { ...result, size: encoded.buffer.length, encoding: encoded.encoding }
 }
 
 function createRemoteFile(client, remotePath) {
