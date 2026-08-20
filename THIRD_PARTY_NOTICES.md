@@ -20,7 +20,11 @@ owned by this project.
 | React and React DOM | MIT |
 | React Flow | MIT |
 | node-redis | MIT |
+| asn1 | MIT |
+| bcrypt-pbkdf | BSD-3-Clause |
+| safer-buffer | MIT |
 | ssh2 | MIT |
+| tweetnacl | Unlicense |
 | write-excel-file | MIT |
 | xterm.js and xterm-addon-fit | MIT |
 

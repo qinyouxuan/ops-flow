@@ -12,6 +12,8 @@
 
 ### Fixed
 
+- Included the complete `ssh2` runtime dependency chain in packaged builds so
+  installed applications can start without missing-module errors.
 - Reused one SSH transport per workflow target for file-transfer and command
   channels, then closed the workflow-owned transport deterministically after the
   run. An already connected interactive terminal can supply the shared transport
