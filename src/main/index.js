@@ -2,7 +2,8 @@
 
 import { app, BrowserWindow, Menu, ipcMain, dialog, clipboard, safeStorage, shell } from 'electron'
 import { basename, delimiter, dirname, isAbsolute, join, posix, relative, resolve } from 'node:path'
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { readdir as readdirAsync, stat as statAsync } from 'node:fs/promises'
 import { createHash, randomBytes } from 'node:crypto'
 import { fork, spawnSync } from 'node:child_process'
 import { once } from 'node:events'
@@ -28,6 +29,7 @@ import {
   summarizeConfig
 } from './configCrypto.mjs'
 import { inspectDatabaseColumnMetadata, setDatabaseColumnComment } from './database/columnMetadataAdapters.mjs'
+import { normalizeMysqlBitRows } from './database/mysqlBitValueNormalizer.mjs'
 import { decodeRemoteTextBuffer, encodeRemoteTextContent } from './remoteTextEncoding.mjs'
 
 const shellSessions = new Map()
@@ -44,6 +46,7 @@ const redisBackupSessions = new Map()
 const redisRestoreSessions = new Map()
 const fileTransferSessions = new Map()
 const fileTransferProgressEmitTimes = new Map()
+const serverUploadQueues = new Map()
 const sshTunnelSessions = new Map()
 const pendingConfigImports = new Map()
 const damengLegacyWorkers = new Set()
@@ -51,6 +54,10 @@ const damengLegacyWorkers = new Set()
 const PROTECTED_STORE_KEYS = new Set(['resources', 'servers', 'databases', 'redisStores', 'redis'])
 const LOCAL_SECRET_MARKER = '__opsFlowProtectedSecretV1'
 const MAX_CONFIG_BACKUP_BYTES = 25 * 1024 * 1024
+const MAX_SHELL_INPUT_QUEUE_BYTES = 1024 * 1024
+const SFTP_UPLOAD_CONCURRENCY = 8
+const SFTP_UPLOAD_CHUNK_SIZE = 32 * 1024
+const UPLOAD_PROGRESS_INTERVAL_MS = 350
 const CONFIG_IMPORT_TTL_MS = 10 * 60 * 1000
 const DAMENG_DRIVER_STORE_KEY = 'damengDriverPath'
 const DAMENG_LEGACY_MODE_STORE_KEY = 'damengLegacyCompatibilityEnabled'
@@ -894,8 +901,16 @@ ipcMain.on('ssh:shell:write', (event, sessionId, data) => {
   const session = shellSessions.get(sessionId)
   if (!session?.stream || session.stream.destroyed || !session.stream.writable) return
   try {
+    if (!writeShellInput(session, data)) {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('ssh:shell:error', {
+          sessionId,
+          message: 'Terminal input is temporarily congested. Wait for the pending input to finish before pasting more text.'
+        })
+      }
+      return
+    }
     const submittedCommands = captureShellInput(session, data)
-    session.stream.write(data)
     submittedCommands.forEach((command) => {
       if (!event.sender.isDestroyed()) event.sender.send('ssh:shell:command', { sessionId, command })
     })
@@ -925,8 +940,8 @@ ipcMain.handle('ssh:inspect', async (event, config) => {
     'uptime',
     `awk 'NR==1{u1=$2+$4; t1=$2+$3+$4+$5+$6+$7+$8} NR>1{exit} END{system("sleep 0.25"); getline line < "/proc/stat"; split(line,a," "); u2=a[2]+a[4]; t2=a[2]+a[3]+a[4]+a[5]+a[6]+a[7]+a[8]; if (t2>t1) printf "CPU_USAGE %.1f\\n", ((u2-u1)*100)/(t2-t1);}' /proc/stat`,
     `free | awk '/Mem:/ { if ($2 > 0) printf "MEM_USAGE %.1f\\n", ($3 * 100) / $2 }'`,
+    `df -P / | awk 'NR==2 { value=$5; gsub(/%/, "", value); printf "DISK_USAGE %s\\n", value }'`,
     'free -h',
-    'df -h /',
     'lscpu | head -20'
   ].join('\n')
 
@@ -993,8 +1008,10 @@ ipcMain.handle('sftp:upload', async (event, config, targetDirectory = '/', optio
     webContents: event.sender
   }
   prepareFileTransferSession(progress, null)
-  let result = await uploadWithReconnect(event.sender, config, progress, (client) => (
-    uploadRemoteFile(client, localPath, remotePath, progress)
+  let result = await enqueueServerUpload(event.sender, config, progress, () => (
+    uploadWithReconnect(event.sender, config, progress, (client) => (
+      uploadRemoteFile(client, localPath, remotePath, progress)
+    ))
   ))
   result = settlePendingFileTransfer(progress, result)
   if (result.canceled && result.partialRemotePath) {
@@ -1026,7 +1043,7 @@ ipcMain.handle('sftp:upload-path', async (event, config, localPath, remotePath, 
     ? posix.join(remotePath, basename(localPath))
     : remotePath
   const transferId = `upload-${Date.now()}-${Math.random().toString(16).slice(2)}`
-  const total = stats.isDirectory() ? getLocalPathSize(localPath) : stats.size
+  const total = stats.isDirectory() ? await getLocalPathSize(localPath) : stats.size
   emitTransferProgress({
     id: transferId,
     total,
@@ -1051,11 +1068,13 @@ ipcMain.handle('sftp:upload-path', async (event, config, localPath, remotePath, 
     webContents: event.sender
   }
   prepareFileTransferSession(progress, null)
-  let result = await uploadWithReconnect(event.sender, config, progress, (client) => (
-    stats.isDirectory()
-      ? uploadRemoteDirectory(client, localPath, targetRemotePath, progress)
-      : uploadRemoteFile(client, localPath, targetRemotePath, progress)
-  ), workflowSessionId)
+  let result = await enqueueServerUpload(event.sender, config, progress, () => (
+    uploadWithReconnect(event.sender, config, progress, (client) => (
+      stats.isDirectory()
+        ? uploadRemoteDirectory(client, localPath, targetRemotePath, progress)
+        : uploadRemoteFile(client, localPath, targetRemotePath, progress)
+    ), workflowSessionId)
+  ))
   result = settlePendingFileTransfer(progress, result)
   if (result.canceled && result.partialRemotePath) {
     void cleanupCanceledRemoteUpload(config, result.partialRemotePath)
@@ -1695,7 +1714,9 @@ async function executeDatabaseQueryPage(connection, config, analysis, page, page
     columns = (result.metaData || []).map((field) => field.name)
   } else {
     const [resultRows, fields] = await connection.query(query)
-    rows = Array.isArray(resultRows) ? resultRows : []
+    rows = Array.isArray(resultRows)
+      ? normalizeMysqlBitRows(resultRows, fields)
+      : []
     columns = (fields || []).map((field) => field.name)
   }
   const safePageSize = Math.max(1, Math.min(5000, Math.floor(Number(pageSize) || 100)))
@@ -1741,8 +1762,11 @@ ipcMain.handle('db:exec', async (_event, config, sql, options = {}) => {
       return { ok: true, rows: result.rows || [], rowCount: result.rowsAffected }
     }
 
-    const [rows] = await connection.query(sql)
-    return { ok: true, rows }
+    const [rows, fields] = await connection.query(sql)
+    return {
+      ok: true,
+      rows: Array.isArray(rows) ? normalizeMysqlBitRows(rows, fields) : rows
+    }
   })
 })
 
@@ -2758,6 +2782,82 @@ async function withActiveShellClient(webContents, config, task) {
   }
 }
 
+function serverUploadQueueKey(webContents, config) {
+  const serverKey = String(config?.id || `${config?.username || ''}@${config?.host || ''}:${config?.port || 22}`)
+  return `${webContents?.id || 'unknown'}:${serverKey}`
+}
+
+function enqueueServerUpload(webContents, config, progress, task) {
+  const key = serverUploadQueueKey(webContents, config)
+  let queue = serverUploadQueues.get(key)
+  if (!queue) {
+    queue = { running: false, entries: [] }
+    serverUploadQueues.set(key, queue)
+  }
+
+  const session = prepareFileTransferSession(progress, null)
+  return new Promise((resolve) => {
+    const entry = {
+      progress,
+      task,
+      started: false,
+      settled: false,
+      settle(result) {
+        if (entry.settled) return
+        entry.settled = true
+        resolve(result)
+      }
+    }
+    const cancelQueuedUpload = () => {
+      if (entry.started || entry.settled) return
+      const index = queue.entries.indexOf(entry)
+      if (index >= 0) queue.entries.splice(index, 1)
+      const result = canceledFileTransferResult(progress, session)
+      finishFileTransferSession(progress, session)
+      entry.settle(result)
+      runNextServerUpload(key, queue)
+    }
+    if (session) session.cancelTransfer = cancelQueuedUpload
+
+    const queued = queue.running || queue.entries.length > 0
+    queue.entries.push(entry)
+    if (queued) {
+      emitTransferProgress(progress, {
+        transferred: session?.transferred || 0,
+        status: 'running',
+        message: 'Waiting for the current upload on this server'
+      })
+    }
+    runNextServerUpload(key, queue)
+  })
+}
+
+function runNextServerUpload(key, queue) {
+  if (queue.running) return
+  const entry = queue.entries.shift()
+  if (!entry) {
+    if (serverUploadQueues.get(key) === queue) serverUploadQueues.delete(key)
+    return
+  }
+
+  queue.running = true
+  entry.started = true
+  const session = fileTransferSessions.get(entry.progress.id)
+  if (session) session.cancelTransfer = null
+
+  Promise.resolve()
+    .then(() => {
+      if (session?.canceled) return canceledFileTransferResult(entry.progress, session)
+      return entry.task()
+    })
+    .catch((error) => ({ ok: false, message: error?.message || 'Upload failed' }))
+    .then((result) => entry.settle(result))
+    .finally(() => {
+      queue.running = false
+      runNextServerUpload(key, queue)
+    })
+}
+
 async function uploadWithReconnect(webContents, config, progress, upload, workflowSessionId = '') {
   let result = await withPreferredSshClient(webContents, config, workflowSessionId, (client, connection) => {
     progress.sharedConnection = connection.shared
@@ -2768,10 +2868,18 @@ async function uploadWithReconnect(webContents, config, progress, upload, workfl
   emitTransferProgress(progress, {
     transferred: 0,
     status: 'running',
-    message: 'SFTP connection interrupted before transfer; reconnecting once'
+    message: progress.sharedConnection
+      ? 'SFTP channel interrupted before transfer; reopening it on the shared SSH connection'
+      : 'SFTP connection interrupted before transfer; reconnecting once'
   })
-  progress.sharedConnection = false
-  result = await withSshClient(config, (client) => upload(client))
+  if (progress.sharedConnection) {
+    result = await withPreferredSshClient(webContents, config, workflowSessionId, (client, connection) => {
+      progress.sharedConnection = connection.shared
+      return upload(client)
+    })
+  } else {
+    result = await withSshClient(config, (client) => upload(client))
+  }
   return { ...result, retried: true }
 }
 
@@ -3308,7 +3416,11 @@ function startShellSession(webContents, config, size = {}) {
 
     const send = (channel, payload = {}) => {
       if (!webContents.isDestroyed()) {
-        webContents.send(channel, { sessionId, ...payload })
+        webContents.send(channel, {
+          sessionId,
+          serverId: String(config?.id || ''),
+          ...payload
+        })
       }
     }
 
@@ -3362,7 +3474,11 @@ function startShellSession(webContents, config, size = {}) {
               client,
               stream,
               webContentsId: webContents.id,
-              serverId: String(config?.id || '')
+              serverId: String(config?.id || ''),
+              inputQueue: [],
+              inputQueueBytes: 0,
+              inputBackpressured: false,
+              inputDrainListening: false
             })
             shellSessionsByWebContents.set(webContents.id, sessionId)
             webContents.once('destroyed', () => closeShellSession(sessionId))
@@ -3422,6 +3538,48 @@ function closeShellSession(sessionId) {
   session.client?.end()
 }
 
+function writeShellInput(session, data) {
+  const input = String(data || '')
+  if (!input) return true
+  if (session.inputBackpressured || session.inputQueue?.length) {
+    const inputBytes = Buffer.byteLength(input)
+    if ((session.inputQueueBytes || 0) + inputBytes > MAX_SHELL_INPUT_QUEUE_BYTES) return false
+    session.inputQueue ||= []
+    session.inputQueue.push(input)
+    session.inputQueueBytes = (session.inputQueueBytes || 0) + inputBytes
+    waitForShellInputDrain(session)
+    return true
+  }
+
+  const writable = session.stream.write(input)
+  if (!writable) {
+    session.inputBackpressured = true
+    waitForShellInputDrain(session)
+  }
+  return true
+}
+
+function waitForShellInputDrain(session) {
+  if (session.inputDrainListening || !session.stream || session.stream.destroyed) return
+  session.inputDrainListening = true
+  session.stream.once('drain', () => flushShellInputQueue(session))
+}
+
+function flushShellInputQueue(session) {
+  session.inputDrainListening = false
+  if (!session.stream || session.stream.destroyed || !session.stream.writable) return
+  session.inputBackpressured = false
+  while (session.inputQueue?.length) {
+    const input = session.inputQueue.shift()
+    session.inputQueueBytes = Math.max(0, (session.inputQueueBytes || 0) - Buffer.byteLength(input))
+    if (!session.stream.write(input)) {
+      session.inputBackpressured = true
+      waitForShellInputDrain(session)
+      return
+    }
+  }
+}
+
 function captureShellInput(session, data) {
   const submitted = []
   const state = session.inputCapture || { value: '', valid: true, lastWasCarriageReturn: false }
@@ -3469,8 +3627,16 @@ function pasteClipboardToShell(webContents) {
   const session = shellSessions.get(sessionId)
   const text = clipboard.readText()
   if (!session?.stream || !text) return
+  if (!writeShellInput(session, text)) {
+    if (!webContents.isDestroyed()) {
+      webContents.send('ssh:shell:error', {
+        sessionId,
+        message: 'Terminal input is temporarily congested. Wait for the pending input to finish before pasting more text.'
+      })
+    }
+    return
+  }
   const submittedCommands = captureShellInput(session, text)
-  session.stream.write(text)
   submittedCommands.forEach((command) => {
     if (!webContents.isDestroyed()) webContents.send('ssh:shell:command', { sessionId, command })
   })
@@ -3520,7 +3686,7 @@ function unlinkRemoteStage(client, remotePath) {
 async function cleanupPrivilegedStage(webContents, config, stagePath, privilege) {
   if (!stagePath) return
   await runPrivilegedFileCommand(webContents, config, `rm -f -- ${shellQuote(stagePath)}`, privilege, 'cleanup')
-  await withSshClient(config, (client) => unlinkRemoteStage(client, stagePath))
+  await withActiveShellClient(webContents, config, (client) => unlinkRemoteStage(client, stagePath))
 }
 
 async function listPrivilegedRemoteDirectory(webContents, config, targetPath, privilege) {
@@ -3775,7 +3941,7 @@ async function writePrivilegedRemoteTextFile(webContents, config, remotePath, co
   const stagePath = makePrivilegedStagePath('write')
   try {
     const encoded = encodeRemoteTextContent(content, options)
-    const staged = await withSshClient(config, (client) => writeRemoteBufferFile(client, stagePath, encoded.buffer))
+    const staged = await withActiveShellClient(webContents, config, (client) => writeRemoteBufferFile(client, stagePath, encoded.buffer))
     if (!staged.ok) return staged
     const result = await commitPrivilegedStagedFile(webContents, config, stagePath, remotePath, privilege)
     return { ...result, size: encoded.buffer.length, encoding: encoded.encoding }
@@ -3898,6 +4064,8 @@ function uploadLocalFileToStage(client, localPath, stagePath, progress) {
         return
       }
       sftp.fastPut(localPath, stagePath, {
+        concurrency: SFTP_UPLOAD_CONCURRENCY,
+        chunkSize: SFTP_UPLOAD_CHUNK_SIZE,
         step: (transferred) => {
           if (session) session.transferred = transferred
           if (!session?.canceled) emitTransferProgress(progress, { transferred, status: 'running' })
@@ -3949,26 +4117,28 @@ async function uploadPrivilegedRemotePath(webContents, config, localPath, target
   }
   emitTransferProgress(progress, { transferred: 0, status: 'running', message: 'Uploading privileged file' })
   prepareFileTransferSession(progress, null)
-  try {
-    let staged = await withSshClient(config, (client) => uploadLocalFileToStage(client, localPath, stagePath, progress))
-    staged = settlePendingFileTransfer(progress, staged)
-    if (!staged.ok) {
-      emitTransferProgress(progress, staged.canceled
-        ? { status: 'cancelled', message: staged.message }
-        : { status: 'failed', message: staged.message })
-      return { ...staged, localPath, remotePath }
+  return enqueueServerUpload(webContents, config, progress, async () => {
+    try {
+      let staged = await withActiveShellClient(webContents, config, (client) => uploadLocalFileToStage(client, localPath, stagePath, progress))
+      staged = settlePendingFileTransfer(progress, staged)
+      if (!staged.ok) {
+        emitTransferProgress(progress, staged.canceled
+          ? { status: 'cancelled', message: staged.message }
+          : { status: 'failed', message: staged.message })
+        return { ...staged, localPath, remotePath }
+      }
+      const committed = await commitPrivilegedStagedFile(webContents, config, stagePath, remotePath, privilege)
+      emitTransferProgress(progress, committed.ok
+        ? { transferred: total, status: 'done', message: 'Privileged upload completed' }
+        : { status: 'failed', message: committed.message })
+      return { ...committed, localPath, remotePath }
+    } catch (error) {
+      emitTransferProgress(progress, { status: 'failed', message: error.message })
+      return { ok: false, message: error.message, localPath, remotePath }
+    } finally {
+      await cleanupPrivilegedStage(webContents, config, stagePath, privilege)
     }
-    const committed = await commitPrivilegedStagedFile(webContents, config, stagePath, remotePath, privilege)
-    emitTransferProgress(progress, committed.ok
-      ? { transferred: total, status: 'done', message: 'Privileged upload completed' }
-      : { status: 'failed', message: committed.message })
-    return { ...committed, localPath, remotePath }
-  } catch (error) {
-    emitTransferProgress(progress, { status: 'failed', message: error.message })
-    return { ok: false, message: error.message, localPath, remotePath }
-  } finally {
-    await cleanupPrivilegedStage(webContents, config, stagePath, privilege)
-  }
+  })
 }
 
 async function downloadPrivilegedRemoteFile(webContents, config, remotePath, privilege) {
@@ -3992,7 +4162,7 @@ async function downloadPrivilegedRemotePath(webContents, config, remotePath, loc
       remotePath: staged.sourcePath,
       webContents
     }
-    const result = await withSshClient(config, (client) => downloadRemoteFile(client, staged.stagePath, localPath, progress))
+    const result = await withActiveShellClient(webContents, config, (client) => downloadRemoteFile(client, staged.stagePath, localPath, progress))
     return result.ok
       ? { ...result, privileged: true, remotePath: staged.sourcePath, localPath }
       : result
@@ -4219,6 +4389,8 @@ function uploadRemoteFile(client, localPath, remotePath, progress = null) {
       }
 
       sftp.fastPut(localPath, remotePath, {
+        concurrency: SFTP_UPLOAD_CONCURRENCY,
+        chunkSize: SFTP_UPLOAD_CHUNK_SIZE,
         step: (transferred) => {
           if (session) session.transferred = transferred
           if (!session?.canceled) emitTransferProgress(progress, { transferred, status: 'running' })
@@ -4276,10 +4448,10 @@ function uploadRemoteDirectory(client, localPath, remotePath, progress = null) {
         await ensureRemoteDirectory(sftp, remotePath)
         const uploadEntry = async (localEntry, remoteEntry) => {
           if (session?.canceled) throw new Error('Transfer canceled by user')
-          const stats = statSync(localEntry)
+          const stats = await statAsync(localEntry)
           if (stats.isDirectory()) {
             await ensureRemoteDirectory(sftp, remoteEntry)
-            for (const child of readdirSync(localEntry)) {
+            for (const child of await readdirAsync(localEntry)) {
               await uploadEntry(join(localEntry, child), posix.join(remoteEntry, child))
             }
             return
@@ -4298,7 +4470,7 @@ function uploadRemoteDirectory(client, localPath, remotePath, progress = null) {
           emitTransferProgress(progress, { transferred: transferredTotal, status: 'running' })
         }
 
-        for (const child of readdirSync(localPath)) {
+        for (const child of await readdirAsync(localPath)) {
           await uploadEntry(join(localPath, child), posix.join(remotePath, child))
         }
         finish(
@@ -4329,6 +4501,8 @@ function uploadFileWithSftp(sftp, localPath, remotePath, progress = null) {
       return
     }
     sftp.fastPut(localPath, remotePath, {
+      concurrency: SFTP_UPLOAD_CONCURRENCY,
+      chunkSize: SFTP_UPLOAD_CHUNK_SIZE,
       step: (transferred) => {
         if (!progress?.session?.canceled) progress?.onStep?.(transferred)
       }
@@ -4358,10 +4532,14 @@ function ensureRemoteDirectory(sftp, remotePath) {
   })), Promise.resolve())
 }
 
-function getLocalPathSize(localPath) {
-  const stats = statSync(localPath)
+async function getLocalPathSize(localPath) {
+  const stats = await statAsync(localPath)
   if (!stats.isDirectory()) return stats.size
-  return readdirSync(localPath).reduce((total, child) => total + getLocalPathSize(join(localPath, child)), 0)
+  let total = 0
+  for (const child of await readdirAsync(localPath)) {
+    total += await getLocalPathSize(join(localPath, child))
+  }
+  return total
 }
 
 function emitTransferProgress(progress, patch) {
@@ -4371,7 +4549,7 @@ function emitTransferProgress(progress, patch) {
   if (status === 'running' && progress.type === 'upload' && progress.id) {
     const now = Date.now()
     const lastEmittedAt = fileTransferProgressEmitTimes.get(progress.id) || 0
-    if (now - lastEmittedAt < 160) return
+    if (now - lastEmittedAt < UPLOAD_PROGRESS_INTERVAL_MS) return
     fileTransferProgressEmitTimes.set(progress.id, now)
   } else if (isTerminal && progress.type === 'upload' && progress.id) {
     fileTransferProgressEmitTimes.delete(progress.id)

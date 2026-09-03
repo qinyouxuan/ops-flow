@@ -824,7 +824,7 @@ body.is-resizing-panel .package-splitter::before {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
   gap: 12px;
   min-height: 0;
 }
@@ -7293,6 +7293,10 @@ body.is-resizing-column {
   background: rgba(15, 23, 42, 0.38);
 }
 
+.workflow-modal-backdrop {
+  z-index: 180;
+}
+
 .server-dialog,
 .file-preview-dialog {
   width: min(720px, 100%);
@@ -9596,6 +9600,13 @@ html[data-theme="dark"] .server-switcher-empty {
 html[data-theme="dark"] .server-switcher-search input {
   color: #dfe1e5 !important;
   background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="dark"] .server-switcher-search input:focus {
+  border: 0 !important;
+  box-shadow: none !important;
 }
 
 html[data-theme="dark"] .server-switcher-item:hover {
@@ -9611,6 +9622,51 @@ html[data-theme="dark"] .server-switcher-item.selected {
 html[data-theme="dark"] .server-switcher-item small,
 html[data-theme="dark"] .server-switcher-empty {
   color: #94a3b8;
+}
+
+html[data-theme="dark"] .server-switcher-icon {
+  color: #6ee7d5;
+  background: #12382f;
+  border: 1px solid #166b55;
+}
+
+html[data-theme="dark"] .server-switcher-icon.server-connecting {
+  color: #7dd3fc;
+  background: #123047;
+  border-color: #1d5f7a;
+}
+
+html[data-theme="dark"] .server-switcher-icon.server-error {
+  color: #fca5a5;
+  background: #3a1d25;
+  border-color: #7f1d2d;
+}
+
+html[data-theme="dark"] .server-switcher-state {
+  color: #d7d9dd;
+  background: #35373b;
+  border: 1px solid #5a5d61;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+html[data-theme="dark"] .server-switcher-state.server-connected {
+  color: #6ee7d5;
+  background: #12382f;
+  border-color: #166b55;
+}
+
+html[data-theme="dark"] .server-switcher-state.server-connecting {
+  color: #7dd3fc;
+  background: #123047;
+  border-color: #1d5f7a;
+}
+
+html[data-theme="dark"] .server-switcher-state.server-error {
+  color: #fca5a5;
+  background: #3a1d25;
+  border-color: #7f1d2d;
 }
 
 html[data-theme="dark"] .server-switcher-add {
@@ -9806,6 +9862,8 @@ html[data-theme="dark"] :is(
   .database-head,
   .db-actions,
   .redis-section-title,
+  .redis-search,
+  .redis-meta,
   .package-section-title,
   .inspector-section-head,
   .audit-section-head,
