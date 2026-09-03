@@ -30,6 +30,7 @@ import {
   FolderPlus,
   HardDrive,
   History,
+  MemoryStick,
   Power,
   PowerOff,
   Plus,
@@ -392,6 +393,7 @@ const I18N_MESSAGES = {
     'metric.load': '负载',
     'metric.memory': '内存',
     'metric.cpu': 'CPU',
+    'metric.disk': '系统盘',
     'metric.status': '状态',
     'status.connected': '已连接',
     'status.connecting': '连接中',
@@ -958,6 +960,7 @@ const I18N_MESSAGES = {
     'redis.type': '类型',
     'redis.ttl': 'TTL',
     'redis.selectKey': '选择一个键查看值。',
+    'redis.loadingValue': '正在读取键值...',
     'inspector.connectFirst': '请先连接服务器再查看系统信息。',
     'inspector.title': '主机管理',
     'inspector.description': '查看运行环境，管理系统服务、用户定时任务和防火墙端口。',
@@ -1164,6 +1167,7 @@ const emptyServer = {
   memory: '-',
   cpuUsage: null,
   memoryUsage: null,
+  diskUsage: null,
   cpu: '-',
   arch: '-',
   os: '-',
@@ -1925,6 +1929,7 @@ export default function App() {
   const [selectedRedisKey, setSelectedRedisKey] = useState('')
   const [redisKeyDetail, setRedisKeyDetail] = useState(null)
   const [isRedisLoading, setIsRedisLoading] = useState(false)
+  const [isRedisDetailLoading, setIsRedisDetailLoading] = useState(false)
   const [isRedisBackupRunning, setIsRedisBackupRunning] = useState(false)
   const [redisRestoreDialog, setRedisRestoreDialog] = useState(null)
   const [isRedisDialogOpen, setIsRedisDialogOpen] = useState(false)
@@ -2001,9 +2006,11 @@ export default function App() {
   const shellDirectoryCommandRef = useRef({ key: '', timestamp: 0 })
   const connectingServerIdRef = useRef('')
   const terminalAutoOpenRef = useRef('')
+  const shellTerminalSizeRef = useRef({})
   const intentionalShellCloseRef = useRef('')
   const activeModuleRef = useRef(activeModule)
   const redisAutoLoadKeyRef = useRef('')
+  const redisKeyDetailRequestRef = useRef(0)
   const systemInspectorAutoLoadKeyRef = useRef('')
   const systemInspectorExecutionRef = useRef('')
   const cronManualExecutionRef = useRef('')
@@ -2015,6 +2022,7 @@ export default function App() {
   const pendingTransferTasksPersistRef = useRef([])
   const previousSshTunnelStatusesRef = useRef({})
   const activeTransferIdsRef = useRef(new Set())
+  const fileTransferActivityCountRef = useRef(0)
   const transferSessionHasErrorRef = useRef(false)
   const databaseTableDeleteCancelRef = useRef(new Set())
   const toastTimerRef = useRef(null)
@@ -2031,6 +2039,14 @@ export default function App() {
     if (activeElement?.matches?.('input, textarea, select, [contenteditable="true"]')) return false
     terminalRef.current?.focus()
     return true
+  }
+  const beginFileTransferActivity = () => {
+    fileTransferActivityCountRef.current += 1
+    if (fileTransferActivityCountRef.current === 1) setIsFileTransferRunning(true)
+  }
+  const finishFileTransferActivity = () => {
+    fileTransferActivityCountRef.current = Math.max(0, fileTransferActivityCountRef.current - 1)
+    if (fileTransferActivityCountRef.current === 0) setIsFileTransferRunning(false)
   }
   const [logs, setLogs] = useState([
     '[09:30:12] Ops Flow ready',
@@ -2601,8 +2617,13 @@ export default function App() {
     fitAddon.fit()
 
     terminal.attachCustomKeyEventHandler((event) => {
-      if (event.type !== 'keydown' || !event.ctrlKey || !event.shiftKey) return true
+      if (event.type !== 'keydown') return true
       const key = event.key.toLowerCase()
+      if (event.ctrlKey && !event.shiftKey && !event.altKey && key === 's') {
+        showToast('info', '已阻止 Ctrl+S 暂停远程终端输出。')
+        return false
+      }
+      if (!event.ctrlKey || !event.shiftKey) return true
       if (key === 'c') {
         const selection = terminal.getSelection()
         if (selection) {
@@ -2649,12 +2670,7 @@ export default function App() {
       if (!terminalHostRef.current?.clientWidth || !terminalHostRef.current?.clientHeight) return
       fitAddon.fit()
       const sessionId = getShellSessionId(selectedServerIdLiveRef.current)
-      if (sessionId) {
-        window.opsFlow.resizeSshShell(sessionId, {
-          cols: terminal.cols,
-          rows: terminal.rows
-        })
-      }
+      if (sessionId) resizeTerminalShellIfNeeded(sessionId)
     })
     resizeObserver.observe(terminalHostRef.current)
 
@@ -2672,17 +2688,17 @@ export default function App() {
 
   useEffect(() => {
     const removeDataListener = window.opsFlow.onSshShellData((payload) => {
-      const serverId = findShellServerId(payload.sessionId)
+      const serverId = findShellServerId(payload.sessionId) || String(payload.serverId || '')
       if (!serverId) return
       appendTerminalOutputData(payload.data, serverId)
     })
     const removeCommandListener = window.opsFlow.onSshShellCommand?.((payload) => {
-      const serverId = findShellServerId(payload.sessionId)
+      const serverId = findShellServerId(payload.sessionId) || String(payload.serverId || '')
       if (!serverId) return
       void syncRemoteDirectoryFromShellCommand(serverId, payload.command)
     })
     const removeCloseListener = window.opsFlow.onSshShellClose((payload) => {
-      const serverId = findShellServerId(payload.sessionId)
+      const serverId = findShellServerId(payload.sessionId) || String(payload.serverId || '')
       if (!serverId) {
         if (intentionalShellCloseRef.current === payload.sessionId) intentionalShellCloseRef.current = ''
         return
@@ -2690,6 +2706,7 @@ export default function App() {
       const wasIntentional = intentionalShellCloseRef.current === payload.sessionId
       delete shellSessionsRef.current[serverId]
       delete shellDirectoriesRef.current[serverId]
+      delete shellTerminalSizeRef.current[payload.sessionId]
       if (shellSessionRef.current === payload.sessionId) {
         shellSessionRef.current = null
         shellServerIdRef.current = ''
@@ -2746,7 +2763,7 @@ export default function App() {
       })
     })
     const removeErrorListener = window.opsFlow.onSshShellError((payload) => {
-      const serverId = findShellServerId(payload.sessionId)
+      const serverId = findShellServerId(payload.sessionId) || String(payload.serverId || '')
       if (!serverId) return
       appendTerminalOutputData(`\r\nConnection error: ${payload.message}\r\n`, serverId)
     })
@@ -2847,12 +2864,7 @@ export default function App() {
         focusTerminalIfAvailable()
         terminalRef.current?.scrollToBottom()
         const sessionId = getShellSessionId(selectedServer.id)
-        if (sessionId && terminalRef.current) {
-          window.opsFlow.resizeSshShell(sessionId, {
-            cols: terminalRef.current.cols,
-            rows: terminalRef.current.rows
-          })
-        }
+        if (sessionId) resizeTerminalShellIfNeeded(sessionId)
         ensureCurrentTerminalShell()
       }, 0)
     })
@@ -3032,6 +3044,7 @@ export default function App() {
         memory: '-',
         cpuUsage: null,
         memoryUsage: null,
+        diskUsage: null,
         cpu: '-',
         arch: '-',
         os: '-',
@@ -3189,23 +3202,28 @@ export default function App() {
       shellServerIdRef.current = server.id
       focusTerminalIfAvailable()
       fitAddonRef.current?.fit()
-      window.opsFlow.resizeSshShell(existingSessionId, {
-        cols: terminalRef.current.cols,
-        rows: terminalRef.current.rows
-      })
+      resizeTerminalShellIfNeeded(existingSessionId)
       flushPendingShellInput(server.id, existingSessionId)
       void initializeShellDirectory(server)
       return { ok: true }
     }
 
+    const connectingOutput = `Connecting to ${server.username}@${server.host}:${server.port} ...\n`
+    terminalTextRef.current = connectingOutput
+    workspaceCacheRef.current[server.id] = {
+      ...(workspaceCacheRef.current[server.id] || {}),
+      terminalOutput: connectingOutput
+    }
+    setTerminalOutput(connectingOutput)
     terminalRef.current.reset()
-    terminalRef.current.writeln(`Connecting to ${server.username}@${server.host}:${server.port} ...`)
+    terminalRef.current.writeln(connectingOutput.trimEnd())
     fitAddonRef.current?.fit()
 
-    const result = await window.opsFlow.startSshShell(server, {
+    const initialSize = {
       cols: terminalRef.current.cols,
       rows: terminalRef.current.rows
-    })
+    }
+    const result = await window.opsFlow.startSshShell(server, initialSize)
     if (!result.ok) {
       delete pendingShellInputRef.current[server.id]
       terminalRef.current.writeln(`Connection failed: ${result.message}`)
@@ -3215,6 +3233,18 @@ export default function App() {
     shellSessionsRef.current[server.id] = result.sessionId
     shellSessionRef.current = result.sessionId
     shellServerIdRef.current = server.id
+    shellTerminalSizeRef.current[result.sessionId] = `${initialSize.cols}x${initialSize.rows}`
+    const resumeResult = await window.opsFlow.resumeSshShell(result.sessionId)
+    if (!resumeResult.ok) {
+      delete shellSessionsRef.current[server.id]
+      delete shellTerminalSizeRef.current[result.sessionId]
+      shellSessionRef.current = null
+      shellServerIdRef.current = ''
+      delete pendingShellInputRef.current[server.id]
+      await window.opsFlow.stopSshShell(result.sessionId)
+      terminalRef.current.writeln(`Connection failed: ${resumeResult.message}`)
+      return resumeResult
+    }
     flushPendingShellInput(server.id, result.sessionId)
     void initializeShellDirectory(server)
     focusTerminalIfAvailable()
@@ -3262,6 +3292,7 @@ export default function App() {
       intentionalShellCloseRef.current = sessionId
       await window.opsFlow.stopSshShell(sessionId)
       delete shellSessionsRef.current[serverId]
+      delete shellTerminalSizeRef.current[sessionId]
     }
     if (!serverId || shellServerIdRef.current === serverId) {
       shellSessionRef.current = null
@@ -5727,7 +5758,7 @@ export default function App() {
     const targetPath = joinRemotePath(parentPath, name)
     const privilege = getRemotePrivilege(targetServer)
     setRemoteCreateDialog((current) => current ? { ...current, loading: true, notice: null } : current)
-    setIsFileTransferRunning(true)
+    beginFileTransferActivity()
     appendLog(`Creating remote ${type === 'dir' ? 'directory' : 'file'}: ${targetPath}`)
     try {
       const result = type === 'dir'
@@ -5771,7 +5802,7 @@ export default function App() {
       appendLog(`Create failed: ${message}`)
       setRemoteCreateDialog((current) => current ? { ...current, loading: false, notice: { type: 'error', text: message } } : current)
     } finally {
-      setIsFileTransferRunning(false)
+      finishFileTransferActivity()
     }
   }
 
@@ -5819,7 +5850,7 @@ export default function App() {
     const targetPath = joinRemotePath(parentPath, name)
     const privilege = getRemotePrivilege(targetServer)
     setRemoteRenameDialog((current) => current ? { ...current, loading: true, notice: null } : current)
-    setIsFileTransferRunning(true)
+    beginFileTransferActivity()
     appendLog(`Renaming remote item: ${sourcePath} -> ${targetPath}`)
     try {
       const result = privilege && window.opsFlow.renamePrivilegedRemoteItem
@@ -5848,7 +5879,7 @@ export default function App() {
       setRemoteRenameDialog((current) => current ? { ...current, loading: false, notice: { type: 'error', text: message } } : current)
       return { ok: false }
     } finally {
-      setIsFileTransferRunning(false)
+      finishFileTransferActivity()
     }
   }
 
@@ -6009,7 +6040,7 @@ export default function App() {
         return
       }
 
-      setIsFileTransferRunning(true)
+      beginFileTransferActivity()
       const privilege = getRemotePrivilege(selectedServer)
       const targetDirectory = remotePath === '/' ? '/' : `${remotePath.replace(/\/+$/, '')}/`
       const results = []
@@ -6035,13 +6066,12 @@ export default function App() {
         const lastResult = completed[completed.length - 1]
         const uploadedName = lastResult.remotePath ? remoteBasename(lastResult.remotePath) : ''
         if (uploadedName) setPendingRemoteFocusName(uploadedName)
-        setIsFileTransferRunning(false)
         await loadRemoteDirectory(remotePath)
         if (uploadedName) setSelectedRemoteItem({ name: uploadedName, type: 'file' })
         if (completed.length > 1) showToast('success', `${completed.length} files uploaded`)
       }
     } finally {
-      setIsFileTransferRunning(false)
+      finishFileTransferActivity()
     }
   }
 
@@ -6059,7 +6089,7 @@ export default function App() {
     const targetPath = batchItems.length
       ? ''
       : selectedRemoteItem.path || joinRemotePath(remotePath, selectedRemoteItem.name)
-    setIsFileTransferRunning(true)
+    beginFileTransferActivity()
     appendLog(batchItems.length ? `Batch download started: ${batchItems.length} files` : `Download started: ${targetPath}`)
 
     try {
@@ -6090,7 +6120,7 @@ export default function App() {
       }
       return result
     } finally {
-      setIsFileTransferRunning(false)
+      finishFileTransferActivity()
     }
   }
 
@@ -6105,7 +6135,7 @@ export default function App() {
     }
 
     const targetPath = item.path || joinRemotePath(remotePath, item.name)
-    setIsFileTransferRunning(true)
+    beginFileTransferActivity()
     setPreviewFile({ ...item, path: targetPath, loading: true })
     setPreviewContent('')
 
@@ -6132,7 +6162,7 @@ export default function App() {
       })
       setPreviewContent(result.content || '')
     } finally {
-      setIsFileTransferRunning(false)
+      finishFileTransferActivity()
     }
   }
 
@@ -6225,7 +6255,7 @@ export default function App() {
       return { ok: false, canceled: true }
     }
 
-    setIsFileTransferRunning(true)
+    beginFileTransferActivity()
     appendLog(targets.length === 1 ? `Delete started: ${targetPath}` : `Batch delete started: ${targets.length} items`)
 
     try {
@@ -6265,7 +6295,7 @@ export default function App() {
         failedItems: failed.map((result) => result.item)
       }
     } finally {
-      setIsFileTransferRunning(false)
+      finishFileTransferActivity()
     }
   }
 
@@ -7835,6 +7865,8 @@ export default function App() {
       return
     }
     setIsRedisLoading(true)
+    redisKeyDetailRequestRef.current += 1
+    setIsRedisDetailLoading(false)
     setSelectedRedisKey('')
     setRedisKeyDetail(null)
     try {
@@ -7858,17 +7890,21 @@ export default function App() {
       showToast('error', resourceConnectionError(redis))
       return
     }
+    const requestId = redisKeyDetailRequestRef.current + 1
+    redisKeyDetailRequestRef.current = requestId
     setSelectedRedisKey(key)
-    setIsRedisLoading(true)
+    setRedisKeyDetail(null)
+    setIsRedisDetailLoading(true)
     try {
       const result = await window.opsFlow.readRedisKey(withRedisRuntime(redis, servers), database, key)
+      if (redisKeyDetailRequestRef.current !== requestId) return
       if (!result.ok) {
         showToast('error', result.message)
         return
       }
       setRedisKeyDetail(result)
     } finally {
-      setIsRedisLoading(false)
+      if (redisKeyDetailRequestRef.current === requestId) setIsRedisDetailLoading(false)
     }
   }
 
@@ -8108,6 +8144,7 @@ export default function App() {
     await window.opsFlow.stopSshShell(sessionId)
     delete shellSessionsRef.current[serverId]
     delete shellDirectoriesRef.current[serverId]
+    delete shellTerminalSizeRef.current[sessionId]
     if (shellSessionRef.current === sessionId) {
       shellSessionRef.current = null
       shellServerIdRef.current = ''
@@ -8116,18 +8153,20 @@ export default function App() {
 
   function appendTerminalOutputData(data, serverId) {
     const isSelectedServerShell = serverId === selectedServerIdLiveRef.current
-    const isVisibleShell = isSelectedServerShell
-      && getShellSessionId(serverId) === shellSessionRef.current
-      && activeModuleRef.current === 'command'
+    const isConnectingTerminalShell = isSelectedServerShell
+      && connectingServerIdRef.current === serverId
+    const isActiveTerminalShell = isSelectedServerShell
+      && (getShellSessionId(serverId) === shellSessionRef.current || isConnectingTerminalShell)
 
     // A PTY stream contains cursor movement, erase and redraw sequences that may
-    // not contain printable text. They must reach xterm unchanged; otherwise the
-    // remote readline cursor and the cursor shown by xterm drift apart.
-    if (isVisibleShell) terminalRef.current?.write(data)
+    // not contain printable text. Keep feeding the selected server's xterm even
+    // while another module hides it. Rebuilding a hidden PTY from normalized text
+    // loses those sequences and leaves partial messages or duplicate prompts.
+    if (isActiveTerminalShell) terminalRef.current?.write(data)
 
     const chunk = normalizeTerminalOutputData(data)
     if (!chunk) return
-    const base = isVisibleShell
+    const base = isActiveTerminalShell
       ? terminalTextRef.current
       : (workspaceCacheRef.current[serverId]?.terminalOutput || '')
     const rawNext = `${base}${chunk}`
@@ -8156,6 +8195,18 @@ export default function App() {
     }
     fitAddonRef.current?.fit()
     terminalRef.current.scrollToBottom()
+  }
+
+  function resizeTerminalShellIfNeeded(sessionId) {
+    if (!sessionId || !terminalRef.current) return
+    const size = {
+      cols: terminalRef.current.cols,
+      rows: terminalRef.current.rows
+    }
+    const sizeKey = `${size.cols}x${size.rows}`
+    if (shellTerminalSizeRef.current[sessionId] === sizeKey) return
+    shellTerminalSizeRef.current[sessionId] = sizeKey
+    void window.opsFlow.resizeSshShell(sessionId, size)
   }
 
   function stopShellIfDifferentServer(serverId) {
@@ -8924,8 +8975,9 @@ export default function App() {
 
         <section className="metrics">
           <Metric icon={<Activity />} label={t('metric.load', 'Load')} value={selectedServer.load} />
-          <Metric icon={<HardDrive />} label={t('metric.memory', 'Memory')} value={selectedServer.memory} />
+          <Metric icon={<MemoryStick />} label={t('metric.memory', 'Memory')} value={selectedServer.memory} />
           <Metric icon={<Server />} label={t('metric.cpu', 'CPU')} value={selectedServer.cpu} />
+          <Metric icon={<HardDrive />} label={t('metric.disk', 'System disk')} value={formatPercent(selectedServer.diskUsage)} />
           <Metric icon={<ShieldCheck />} label={t('metric.status', 'Status')} value={t(`status.${selectedServer.status}`, selectedServer.status)} tone={selectedServer.status} />
         </section>
 
@@ -9494,11 +9546,14 @@ export default function App() {
                     selectedKey={selectedRedisKey}
                     detail={redisKeyDetail}
                     loading={isRedisLoading}
+                    detailLoading={isRedisDetailLoading}
                     backupRunning={isRedisBackupRunning}
                     onAdd={addRedis}
                     onEdit={editRedis}
                     onDelete={deleteRedis}
                     onSelect={(redis) => {
+                      redisKeyDetailRequestRef.current += 1
+                      setIsRedisDetailLoading(false)
                       setSelectedRedisId(redis.id)
                       setRedisDatabases([])
                       setRedisKeys([])
@@ -11826,7 +11881,7 @@ function WorkflowDialog({ mode, draft, moduleGroups, databases = [], redisStores
   }
 
   return (
-    <div className="modal-backdrop">
+    <div className="modal-backdrop workflow-modal-backdrop">
       <section
         className="server-dialog workflow-dialog"
         onKeyDown={(event) => {
@@ -14954,7 +15009,7 @@ function FilePreviewDialog({ file, content, saving, copying, onChange, onClose, 
   )
 }
 
-function RedisBrowser({ connections, selected, connectionAvailable, servers, databases, selectedDb, keys, pattern, selectedKey, detail, loading, backupRunning, onAdd, onEdit, onDelete, onSelect, onRefresh, onSelectDb, onPatternChange, onSearch, onOpenKey, onDeleteKey, onFlushDb, onBackup, onRestore }) {
+function RedisBrowser({ connections, selected, connectionAvailable, servers, databases, selectedDb, keys, pattern, selectedKey, detail, loading, detailLoading, backupRunning, onAdd, onEdit, onDelete, onSelect, onRefresh, onSelectDb, onPatternChange, onSearch, onOpenKey, onDeleteKey, onFlushDb, onBackup, onRestore }) {
   const { t } = useI18n()
   const [redisSplit, setRedisSplit] = useState(42)
   const redisMainRef = useRef(null)
@@ -15042,8 +15097,8 @@ function RedisBrowser({ connections, selected, connectionAvailable, servers, dat
           onMouseDown={startRedisResize}
         />
         <section className="redis-value-panel">
-          <div className="redis-section-title"><span>{t('redis.value', 'Value')}</span><button onClick={onDeleteKey} disabled={!connectionAvailable || !selectedKey || loading}><Trash2 size={14} />{t('redis.deleteKey', 'Delete key')}</button></div>
-          {detail ? (
+          <div className="redis-section-title"><span>{t('redis.value', 'Value')}</span><button onClick={onDeleteKey} disabled={!connectionAvailable || !selectedKey || loading || detailLoading}><Trash2 size={14} />{t('redis.deleteKey', 'Delete key')}</button></div>
+          {detailLoading ? <div className="redis-empty">{t('redis.loadingValue', 'Loading value...')}</div> : detail ? (
             <>
               <div className="redis-meta"><span>{t('redis.type', 'Type')}: {detail.type}</span><span>{t('redis.ttl', 'TTL')}: {formatRedisTtl(detail.ttl)}</span></div>
               <textarea readOnly value={formatRedisValue(detail.value)} />
@@ -20042,6 +20097,7 @@ function buildServerFromForm(form) {
     memory: '-',
     cpuUsage: null,
     memoryUsage: null,
+    diskUsage: null,
     cpu: '-',
     arch: '-',
     os: '-',
@@ -21957,6 +22013,7 @@ function resetServerRuntime(server) {
     memory: '-',
     cpuUsage: null,
     memoryUsage: null,
+    diskUsage: null,
     cpu: '-',
     arch: '-',
     os: '-',
@@ -22121,6 +22178,7 @@ function parseServerInspect(stdout = '') {
   const memoryLine = lines.find((line) => line.startsWith('Mem:')) || ''
   const cpuUsageLine = lines.find((line) => line.startsWith('CPU_USAGE')) || ''
   const memoryUsageLine = lines.find((line) => line.startsWith('MEM_USAGE')) || ''
+  const diskUsageLine = lines.find((line) => line.startsWith('DISK_USAGE')) || ''
   const cpuLine = lines.find((line) => line.startsWith('CPU(s):')) || ''
   const archLine = lines.find((line) => line.startsWith('Architecture:')) || ''
   const modelLine = lines.find((line) => line.startsWith('Model name:')) || ''
@@ -22133,6 +22191,7 @@ function parseServerInspect(stdout = '') {
     cpu: cpuLine ? `${valueAfterColon(cpuLine)} Core` : modelLine ? valueAfterColon(modelLine) : '-',
     cpuUsage: parseTaggedPercent(cpuUsageLine),
     memoryUsage: parseTaggedPercent(memoryUsageLine),
+    diskUsage: parseTaggedPercent(diskUsageLine),
     memory: parseMemory(memoryLine),
     load: parseLoad(uptimeLine),
     uptime: parseUptime(uptimeLine)
