@@ -897,6 +897,16 @@ ipcMain.handle('ssh:shell:start', async (event, config, size = {}) => {
   return startShellSession(event.sender, config, size)
 })
 
+ipcMain.handle('ssh:shell:resume', async (_event, sessionId) => {
+  const session = shellSessions.get(sessionId)
+  if (!session?.stream || session.stream.destroyed) {
+    return { ok: false, message: 'Terminal session is not connected' }
+  }
+  session.stream.resume()
+  session.stream.stderr?.resume()
+  return { ok: true }
+})
+
 ipcMain.on('ssh:shell:write', (event, sessionId, data) => {
   const session = shellSessions.get(sessionId)
   if (!session?.stream || session.stream.destroyed || !session.stream.writable) return
@@ -3468,6 +3478,7 @@ function startShellSession(webContents, config, size = {}) {
             // gives the renderer its session id. This is especially important
             // while automatically reopening a dropped interactive shell.
             stream.pause()
+            stream.stderr?.pause()
 
             shellSessions.set(sessionId, {
               id: sessionId,
@@ -3502,9 +3513,6 @@ function startShellSession(webContents, config, size = {}) {
               .stderr?.on('data', (data) => send('ssh:shell:data', { data: data.toString('utf8') }))
 
             finish({ ok: true, sessionId })
-            setImmediate(() => {
-              if (!stream.destroyed) stream.resume()
-            })
           }
         )
       })

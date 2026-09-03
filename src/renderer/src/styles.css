@@ -1024,6 +1024,10 @@ body.is-resizing-panel .workspace-auxiliary-splitter::before {
   border-radius: 8px;
 }
 
+.ops-panel {
+  position: relative;
+}
+
 .panel-title {
   display: flex;
   align-items: center;
@@ -1676,6 +1680,14 @@ body.is-resizing-panel .workspace-auxiliary-splitter::before {
 
 .hidden-module {
   display: none;
+}
+
+.command-workspace.hidden-module {
+  position: absolute;
+  inset: 53px 0 0;
+  display: grid;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .workflow-layout {

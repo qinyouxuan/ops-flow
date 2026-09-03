@@ -2006,7 +2006,7 @@ export default function App() {
   const shellDirectoryCommandRef = useRef({ key: '', timestamp: 0 })
   const connectingServerIdRef = useRef('')
   const terminalAutoOpenRef = useRef('')
-  const hiddenShellOutputRef = useRef(new Set())
+  const shellTerminalSizeRef = useRef({})
   const intentionalShellCloseRef = useRef('')
   const activeModuleRef = useRef(activeModule)
   const redisAutoLoadKeyRef = useRef('')
@@ -2670,12 +2670,7 @@ export default function App() {
       if (!terminalHostRef.current?.clientWidth || !terminalHostRef.current?.clientHeight) return
       fitAddon.fit()
       const sessionId = getShellSessionId(selectedServerIdLiveRef.current)
-      if (sessionId) {
-        window.opsFlow.resizeSshShell(sessionId, {
-          cols: terminal.cols,
-          rows: terminal.rows
-        })
-      }
+      if (sessionId) resizeTerminalShellIfNeeded(sessionId)
     })
     resizeObserver.observe(terminalHostRef.current)
 
@@ -2711,6 +2706,7 @@ export default function App() {
       const wasIntentional = intentionalShellCloseRef.current === payload.sessionId
       delete shellSessionsRef.current[serverId]
       delete shellDirectoriesRef.current[serverId]
+      delete shellTerminalSizeRef.current[payload.sessionId]
       if (shellSessionRef.current === payload.sessionId) {
         shellSessionRef.current = null
         shellServerIdRef.current = ''
@@ -2864,21 +2860,11 @@ export default function App() {
     window.requestAnimationFrame(() => {
       window.setTimeout(() => {
         if (!terminalHostRef.current?.clientWidth || !terminalHostRef.current?.clientHeight) return
-        if (hiddenShellOutputRef.current.has(selectedServer.id)) {
-          const cachedOutput = workspaceCacheRef.current[selectedServer.id]?.terminalOutput || terminalTextRef.current
-          replaceTerminalDisplay(cachedOutput)
-          hiddenShellOutputRef.current.delete(selectedServer.id)
-        }
         fitAddonRef.current?.fit()
         focusTerminalIfAvailable()
         terminalRef.current?.scrollToBottom()
         const sessionId = getShellSessionId(selectedServer.id)
-        if (sessionId && terminalRef.current) {
-          window.opsFlow.resizeSshShell(sessionId, {
-            cols: terminalRef.current.cols,
-            rows: terminalRef.current.rows
-          })
-        }
+        if (sessionId) resizeTerminalShellIfNeeded(sessionId)
         ensureCurrentTerminalShell()
       }, 0)
     })
@@ -3216,10 +3202,7 @@ export default function App() {
       shellServerIdRef.current = server.id
       focusTerminalIfAvailable()
       fitAddonRef.current?.fit()
-      window.opsFlow.resizeSshShell(existingSessionId, {
-        cols: terminalRef.current.cols,
-        rows: terminalRef.current.rows
-      })
+      resizeTerminalShellIfNeeded(existingSessionId)
       flushPendingShellInput(server.id, existingSessionId)
       void initializeShellDirectory(server)
       return { ok: true }
@@ -3236,10 +3219,11 @@ export default function App() {
     terminalRef.current.writeln(connectingOutput.trimEnd())
     fitAddonRef.current?.fit()
 
-    const result = await window.opsFlow.startSshShell(server, {
+    const initialSize = {
       cols: terminalRef.current.cols,
       rows: terminalRef.current.rows
-    })
+    }
+    const result = await window.opsFlow.startSshShell(server, initialSize)
     if (!result.ok) {
       delete pendingShellInputRef.current[server.id]
       terminalRef.current.writeln(`Connection failed: ${result.message}`)
@@ -3249,6 +3233,18 @@ export default function App() {
     shellSessionsRef.current[server.id] = result.sessionId
     shellSessionRef.current = result.sessionId
     shellServerIdRef.current = server.id
+    shellTerminalSizeRef.current[result.sessionId] = `${initialSize.cols}x${initialSize.rows}`
+    const resumeResult = await window.opsFlow.resumeSshShell(result.sessionId)
+    if (!resumeResult.ok) {
+      delete shellSessionsRef.current[server.id]
+      delete shellTerminalSizeRef.current[result.sessionId]
+      shellSessionRef.current = null
+      shellServerIdRef.current = ''
+      delete pendingShellInputRef.current[server.id]
+      await window.opsFlow.stopSshShell(result.sessionId)
+      terminalRef.current.writeln(`Connection failed: ${resumeResult.message}`)
+      return resumeResult
+    }
     flushPendingShellInput(server.id, result.sessionId)
     void initializeShellDirectory(server)
     focusTerminalIfAvailable()
@@ -3296,6 +3292,7 @@ export default function App() {
       intentionalShellCloseRef.current = sessionId
       await window.opsFlow.stopSshShell(sessionId)
       delete shellSessionsRef.current[serverId]
+      delete shellTerminalSizeRef.current[sessionId]
     }
     if (!serverId || shellServerIdRef.current === serverId) {
       shellSessionRef.current = null
@@ -8147,6 +8144,7 @@ export default function App() {
     await window.opsFlow.stopSshShell(sessionId)
     delete shellSessionsRef.current[serverId]
     delete shellDirectoriesRef.current[serverId]
+    delete shellTerminalSizeRef.current[sessionId]
     if (shellSessionRef.current === sessionId) {
       shellSessionRef.current = null
       shellServerIdRef.current = ''
@@ -8155,20 +8153,20 @@ export default function App() {
 
   function appendTerminalOutputData(data, serverId) {
     const isSelectedServerShell = serverId === selectedServerIdLiveRef.current
-    const isVisibleShell = isSelectedServerShell
-      && getShellSessionId(serverId) === shellSessionRef.current
-      && activeModuleRef.current === 'command'
-
-    if (!isVisibleShell) hiddenShellOutputRef.current.add(serverId)
+    const isConnectingTerminalShell = isSelectedServerShell
+      && connectingServerIdRef.current === serverId
+    const isActiveTerminalShell = isSelectedServerShell
+      && (getShellSessionId(serverId) === shellSessionRef.current || isConnectingTerminalShell)
 
     // A PTY stream contains cursor movement, erase and redraw sequences that may
-    // not contain printable text. They must reach xterm unchanged; otherwise the
-    // remote readline cursor and the cursor shown by xterm drift apart.
-    if (isVisibleShell) terminalRef.current?.write(data)
+    // not contain printable text. Keep feeding the selected server's xterm even
+    // while another module hides it. Rebuilding a hidden PTY from normalized text
+    // loses those sequences and leaves partial messages or duplicate prompts.
+    if (isActiveTerminalShell) terminalRef.current?.write(data)
 
     const chunk = normalizeTerminalOutputData(data)
     if (!chunk) return
-    const base = isVisibleShell
+    const base = isActiveTerminalShell
       ? terminalTextRef.current
       : (workspaceCacheRef.current[serverId]?.terminalOutput || '')
     const rawNext = `${base}${chunk}`
@@ -8197,6 +8195,18 @@ export default function App() {
     }
     fitAddonRef.current?.fit()
     terminalRef.current.scrollToBottom()
+  }
+
+  function resizeTerminalShellIfNeeded(sessionId) {
+    if (!sessionId || !terminalRef.current) return
+    const size = {
+      cols: terminalRef.current.cols,
+      rows: terminalRef.current.rows
+    }
+    const sizeKey = `${size.cols}x${size.rows}`
+    if (shellTerminalSizeRef.current[sessionId] === sizeKey) return
+    shellTerminalSizeRef.current[sessionId] = sizeKey
+    void window.opsFlow.resizeSshShell(sessionId, size)
   }
 
   function stopShellIfDifferentServer(serverId) {

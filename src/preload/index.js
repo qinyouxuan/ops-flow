@@ -54,6 +54,7 @@ contextBridge.exposeInMainWorld('opsFlow', {
     return () => ipcRenderer.removeListener('ssh:exec:data', listener)
   },
   startSshShell: (config, size) => ipcRenderer.invoke('ssh:shell:start', config, size),
+  resumeSshShell: (sessionId) => ipcRenderer.invoke('ssh:shell:resume', sessionId),
   writeSshShell: (sessionId, data) => ipcRenderer.send('ssh:shell:write', sessionId, data),
   resizeSshShell: (sessionId, size) => ipcRenderer.invoke('ssh:shell:resize', sessionId, size),
   stopSshShell: (sessionId) => ipcRenderer.invoke('ssh:shell:stop', sessionId),
